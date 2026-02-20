@@ -1,0 +1,26 @@
+# .NET Core
+bin/
+obj/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Visual Studio Code
+.vscode/
+
+# Environment
+.env
+.env.local
+*.local
+
+# Node
+node_modules/
+dist/

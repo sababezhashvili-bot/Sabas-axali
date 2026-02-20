@@ -1,0 +1,6 @@
+@Racha629_Api_HostAddress = http://localhost:5216
+
+GET {{Racha629_Api_HostAddress}}/api/racha/locations
+Accept: application/json
+
+###
