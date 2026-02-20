@@ -21,5 +21,8 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 2000, // Silence the >500kb warning for Mapbox
   }
 })
