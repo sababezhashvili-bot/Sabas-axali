@@ -91,21 +91,35 @@
             <div class="weather-loc">{{ displayLocation }}</div>
             <div class="weather-row-main">
               <span class="temp-main">{{ parseInt(btnTemp) }}°</span>
-              <div class="weather-details">
-                <span><span class="material-symbols-outlined" style="font-size:14px">water_drop</span> {{ humidity }}</span>
-                <span><span class="material-symbols-outlined" style="font-size:14px">height</span> {{ elevation }}</span>
-              </div>
+            </div>
+          </div>
+          <div class="weather-tooltip">
+            <div class="tooltip-loc">{{ displayLocation }}</div>
+            <div class="tooltip-row">
+              <span>Temperature</span>
+              <span class="accent-color">{{ btnTemp }}</span>
+            </div>
+            <div class="tooltip-row">
+              <span>Humidity</span>
+              <span class="accent-color">{{ humidity }}</span>
+            </div>
+            <div class="tooltip-row">
+              <span>Altitude</span>
+              <span class="accent-color">{{ elevation }}</span>
+            </div>
+            <div class="tooltip-row" style="margin-top:5px; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px">
+              <span>Condition</span>
+              <span class="material-symbols-outlined" style="color:#ffcc00!important;font-size:16px">wb_sunny</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Layer Control (Hamburger) -->
-      <div class="layer-wrap">
-        <button class="pill-btn layer-btn" title="Map Layers">
+        <button class="pill-btn layer-btn" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers">
           <span class="material-symbols-outlined">layers</span>
         </button>
-        <div class="layer-card">
+        <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
           <div class="layer-header">
             Map Layers
             <label class="master-switch" title="Toggle All">
@@ -122,7 +136,6 @@
             <input type="checkbox" v-model="showBuildings"> <span>3D Buildings</span>
           </label>
         </div>
-      </div>
 
       <!-- 3D Toggle -->
       <button class="pill-btn" :class="{ active: is3D }" @click="toggle3D" title="2D/3D Toggle">
@@ -152,16 +165,26 @@
           :class="['cat-pill', { active: activeCat===c.v }]"
           @click="filterCat(c.v)">{{ c.l }}</button>
       </div>
-      <button class="pill-btn sm" @click="toggleAuth">
-        <span class="material-symbols-outlined" style="font-size:15px">person</span>
+    </div>
+
+    <!-- User Profile Relocated to Top Right -->
+    <div class="user-auth-wrap">
+      <button class="pill-btn" @click="toggleAuth">
+        <span class="material-symbols-outlined">person</span>
       </button>
     </div>
 
     <!-- Active region chip -->
     <div v-if="activeRegion" class="region-chip">
-      <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)!important">location_on</span>
-      {{ activeRegion }}
-      <span class="material-symbols-outlined" style="font-size:14px;cursor:pointer;opacity:.6" @click="resetRegion">close</span>
+      <div class="region-chip-main">
+        <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)!important">location_on</span>
+        {{ activeRegion }}
+        <span class="material-symbols-outlined" style="font-size:14px;cursor:pointer;opacity:.6" @click="resetRegion">close</span>
+      </div>
+      <div class="region-chip-stats">
+        <span class="material-symbols-outlined" style="font-size:12px">groups</span>
+        Population: {{ populationCount }}
+      </div>
     </div>
 
     <!-- Bottom label -->
@@ -207,6 +230,8 @@ const maskingReady = ref(false) // Controls loading screen
 const showLabels    = ref(false)
 const showRoads     = ref(false)
 const showBuildings = ref(false)
+const isLayerWidgetOpen = ref(false)
+const populationCount = ref('28,500')
 
 // ── Ad Platform ──
 const adSpaces = ref([])
@@ -370,7 +395,7 @@ class AdminToggleControl {
   }
   _syncStyle () {
     if (!this._btn) return
-    this._btn.style.background = this._active ? '#a3b18a' : ''
+    this._btn.style.background = this._active ? '#72A98F' : ''
     this._btn.style.color      = this._active ? '#ffffff' : ''
   }
 }
@@ -385,20 +410,18 @@ onMounted(async () => {
   map = new mapboxgl.Map({
     container: mapEl.value,
     style: 'mapbox://styles/mapbox/satellite-streets-v12', 
-    bounds: RACHA_BOUNDS, // Hardcoded initial view
+    bounds: RACHA_BOUNDS, 
     fitBoundsOptions: { padding: 0, animate: false },
     pitch: 60,
     bearing: -8,
     antialias: true,
-
-    transparent: true,        // CRITICAL: Allows CSS sky background to show through
+    transparent: true,
     projection: 'mercator', 
   })
 
-  // Safety: Force remove loading screen after 3s max (if map load or fetch hangs)
+  // Safety: Force remove loading screen after 3s max
   setTimeout(() => {
     if (!maskingReady.value) {
-        console.warn('Force removing loading screen (safety timeout)')
         maskingReady.value = true
         if (mapEl.value) mapEl.value.style.opacity = '1'
     }
@@ -413,370 +436,203 @@ onMounted(async () => {
   })
 
   map.on('load', async () => {
-    // Global labels are now filtered dynamically in selectRegion
-
     ready = true
     updateLayers() 
+    initMapLayers()
+  })
 
-    // ── Terrain + DEM (maxzoom:14 for crisp geometry) ──
+  map.on('style.load', () => {
+    if (ready) initMapLayers()
+  })
+
+  async function selectRegion(feature) {
+    const turf = window.turf
+    if (!turf) { console.error('Turf.js not loaded'); return }
+
+    // 1. Update Focus Source (Border)
+    if (map.getSource('focus-region')) {
+      map.getSource('focus-region').setData(feature)
+    }
+
+    // 2. Generate Inverse Mask (World - Region)
     try {
-      map.addSource('dem', {
-        type: 'raster-dem',
-        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-        tileSize: 512,
-        maxzoom: 14,
+      const worldPoly = turf.polygon([[
+        [-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]
+      ]])
+      const mask = turf.difference(worldPoly, feature)
+      if (mask && map.getSource('dim-mask-source')) {
+        map.getSource('dim-mask-source').setData(mask)
+      }
+    } catch(err) { console.error('Mask generation failed:', err) }
+
+    // 3. Fly To Region
+    const bbox = turf.bbox(feature)
+    map.fitBounds(bbox, { padding: 150, pitch: 60, bearing: -10, duration: 2000, essential: true })
+
+    // 4. Update UI
+    activeRegion.value = feature.properties.shapeName
+
+    // 5. Data Filtering
+    // A. Filter Markers
+    markers.forEach(m => {
+       const lngLat = m.mk.getLngLat()
+       const pt = turf.point([lngLat.lng, lngLat.lat])
+       const isInside = turf.booleanPointInPolygon(pt, feature)
+       m.isInside = isInside
+       const catMatch = (activeCat.value === 'all' || m.cat === activeCat.value)
+       m.el.style.display = (isInside && catMatch) ? 'block' : 'none'
+    })
+
+    // B. Layer Clipping
+    const style = map.getStyle()
+    if (style && style.layers) {
+      style.layers.forEach(l => {
+        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
+          try { map.setFilter(l.id, ['within', feature]) } catch (e) {}
+        }
       })
+    }
+
+    // C. Move mask to top
+    if (map.getLayer('dim-mask-layer')) map.moveLayer('dim-mask-layer')
+    if (map.getLayer('focus-region-border')) map.moveLayer('focus-region-border')
+  }
+
+  async function initMapLayers() {
+    // ── Terrain ──
+    try {
+      if (!map.getSource('dem')) {
+        map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
+      }
       map.setTerrain({ source:'dem', exaggeration: 1.5 })
     } catch(e) {}
 
-    // ── Cinematic Lighting (High Contrast / Dramatic) ──
+    // ── Cinematic Lighting ──
     try {
-      map.setLight({
-        anchor:    'viewport',
-        color:     '#ffffff',
-        intensity: 0.6,      // Strong sun
-        position:  [1.15, 210, 30],
-        'ambient': {
-          'color': '#ffffff',
-          'intensity': 0.4 // Reduced ambient for deeper shadows (Cinematic)
-        }
-      })
+      map.setLight({ anchor:'viewport', color:'#ffffff', intensity:isLightMode.value ? 0.6 : 0.1, position:[1.15, 210, 30] })
     } catch(e) {}
-    // Ambient fill (Optional, but let's stick to the requested single setLight for purity)
-    // The previous ambient/directional combo is good, but user requested specific High Noon settings.
-    // We'll replace the complex combo with the requested simple one.
 
-    // ── Rayleigh Scattering Sky — space-to-atmosphere gradient ──
-    // ── Fog: completely disabled — crystal clarity, no haze ──
-    try { map.setFog(null) } catch(e) {}
-    // Kill Standard-style atmosphere toggle (keep only our fog config)
-    try { map.setConfigProperty('basemap', 'showAtmosphere', false) } catch(e) {}
-
-    // ── Satellite Raster Boost — restore vivid greens & contrast ──
-    // ── Satellite Raster Boost — Restore Vivid Colors ──
-    try {
-      const boostLayer = (id) => {
-        if (!map.getLayer(id)) return
-        map.setPaintProperty(id, 'raster-saturation',   -0.2) // Muted / Cinematic
-        map.setPaintProperty(id, 'raster-contrast',      0.2) // High contrast
-        map.setPaintProperty(id, 'raster-brightness-min',0)
-        map.setPaintProperty(id, 'raster-resampling',    'linear')
-      }
-      boostLayer('satellite')
-      // No restricted layer needed anymore, we use global satellite
+    // ── Fog ──
+    try { 
+      if (isLightMode.value) map.setFog(null)
+      else map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
     } catch(e) {}
-    
-    // ── 3D Buildings (Standard Layer) ──
-    // Ensure 3D buildings layer exists for toggling
+
+    // ── 3D Buildings ──
     if (!map.getLayer('3d-buildings')) {
       try {
         map.addLayer({
-          'id': '3d-buildings',
-          'source': 'composite',
-          'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'],
-          'type': 'fill-extrusion',
-          'minzoom': 13, // optimise
+          'id': '3d-buildings', 'source': 'composite', 'source-layer': 'building',
+          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 14,
           'paint': {
-            'fill-extrusion-color': '#ccc',
-            'fill-extrusion-height': ['get', 'height'], // CRITICAL: Real height
-            'fill-extrusion-base': ['get', 'min_height'],
-            'fill-extrusion-opacity': 0.8
+            'fill-extrusion-color': '#72A98F',
+            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
+            'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
+            'fill-extrusion-opacity': 0.85
           }
         })
-      } catch(e) { console.warn('3d-buildings add failed', e) }
+      } catch(e) {}
     }
 
+    // ── Admin Regions & Masking ──
+    try {
+      const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM1/geoBoundaries-GEO-ADM1_simplified.geojson')
+      const json = await res.json()
+      json.features.forEach((f, i) => { f.id = i })
 
-    // ── Hillshade — soft natural depth, no crushed shadows ──
-
-
-
-
-    // ── Fetch REAL Admin Boundaries (ADM1) for Dynamic Masking ──
-    ;(async () => {
-      try {
-        const GEO_ADM1_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM1/geoBoundaries-GEO-ADM1_simplified.geojson'
-        const res  = await fetch(GEO_ADM1_URL)
-        const json = await res.json()
-        
-        // Store all regions for interaction
-        // Add ID to features for hover/click state
-        json.features.forEach((f, i) => { f.id = i })
-
-        // ── Interactive Regions Layer (Transparent fill for clicks) ──
+      if (!map.getSource('admin-regions')) {
         map.addSource('admin-regions', { type:'geojson', data: json })
-        
-        map.addLayer({
-          id: 'admin-regions-fill',
-          type: 'fill',
-          source: 'admin-regions',
-          paint: {
-            'fill-color': 'transparent',
-            'fill-opacity': 0 // Invisible but clickable
-          }
-        })
+        map.addLayer({ id: 'admin-regions-fill', type: 'fill', source: 'admin-regions', paint: { 'fill-color': 'transparent', 'fill-opacity': 0 } })
 
-        // ── Dynamic Mask Sources ──
-        // 1. Focus Source: The selected region geometry (for border highlight)
-        map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
-        
-        // 2. Dim Mask Source: World minus Selected Region
-        // Global mask initially (covers everything until selection)
-        // Or empty (shows everything) - let's default to SHOWING everything, wait for selection
-        // Actually, request implies "Inverse Polygon Creation". 
-        // Let's initialize with NO mask (clear view) or a default region.
-        // Let's start CLEAR.
-        map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
-
-        // ── Dynamic Mask Layers ──
-        // 1. Black Overlay (80% Opacity)
-        // NOTE: Removed 'settlement-label' to prevent errors if it doesn't exist. Z-index handled by order.
-        map.addLayer({
-          id: 'dim-mask-layer',
-          type: 'fill',
-          source: 'dim-mask-source',
-          paint: { 
-            'fill-color': '#000000', 
-            'fill-opacity': 0.8 // 80% Black Overlay (Visual Tweak)
-          }
-        })
-
-        // 2. Region Highlight Border (White, 2px)
-        map.addLayer({
-          id: 'focus-region-border',
-          type: 'line',
-          source: 'focus-region',
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 2,
-            'line-opacity': 1
-          }
-        })
-
-        // ── Interaction Logic ──
+        // Interaction Logic
         let activeFeatureId = null
-
         map.on('click', 'admin-regions-fill', (e) => {
           if (!e.features.length) return
           const feature = e.features[0]
-          
-          // STRICT CONSTRAINT: Only allow Racha region
           if (!feature.properties.shapeName.includes('Racha')) return
-
-          // Avoid re-calculating if same region clicked
           if (feature.id === activeFeatureId) return
           activeFeatureId = feature.id
-          
           selectRegion(feature)
         })
 
-        // Change cursor ONLY for Racha
         map.on('mouseenter', 'admin-regions-fill', (e) => {
-            if (e.features[0].properties.shapeName.includes('Racha')) {
-                map.getCanvas().style.cursor = 'pointer'
-            }
+          if (e.features[0].properties.shapeName.includes('Racha')) {
+            map.getCanvas().style.cursor = 'pointer'
+          }
         })
         map.on('mouseleave', 'admin-regions-fill', () => { map.getCanvas().style.cursor = '' })
+      }
 
-        // ── Function: Select Region & Update Mask ──
-        const selectRegion = (feature) => {
-          const turf = window.turf
-          if (!turf) { console.error('Turf.js not loaded'); return }
+      if (!map.getSource('focus-region')) map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
+      if (!map.getSource('dim-mask-source')) map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
 
-          // 1. Update Focus Source (Border)
-          map.getSource('focus-region').setData(feature)
+      if (!map.getLayer('dim-mask-layer')) {
+        map.addLayer({ id: 'dim-mask-layer', type: 'fill', source: 'dim-mask-source', paint: { 'fill-color': '#000000', 'fill-opacity': 0.8 } })
+      }
+      if (!map.getLayer('focus-region-border')) {
+        map.addLayer({ id: 'focus-region-border', type: 'line', source: 'focus-region', paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-opacity': 1 } })
+      }
 
-          // 2. Generate Inverse Mask (World - Region)
-          try {
-            const worldPoly = turf.polygon([[
-              [-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]
-            ]])
-            
-            // Mask needs polygon geometry. Feature might be MultiPolygon.
-            // Turf difference works on Polygons/MultiPolygons.
-            const mask = turf.difference(worldPoly, feature)
-            
-            if (mask) {
-              map.getSource('dim-mask-source').setData(mask)
-            } else {
-              console.warn('Mask generation returned null')
-              map.getSource('dim-mask-source').setData({ type: 'FeatureCollection', features: [] })
-            }
-          } catch(err) {
-            console.error('Mask generation failed:', err)
-          }
-
-          // 3. Fly To Region
-          const bbox = turf.bbox(feature)
-          
-          // Calculate expanded bounds for constraint (so user can see surroundings)
-          const minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3]
-          const dx = maxX - minX, dy = maxY - minY
-          const padX = dx * 0.5, padY = dy * 0.5 // 50% buffer on each side
-          
-          const maxBounds = [[minX - padX, minY - padY], [maxX + padX, maxY + padY]]
-
-          // Apply loose constraints
-          map.setMaxBounds(maxBounds)
-          
-          map.fitBounds(bbox, {
-            padding: 150, // Increase padding to show region "from further away"
-            pitch: 60,
-            bearing: -10,
-            duration: 2000,
-            essential: true
-          })
-
-          // 4. Update UI (Active Chip)
-          activeRegion.value = feature.properties.shapeName
-
-          // 5. Data Filtering
-          // A. Filter Markers - Check Spatial & Category
-          markers.forEach(m => {
-             const lngLat = m.mk.getLngLat()
-             const pt = turf.point([lngLat.lng, lngLat.lat])
-             const isInside = turf.booleanPointInPolygon(pt, feature)
-             
-             // CACHE spatial status for category toggling
-             m.isInside = isInside
-             
-             // Determine visibility: Must be inside AND match category
-             const catMatch = (activeCat.value === 'all' || m.cat === activeCat.value)
-             m.el.style.display = (isInside && catMatch) ? 'block' : 'none'
-          })
-
-          // B. Simplified Masking: No detailed layer filtering.
-          // The 100% Opaque 3D Mask will physically cover everything outside.
-          
-          // C. Refined Label Visibility (Hide 'Georgia' etc.)
-          const hiddenLayers = [
-            'country-label', 'state-label', 
-            'admin-0-label', 'admin-1-label', 'admin-2-label',
-            'place-country', 'place-state', 'place-city-label', // if cities are too big
-            'settlement-subdivision-label', // Districts
-            'road-label', // The user said "and any other administrative names... located outside". 
-                          // Also asked to "Remove External Labels". 
-                          // Let's hide road labels too if they are cluttered.
-                          // But wait, user previously said "Stop trying to hide individual roads... this caused the mess".
-                          // The "Mess" was likely the complex filtering logic. 
-                          // GLOBAL hiding is safe.
-            'waterway-label' 
-          ]
-          hiddenLayers.forEach(id => {
-              if (map.getLayer(id)) {
-                  map.setLayoutProperty(id, 'visibility', 'none')
-              }
-          })
-          
-          
-          // CRITICAL: Force the blackout mask to be the absolute last layer (topmost)
-          // preventing any labels from "popping" over it due to collision logic or sorting.
-          if (map.getLayer('dim-mask-layer')) {
-              map.moveLayer('dim-mask-layer')
-          }
-          if (map.getLayer('focus-region-border')) {
-              map.moveLayer('focus-region-border')
-          }
-        }
-        
-        // OPTIONAL: Default to Racha if desired, or stay global.
-        // Let's auto-select Racha to match the previous demo state if found.
+      if (activeRegion.value) {
+        const feat = json.features.find(f => f.properties.shapeName === activeRegion.value)
+        if (feat) selectRegion(feat)
+      } else {
         const racha = json.features.find(f => (f.properties.shapeName||'').includes('Racha'))
-        if (racha) {
-            selectRegion(racha)
-        }
-        maskingReady.value = true
-
-      } catch (err) {
-        console.warn('ADM1 fetch failed or processing error:', err)
-      } finally {
-        // Always reveal the map, even if fetch failed
-        maskingReady.value = true
-        if (mapEl.value) mapEl.value.style.opacity = '1'
+        if (racha) selectRegion(racha)
       }
-    })()
-
-
-
-
-    // ── 3D Forest (off by default, toggled via button) ──
-    try {
-      map.addLayer({
-        id: 'forest',
-        type: 'fill-extrusion',
-        source: { type:'vector', url:'mapbox://mapbox.mapbox-terrain-v2' },
-        'source-layer': 'landcover',
-        filter: ['==', 'class', 'wood'],
-        minzoom: 8,
-        layout: { visibility: 'none' },
-        paint: {
-          'fill-extrusion-color': ['interpolate',['linear'],['zoom'], 8,'#1e5c1e', 12,'#2d7a2d'],
-          'fill-extrusion-height': ['interpolate',['linear'],['zoom'], 8,25, 13,70],
-          'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.65,
-        },
-      })
     } catch(e) {}
 
-    // ── Load Ads ──
-    try {
-      const ads = await api.getAds()
-      if (ads) {
-          ads.forEach(ad => {
-            const el = document.createElement('div')
-            el.className = `ad-marker ${ad.status.toLowerCase()}`
-            el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
-            
-            el.addEventListener('click', (e) => {
-               e.stopPropagation()
-               selectedAd.value = ad
-               showAdModal.value = true
-            })
-        
-            new mapboxgl.Marker({ element: el })
-              .setLngLat([ad.longitude, ad.latitude])
-              .addTo(map)
+    // ── Forest ──
+    if (!map.getLayer('forest')) {
+      try {
+        map.addLayer({
+          id: 'forest', type: 'fill-extrusion', source: { type:'vector', url:'mapbox://mapbox.mapbox-terrain-v2' },
+          'source-layer': 'landcover', filter: ['==', 'class', 'wood'], minzoom: 8,
+          layout: { visibility: showForest.value ? 'visible' : 'none' },
+          paint: {
+            'fill-extrusion-color': ['interpolate',['linear'],['zoom'], 8,'#4a6d5c', 12,'#72A98F'],
+            'fill-extrusion-height': ['interpolate',['linear'],['zoom'], 8,25, 13,70],
+            'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.65,
+          },
+        })
+      } catch(e) {}
+    }
+
+    // ── Ads & Pins (Once) ──
+    if (markers.length === 0) {
+      try {
+        const ads = await api.getAds()
+        ads?.forEach(ad => {
+          const el = document.createElement('div')
+          el.className = `ad-marker ${ad.status.toLowerCase()}`
+          el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
+          el.addEventListener('click', (e) => { e.stopPropagation(); selectedAd.value = ad; showAdModal.value = true })
+          new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
+        })
+
+        const locs = await api.getLocations()
+        const pts = locs?.length ? locs.map((l,i) => ({
+          id:i, lng:l.longitude, lat:l.latitude, name: l.nameGeo||l.name,
+          description: l.typeGeo||l.description, category: (l.category||'landmark').toLowerCase(),
+        })) : FALLBACK
+
+        pts.forEach(pt => {
+          const el = makePin(pt)
+          el.addEventListener('click', ev => {
+            ev.stopPropagation()
+            const cfg = CAT_CFG[pt.category] || CAT_CFG.default
+            popup.setLngLat([pt.lng, pt.lat]).setHTML(`<div class="popup-inner"><div class="popup-cat" style="color:${cfg.color}">${cfg.label}</div><h3 class="popup-title">${pt.name}</h3><p class="popup-desc">${pt.description}</p></div>`).addTo(map)
+            markers.forEach(m => m.el.classList.remove('selected'))
+            el.classList.add('selected')
           })
-      }
-    } catch(e) {}
-
-    // ── Load pins ──
-    let pts = FALLBACK
-    try {
-      const locs = await api.getLocations()
-      if (locs?.length) {
-        pts = locs.map((l,i) => ({
-          id:i, lng:l.longitude, lat:l.latitude,
-          name: l.nameGeo||l.name||'Unknown',
-          description: l.typeGeo||l.description||'',
-          category: (l.category||'landmark').toLowerCase(),
-        }))
-      }
-    } catch(e) {}
-
-    pts.forEach(pt => {
-      const el = makePin(pt)
-      el.addEventListener('click', ev => {
-        ev.stopPropagation()
-        const cfg = CAT_CFG[pt.category] || CAT_CFG.default
-        popup.setLngLat([pt.lng, pt.lat]).setHTML(`
-          <div class="popup-inner">
-            <div class="popup-cat" style="color:${cfg.color}">${cfg.label}</div>
-            <h3 class="popup-title">${pt.name}</h3>
-            <p class="popup-desc">${pt.description}</p>
-          </div>
-        `).addTo(map)
-        markers.forEach(m => m.el.classList.remove('selected'))
-        el.classList.add('selected')
-      })
-      const mk = new mapboxgl.Marker({ element:el, anchor:'bottom', pitchAlignment:'viewport', rotationAlignment:'viewport' })
-        .setLngLat([pt.lng, pt.lat]).addTo(map)
-      markers.push({ mk, cat:pt.category, el })
-    })
-
+          const mk = new mapboxgl.Marker({ element:el, anchor:'bottom', pitchAlignment:'viewport', rotationAlignment:'viewport' }).setLngLat([pt.lng, pt.lat]).addTo(map)
+          markers.push({ mk, cat:pt.category, el })
+        })
+      } catch(e) {}
+    }
     updateWeather()
-  })
+    maskingReady.value = true
+  }
 
   map.on('moveend', updateWeather)
 
@@ -796,12 +652,36 @@ onUnmounted(() => {
 // ─── RESET REGION ─────────────────────────────────────────────────────────────
 function resetRegion() {
   activeRegion.value = ''
-  // Deselect all
-  REGIONS.features.forEach(f => {
-    map.setFeatureState({ source:'regions', id:f.id }, { selected:false })
+  if (map.getSource('focus-region')) {
+    map.getSource('focus-region').setData({ type: 'FeatureCollection', features: [] })
+  }
+  if (map.getSource('dim-mask-source')) {
+    map.getSource('dim-mask-source').setData({ type: 'FeatureCollection', features: [] })
+  }
+  
+  // Clear layer filters
+  const style = map.getStyle()
+  if (style && style.layers) {
+    style.layers.forEach(l => {
+      if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
+        try { map.setFilter(l.id, null) } catch (e) {}
+      }
+    })
+  }
+
+  // Restore global labels
+  const globalLabels = ['country-label', 'state-label', 'admin-0-label', 'admin-1-label', 'admin-2-label']
+  globalLabels.forEach(id => {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible')
   })
-  map.fitBounds([[40.00,41.00],[45.85,43.55]], {
-    padding:60, duration:1800, pitch:55, bearing:-5
+
+  map.fitBounds([[41.0, 41.0], [45.0, 43.5]], { padding: 60, duration: 2000, pitch: 55, bearing: -5 })
+  
+  // Restore markers
+  markers.forEach(m => {
+    m.isInside = true
+    const catMatch = (activeCat.value === 'all' || m.cat === activeCat.value)
+    m.el.style.display = catMatch ? 'block' : 'none'
   })
 }
 
@@ -826,7 +706,7 @@ async function updateWeather() {
     const elev = map.queryTerrainElevation(c) || 0
     elevation.value = Math.round(elev) + ' მ'
     
-    // 2. Weather API (Open-Meteo as consistent provider)
+    // 2. Weather API (Open-Meteo)
     const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lng}&current_weather=true&hourly=relativehumidity_2m`)
     const d = await r.json()
     const t = Math.round(d.current_weather.temperature)
@@ -839,8 +719,14 @@ async function updateWeather() {
     if (geoJson.features && geoJson.features.length > 0) {
       displayLocation.value = geoJson.features[0].text
     } else {
-      displayLocation.value = 'Racha'
+      displayLocation.value = activeRegion.value || 'Racha'
     }
+
+    // 4. Update Population dynamically based on activeRegion
+    if (activeRegion.value.includes('Racha')) populationCount.value = '28,500'
+    else if (activeRegion.value.includes('Svaneti')) populationCount.value = '29,900'
+    else populationCount.value = '--'
+
   } catch(e) {}
 }
 
@@ -856,29 +742,30 @@ function toggleTheme() {
   const isDark = !isLightMode.value
   themeIcon.value = isDark ? 'light_mode' : 'dark_mode'
   
-  // Use .dark-mode as requested
-  if (isDark) document.body.classList.add('dark-mode')
-  else        document.body.classList.remove('dark-mode')
+  if (isDark) {
+    document.body.classList.add('dark-mode')
+    document.documentElement.style.setProperty('--glass-bg', 'rgba(10, 10, 20, 0.6)')
+    document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.1)')
+  } else {
+    document.body.classList.remove('dark-mode')
+    document.documentElement.style.setProperty('--glass-bg', 'rgba(255, 255, 255, 0.15)')
+    document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.3)')
+  }
 
   if (!map) return
 
   try {
-    // ── Day Mode (Sky visible through transparent map) ──
+    // Swap Mapbox Style
+    const newStyle = isDark ? 'mapbox://styles/mapbox/satellite-v9' : 'mapbox://styles/mapbox/light-v11'
+    map.setStyle(newStyle)
+    
+    // Logic moved to initMapLayers which is called on style.load
+
     if (!isDark) {
-      map.setLight([
-        { type: 'ambient',     properties: { color: '#ffffff', intensity: 0.35 } },
-        { type: 'directional', properties: { color: '#ffffff', intensity: 0.6, direction: [210, 30] } }
-      ])
-      map.setFog(null) // No fog → transparent canvas → CSS Day Sky
-    } 
-    // ── Night Mode (Stars/Dim) ──
-    else {
-      map.setLight([
-        { type: 'ambient',     properties: { color: '#ccddee', intensity: 0.08 } }, // dim moonlight
-        { type: 'directional', properties: { color: '#aab',    intensity: 0.25, direction: [210, 30] } }
-      ])
-      // Night fog helps create starfield if CSS isn't enough, but CSS handles it too.
-      // Let's use fog for depth + stars.
+      map.setLight({ anchor:'viewport', color:'#ffffff', intensity:0.6, position:[1.15, 210, 30] })
+      map.setFog(null)
+    } else {
+      map.setLight({ anchor:'viewport', color:'#ccddee', intensity:0.1, position:[1.15, 210, 30] })
       map.setFog({
         range: [0.5, 12],
         color: '#0d1520',
@@ -930,8 +817,8 @@ html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
   --glass-bg:      rgba(20, 20, 35, 0.45);
   --glass-border:  rgba(255, 255, 255, 0.12);
   --glass-blur:    blur(24px) saturate(180%);
-  --neon-glow:     0 0 10px rgba(52, 199, 89, 0.4);
-  --accent:        #34C759;
+  --neon-glow:     0 0 10px rgba(114, 169, 143, 0.4);
+  --accent:        var(--brand-green);
   --text-main:     #ffffff;
   --text-muted:    rgba(255, 255, 255, 0.6);
   --font-main:     'Inter', sans-serif;
@@ -1009,21 +896,24 @@ body.dark-mode .glass-effect {
 .region-tooltip {
   position: fixed; z-index: 50; pointer-events: none;
   background: rgba(8,8,18,0.9); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(52,199,89,0.5); color: #fff;
+  border: 0.5px solid rgba(114,169,143,0.5); color: #fff;
   font-size: 12px; font-weight: 600; padding: 5px 13px;
   border-radius: 20px; white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 12px rgba(52,199,89,.2);
+  box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 12px rgba(114,169,143,.2);
 }
 
 /* ── Active Region Chip ── */
 .region-chip {
-  position: absolute; top: 78px; left: 50%; transform: translateX(-50%);
-  z-index: 25; display: flex; align-items: center; gap: 6px;
-  background: var(--glass); backdrop-filter: var(--blur);
-  border: 0.5px solid rgba(52,199,89,0.4); border-radius: 100px;
-  padding: 6px 14px; color: #fff; font-size: 12px; font-weight: 600;
-  box-shadow: 0 0 16px rgba(52,199,89,.2);
+  position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+  z-index: 25; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--glass-bg); backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 20px;
+  padding: 8px 16px; color: #fff;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  transition: all 0.3s ease;
 }
+.region-chip-main { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+.region-chip-stats { font-size: 11px; opacity: 0.7; display: flex; align-items: center; gap: 4px; }
 
 /* ── Apple Pin ── */
 .pin {
@@ -1034,8 +924,8 @@ body.dark-mode .glass-effect {
   filter: drop-shadow(0 6px 18px rgba(0,0,0,.55));
 }
 .pin:hover { transform: scale(1.1) translateY(-3px); }
-.pin.selected .pin-badge { box-shadow: 0 0 0 3px #34C759, 0 0 20px rgba(52,199,89,.6); }
-.pin.selected .pin-stem  { background: linear-gradient(to bottom, #34C759, rgba(52,199,89,.1)); }
+.pin.selected .pin-badge { box-shadow: 0 0 0 3px var(--brand-green), 0 0 20px rgba(114,169,143,0.6); }
+.pin.selected .pin-stem  { background: linear-gradient(to bottom, var(--brand-green), rgba(114,169,143,0.1)); }
 
 .pin-label {
   background: rgba(8,8,18,.85); backdrop-filter: blur(12px);
@@ -1098,10 +988,10 @@ body.dark-mode .glass-effect {
 
 /* Zoom Controls */
 .zoom-group {
-  display: flex; flex-direction: column; gap: 8px; margin-top: 10px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .zoom-btn {
-  width: 48px; height: 48px; border-radius: 50%; font-weight: bold; font-size: 18px;
+  width: 44px; height: 44px; border-radius: 50%;
 }
 
 /* Weather Widget (Smart Expand - Left Aligned) */
@@ -1140,9 +1030,28 @@ body.dark-mode .glass-effect {
 .weather-wrap:hover .weather-info {
   opacity: 1; transform: translateX(0);
 }
-.temp-main { font-weight: 700; font-size: 16px; line-height: 1.1; margin-bottom: 2px; }
-.weather-details { display: flex; gap: 10px; font-size: 10px; opacity: 0.8; font-weight: 500; }
-.weather-details span { display: flex; align-items: center; gap: 3px; }
+.weather-tooltip {
+  position: absolute; left: 100%; top: 50%; transform: translateY(-50%) translateX(10px);
+  width: 200px; padding: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  z-index: 1000;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  pointer-events: none; opacity: 0;
+  transition: all 0.3s ease;
+}
+.weather-wrap:hover .weather-tooltip { opacity: 1; transform: translateY(-50%) translateX(20px); }
+.tooltip-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+.tooltip-loc { font-weight: 700; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
+
+/* Fixed 3D Buildings Rendering */
+.map-view .mapboxgl-fill-extrusion {
+    transition: fill-extrusion-height 0.5s ease;
+}
 
 /* Layer Control (Drawer Redesign) */
 .layer-wrap { position: relative; }
@@ -1161,7 +1070,21 @@ body.dark-mode .glass-effect {
   z-index: 100;
 }
 .layer-wrap:hover .layer-card {
-  transform: translateX(0) scale(1); opacity: 1; pointer-events: auto;
+  /* Removed hover trigger for persistence */
+}
+.layer-card {
+  position: absolute; left: 60px; top: 0;
+  width: 220px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  z-index: 100;
+  color: #fff;
 }
 .layer-header { 
   font-size: 10px; text-transform: uppercase; letter-spacing: 1px; 
@@ -1221,12 +1144,50 @@ body.dark-mode .glass-effect {
 
 /* ── Geocoder ── */
 .mapboxgl-ctrl-geocoder {
-  background: rgba(255,255,255,.08)!important; border-radius: 100px!important;
-  width: 155px!important; min-width:0!important; height:28px!important;
-  display:flex!important; align-items:center!important;
-  box-shadow:none!important; border:0.5px solid var(--border)!important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-radius: 24px !important;
+  width: 280px !important; min-width: 0 !important; height: 44px !important;
+  display: flex !important; align-items: center !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  overflow: visible !important;
 }
-.mapboxgl-ctrl-geocoder--input { color:#fff!important; padding:0 30px!important; font-size:11px!important; background:none!important; border:none!important; height:100%!important; }
+.mapboxgl-ctrl-geocoder--icon-search {
+  left: 14px !important; top: 50% !important; transform: translateY(-50%) !important;
+  width: 20px !important; height: 20px !important; fill: #fff !important;
+  opacity: 0.8; margin: 0 !important;
+}
+.mapboxgl-ctrl-geocoder--button {
+  background: transparent !important;
+  top: 50% !important; transform: translateY(-50%) !important;
+  right: 12px !important; margin: 0 !important;
+  display: flex !important; align-items: center; justify-content: center;
+}
+.mapboxgl-ctrl-geocoder--icon-close {
+  fill: #fff !important; width: 20px !important; height: 20px !important;
+  opacity: 0.7;
+}
+.mapboxgl-ctrl-geocoder--icon-close:hover { opacity: 1; }
+.mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
+
+/* ── User Profile Container ── */
+.user-auth-wrap {
+  position: absolute; top: 25px; right: 25px;
+  z-index: 100;
+}
+.user-auth-wrap .pill-btn {
+  width: 50px; height: 50px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.user-auth-wrap .pill-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
 
 /* ── Geocoder Suggestions (Glassmorphism) ── */
 .mapboxgl-ctrl-geocoder .suggestions {
@@ -1357,14 +1318,14 @@ body.dark-theme .sky-background {
   z-index: 50;
 }
 .ad-marker:hover { transform: scale(1.15); z-index: 60; }
-.ad-marker.available { color: #34C759; border: 2px solid #34C759; }
+.ad-marker.available { color: var(--brand-green); border: 2px solid var(--brand-green); }
 .ad-marker.pending   { color: orange; border: 2px solid orange; }
 .ad-marker.rented    { color: #ff4444; border: 2px solid #ff4444; }
 
 .ad-status-badge {
     display:inline-block; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; text-transform:uppercase; margin-bottom:10px;
 }
-.ad-status-badge.available { background:rgba(52,199,89,0.2); color:#34C759; }
+.ad-status-badge.available { background:rgba(114,169,143,0.2); color:var(--brand-green); }
 .ad-status-badge.pending { background:rgba(255,165,0,0.2); color:orange; }
 .ad-status-badge.rented { background:rgba(255,68,68,0.2); color:#ff4444; }
 body.dark-theme .clouds {

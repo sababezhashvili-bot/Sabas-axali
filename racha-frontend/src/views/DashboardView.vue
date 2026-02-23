@@ -49,7 +49,7 @@ onMounted(async () => {
   --glass: rgba(255, 255, 255, 0.05);
   --glass-blur: blur(40px) saturate(180%);
   --border: rgba(255, 255, 255, 0.1);
-  --custom-green: #7fb069;
+  --custom-green: var(--brand-green);
 
   display: flex;
   height: 100vh;

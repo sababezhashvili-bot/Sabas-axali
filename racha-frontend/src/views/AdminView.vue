@@ -481,8 +481,19 @@ const isAddingAd = ref(false)
 const newAd = ref({ name:'', price:'', type:'Billboard', lat:null, lng:null })
 let tempAdMarker = null
 
+// Store all markers for spatial clipping
+const adminMarkers = []
+
+function addAdminMarker(mk, el, type = 'poi') {
+    adminMarkers.push({ mk, el, type })
+}
+
 async function loadAdsData() {
     try {
+        // Clear old markers from map if any (though currently we reload or re-add)
+        // For strictness, let's clear the array
+        adminMarkers.length = 0 
+        
         ads.value = await api.getAds()
         rentRequests.value = await api.getRentRequests()
         
@@ -491,7 +502,8 @@ async function loadAdsData() {
              const el = document.createElement('div')
              el.className = `ad-marker ${ad.status.toLowerCase()}`
              el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
-             new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
+             const mk = new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
+             addAdminMarker(mk, el, 'ad')
         })
     } catch(e) {}
 }
@@ -718,6 +730,43 @@ onMounted(async () => {
         bearing: -10,
         duration: 2000
       })
+
+      // Mask Markers - Check Spatial
+      adminMarkers.forEach(m => {
+        const lngLat = m.mk.getLngLat()
+        const pt = turf.point([lngLat.lng, lngLat.lat])
+        const isInside = turf.booleanPointInPolygon(pt, feature)
+        m.el.style.display = isInside ? 'block' : 'none'
+      })
+
+      // Strict Layer Clipping: Apply 'within' filters
+      const style = map.getStyle()
+      if (style && style.layers) {
+        style.layers.forEach(layer => {
+          const id = layer.id
+          if (id.includes('label') || id.includes('road') || id.includes('building') || id.includes('poi') || id.includes('bridge') || id.includes('tunnel')) {
+            try {
+              map.setFilter(id, ['within', feature])
+            } catch (e) {}
+          }
+        })
+      }
+
+      // Explicitly hide large global labels
+      const globalLabels = [
+        'country-label', 'state-label', 
+        'admin-0-label', 'admin-1-label', 'admin-2-label',
+        'place-country', 'place-state', 'place-city-label'
+      ]
+      globalLabels.forEach(id => {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, 'visibility', 'none')
+        }
+      })
+
+      // Force mask and border to top
+      if (map.getLayer('dim-mask-layer')) map.moveLayer('dim-mask-layer')
+      if (map.getLayer('focus-region-border')) map.moveLayer('focus-region-border')
     }
 
     // Fetch ADM1 Data & Apply Mask
@@ -754,9 +803,10 @@ onMounted(async () => {
           map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60 })
         })
         
-        new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([l.longitude, l.latitude])
           .addTo(map)
+        addAdminMarker(mk, el, 'poi')
       })
     }
   } catch (e) { console.error('Failed to load pins', e) }
@@ -776,6 +826,11 @@ onMounted(async () => {
         locCoords.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
         marker.setLngLat(e.lngLat).addTo(map)
         
+        // Ensure this marker is also tracked for clipping
+        if (!adminMarkers.some(m => m.mk === marker)) {
+            addAdminMarker(marker, pinEl, 'new-poi')
+        }
+        
         // Animate pin drop
         pinEl.classList.remove('drop-anim')
         void pinEl.offsetWidth 
@@ -787,11 +842,8 @@ onMounted(async () => {
         newAd.value.lat = lat
         newAd.value.lng = lng
         
-        if (tempAdMarker) tempAdMarker.remove()
-        const el = document.createElement('div')
-        el.className = 'ad-marker available new'
-        el.innerHTML = 'NEW'
         tempAdMarker = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map)
+        addAdminMarker(tempAdMarker, el, 'new-ad')
     }
   })
 })
@@ -814,8 +866,8 @@ onUnmounted(() => {
   --glass-bg:      rgba(20, 20, 35, 0.45);
   --glass-border:  rgba(255, 255, 255, 0.12);
   --glass-blur:    blur(24px) saturate(180%);
-  --neon-glow:     0 0 10px rgba(52, 199, 89, 0.4);
-  --accent:        #34C759;
+  --neon-glow:     0 0 10px rgba(114, 169, 143, 0.4);
+  --accent:        var(--brand-green);
   --text-main:     #ffffff;
   --text-muted:    rgba(255, 255, 255, 0.6);
   --font-main:     'Inter', sans-serif;
@@ -881,10 +933,10 @@ onUnmounted(() => {
 .nav-brand { margin-bottom: 30px; }
 .brand-icon {
   width: 40px; height: 40px;
-  background: linear-gradient(135deg, #34C759, #30D158);
+  background: linear-gradient(135deg, #4a6d5c, #72A98F);
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 15px rgba(52,199,89,0.3);
+  box-shadow: 0 4px 15px rgba(114,169,143,0.3);
   color: #fff;
 }
 .nav-group { display: flex; flex-direction: column; width: 100%; align-items: center; }
@@ -1030,7 +1082,7 @@ onUnmounted(() => {
     transition: all 0.2s;
 }
 .icon-toggle:hover { background: rgba(255,255,255,0.1); color: #fff; }
-.icon-toggle.active { background: rgba(52,199,89,0.2); color: #34C759; border: 1px solid #34C759; box-shadow: 0 0 10px rgba(52,199,89,0.2); }
+.icon-toggle.active { background: rgba(114,169,143,0.2); color: var(--brand-green); border: 1px solid var(--brand-green); box-shadow: 0 0 10px rgba(114,169,143,0.2); }
 
 .form-group input:focus { border-color: var(--accent); background: rgba(0,0,0,0.4); }
 .file-input { padding: 8px; font-size: 12px; }
@@ -1041,7 +1093,7 @@ onUnmounted(() => {
   color: #fff; border: none; padding: 12px; border-radius: 10px;
   font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
   transition: 0.2s;
-  box-shadow: 0 4px 15px rgba(52,199,89,0.3);
+  box-shadow: 0 4px 15px rgba(114,169,143,0.3);
 }
 .action-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
 
@@ -1068,7 +1120,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .log-list { list-style: none; padding: 0; margin: 0; }
 .log-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .log-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(255,255,255,0.05); }
-.log-icon.login { color: #30D158; background: rgba(52,199,89,0.15); }
+.log-icon.login { color: var(--brand-green); background: rgba(114,169,143,0.15); }
 .log-content { flex: 1; min-width: 0; }
 .log-title { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
 .log-user { color: var(--accent); }
@@ -1110,8 +1162,8 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   transform: scale(1.1) translateY(-5px);
 }
 .admin-pin-wrapper:hover .pin-glass-head {
-  box-shadow: 0 0 0 2px rgba(52,199,89,0.5), 0 0 20px rgba(52,199,89,0.6);
-  background: rgba(52,199,89,0.2);
+  box-shadow: 0 0 0 2px rgba(114,169,143,0.5), 0 0 20px rgba(114,169,143,0.6);
+  background: rgba(114,169,143,0.2);
 }
 
 /* 1. Glass Head */
@@ -1122,7 +1174,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.6);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 15px rgba(52,199,89, 0.4);
+  box-shadow: 0 0 15px rgba(114,169,143, 0.4);
   position: relative;
   z-index: 2;
   animation: breatheGlow 3s infinite ease-in-out;
@@ -1152,8 +1204,8 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 
 /* Animations */
 @keyframes breatheGlow {
-  0%, 100% { box-shadow: 0 0 0 0px rgba(52,199,89,0), 0 4px 10px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.6); }
-  50% { box-shadow: 0 0 0 4px rgba(52,199,89,0.2), 0 4px 15px rgba(52,199,89,0.4); border-color: #fff; }
+  0%, 100% { box-shadow: 0 0 0 0px rgba(114,169,143,0), 0 4px 10px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(114,169,143,0.2), 0 4px 15px rgba(114,169,143,0.4); border-color: #fff; }
 }
 
 .drop-anim {
@@ -1270,7 +1322,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  box-shadow: 0 0 12px rgba(52,199,89,0.4);
+  box-shadow: 0 0 12px rgba(114,169,143,0.4);
 }
 .mcp-btn .material-symbols-outlined { font-size: 16px; }
 
