@@ -197,7 +197,7 @@
                :class="{ active: activeRegion === r }"
                @click="selectSubRegion(r)">
             <span class="item-name">{{ r }}</span>
-            <span class="item-pop">{{ pop }}</span>
+            <span class="item-pop">{{ pop.toLocaleString() }}</span>
           </div>
         </div>
       </transition>
@@ -239,7 +239,7 @@ const themeIcon   = ref(document.body.classList.contains('dark-theme') ? 'dark_m
 const isLightMode = ref(!document.body.classList.contains('dark-theme'))
 const is3D        = ref(true)
 const showForest  = ref(false)
-const activeRegion = ref('Racha-Lechkhumi & Qvemo Svaneti')
+const activeRegion = ref('რაჭა (მთლიანი)')
 const maskingReady = ref(false) // Controls loading screen
 
 // Layer Toggles
@@ -247,35 +247,84 @@ const showLabels    = ref(false)
 const showRoads     = ref(false)
 const showBuildings = ref(false)
 const isLayerWidgetOpen = ref(false)
-const populationCount = ref('48,800')
+const populationCount = ref('31,000')
+const actualPopNum = ref(31000)
 const activeFeature = ref(null) 
 const combinedRachaRef = ref(null) // Stores the Union of Ambrolauri + Oni
 
 // Region Selector State
 const isRegionDropdownOpen = ref(false)
 const SUB_REGIONS = {
-  'Racha-Lechkhumi & Qvemo Svaneti': '48,800',
-  'Racha': '28,500',
-  'Lechkhumi': '14,200',
-  'Qvemo Svaneti': '6,100'
+  'რაჭა (მთლიანი)': 31000,
+  'ამბროლაური': 15400,
+  'ონი': 15600
+}
+
+const MUNI_MAP = {
+  'ამბროლაური': 'Ambrolauri',
+  'ონი': 'Oni'
+}
+
+function animateCounter(target) {
+  const start = actualPopNum.value
+  const duration = 1000
+  const startTime = performance.now()
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    const easeOutQuad = t => t * (2 - t)
+    const current = Math.floor(start + (target - start) * easeOutQuad(progress))
+    
+    actualPopNum.value = current
+    populationCount.value = current.toLocaleString()
+
+    if (progress < 1) {
+      requestAnimationFrame(update)
+    }
+  }
+  requestAnimationFrame(update)
 }
 
 function selectSubRegion(r) {
+  const prevRegion = activeRegion.value
   activeRegion.value = r
-  populationCount.value = SUB_REGIONS[r]
   isRegionDropdownOpen.value = false
   
-  // Trigger Map Restoration for Sub-Region Isolation
-  if (r.includes('&')) {
-    if (combinedRachaRef.value) selectRegion(combinedRachaRef.value)
+  // Trigger Counter Animation
+  if (SUB_REGIONS[r]) {
+    animateCounter(SUB_REGIONS[r])
+  }
+
+  // Persistent Masking: Always keep Racha highlighted
+  // We only change the camera view (Zoom/Fly-to)
+  
+  if (r === 'რაჭა (მთლიანი)') {
+    if (combinedRachaRef.value) {
+        const bbox = window.turf.bbox(combinedRachaRef.value)
+        map.fitBounds(bbox, { 
+            padding: 120, pitch: 55, bearing: -8, duration: 3000, 
+            easing: (t) => t * (2 - t) 
+        })
+    }
     return
   }
 
+  // Handle Ambrolauri or Oni Zoom
   if (ready && map && map.getSource('admin-regions')) {
     const data = map.getSource('admin-regions')._data
     if (data && data.features) {
-       const feat = data.features.find(f => (f.properties.shapeName || '') === r)
-       if (feat) selectRegion(feat)
+       const engName = MUNI_MAP[r]
+       const feat = data.features.find(f => (f.properties.shapeName || '') === engName)
+       if (feat) {
+          // Soft Fly-to municipality
+          const bbox = window.turf.bbox(feat)
+          map.fitBounds(bbox, { 
+              padding: 150, pitch: 60, bearing: -10, duration: 3000, 
+              essential: true,
+              easing: (t) => t * (2 - t)
+          })
+       }
     }
   }
 }
@@ -468,7 +517,7 @@ onMounted(async () => {
 
   // Approx Racha Bounds for instant camera
   const RACHA_BOUNDS = [[42.4, 42.2], [44.2, 43.2]];
-  const MAX_PAN_BOUNDS = [[41.5, 41.5], [45.5, 44.0]];
+  const MAX_PAN_BOUNDS = [[41.8, 41.9], [44.6, 43.4]];
 
   map = new mapboxgl.Map({
     container: mapEl.value,
@@ -481,6 +530,11 @@ onMounted(async () => {
     antialias: true,
     transparent: true,
     projection: 'mercator', 
+    // Cinematic Damping & Inertia
+    dragPan: { inertia: true, damping: 0.05 },
+    dragRotate: { inertia: true, damping: 0.05 },
+    scrollZoom: { inertia: true, damping: 0.05 },
+    keyboard: true,
   })
 
   // Lock Zoom: Prevent zooming out beyond initial state
@@ -546,9 +600,16 @@ onMounted(async () => {
       }
     } catch(err) { console.error('Mask generation failed:', err) }
 
-    // 3. Fly To Region
+    // 3. Fly To Region (Smooth Cinematic Ease)
     const bbox = turf.bbox(feature)
-    map.fitBounds(bbox, { padding: 150, pitch: 60, bearing: -10, duration: 2000, essential: true })
+    map.fitBounds(bbox, { 
+      padding: 150, 
+      pitch: 60, 
+      bearing: -10, 
+      duration: 3000, 
+      essential: true,
+      easing: (t) => t * (2 - t) // Smooth Ease-In-Out override
+    })
 
     // 4. Update UI
     activeRegion.value = feature.properties.shapeName
@@ -679,7 +740,7 @@ onMounted(async () => {
           const combinedRacha = rachaFeatures.reduce((acc, feat) => {
             return window.turf.union(acc, feat)
           })
-          combinedRacha.properties = { shapeName: 'Racha' }
+          combinedRacha.properties = { shapeName: 'რაჭა (მთლიანი)' }
           combinedRachaRef.value = combinedRacha // Store for later use
           
           // We'll use this combined feature as the 'active' region for initial view
@@ -805,7 +866,13 @@ function resetRegion() {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible')
   })
 
-  map.fitBounds([[41.0, 41.0], [45.0, 43.5]], { padding: 60, duration: 2000, pitch: 55, bearing: -5 })
+  map.fitBounds([[41.0, 41.0], [45.0, 43.5]], { 
+    padding: 60, 
+    duration: 2500, 
+    pitch: 55, 
+    bearing: -5,
+    easing: (t) => t * (2 - t)
+  })
   
   // Restore markers
   markers.forEach(m => {
