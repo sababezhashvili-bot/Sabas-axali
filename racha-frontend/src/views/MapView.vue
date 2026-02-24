@@ -239,7 +239,7 @@ const themeIcon   = ref(document.body.classList.contains('dark-theme') ? 'dark_m
 const isLightMode = ref(!document.body.classList.contains('dark-theme'))
 const is3D        = ref(true)
 const showForest  = ref(false)
-const activeRegion = ref('რაჭა (მთლიანი)')
+const activeRegion = ref('რაჭა')
 const maskingReady = ref(false) // Controls loading screen
 
 // Layer Toggles
@@ -255,19 +255,18 @@ const combinedRachaRef = ref(null) // Stores the Union of Ambrolauri + Oni
 // Region Selector State
 const isRegionDropdownOpen = ref(false)
 const SUB_REGIONS = {
-  'რაჭა (მთლიანი)': 31000,
+  'რაჭა': 31000,
   'ამბროლაური': 15400,
   'ონი': 15600
 }
 
 const MUNI_MAP = {
-  'ამბროლაური': 'Ambrolauri',
-  'ონი': 'Oni'
+  'ამბროლაური': ['Ambrolauri', 'Ambrolauris'],
+  'ონი': ['Oni', 'Onis']
 }
 
-function animateCounter(target) {
+function animateCounter(target, duration = 3000) {
   const start = actualPopNum.value
-  const duration = 1000
   const startTime = performance.now()
 
   function update(currentTime) {
@@ -287,7 +286,6 @@ function animateCounter(target) {
 }
 
 function selectSubRegion(r) {
-  const prevRegion = activeRegion.value
   activeRegion.value = r
   isRegionDropdownOpen.value = false
   
@@ -296,33 +294,40 @@ function selectSubRegion(r) {
     animateCounter(SUB_REGIONS[r])
   }
 
-  // Persistent Masking: Always keep Racha highlighted
-  // We only change the camera view (Zoom/Fly-to)
-  
-  if (r === 'რაჭა (მთლიანი)') {
+  // Hierarchical Zoom & Masking
+  if (r === 'რაჭა') {
     if (combinedRachaRef.value) {
-        const bbox = window.turf.bbox(combinedRachaRef.value)
-        map.fitBounds(bbox, { 
-            padding: 120, pitch: 55, bearing: -8, duration: 3000, 
-            easing: (t) => t * (2 - t) 
-        })
+        selectRegion(combinedRachaRef.value)
     }
     return
   }
 
-  // Handle Ambrolauri or Oni Zoom
+  // Handle Ambrolauri or Oni Zoom (Cinematic 3D Fly-To)
   if (ready && map && map.getSource('admin-regions')) {
-    const data = map.getSource('admin-regions')._data
+    const source = map.getSource('admin-regions')
+    const data = source._data || source.serialize().data
     if (data && data.features) {
-       const engName = MUNI_MAP[r]
-       const feat = data.features.find(f => (f.properties.shapeName || '') === engName)
+       const possibleNames = MUNI_MAP[r] || []
+       const feat = data.features.find(f => {
+         const name = (f.properties.shapeName || '').trim()
+         return possibleNames.some(p => name.toLowerCase() === p.toLowerCase())
+       })
        if (feat) {
-          // Soft Fly-to municipality
           const bbox = window.turf.bbox(feat)
-          map.fitBounds(bbox, { 
-              padding: 150, pitch: 60, bearing: -10, duration: 3000, 
-              essential: true,
-              easing: (t) => t * (2 - t)
+          const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
+          
+          // Silky Smooth Cinematic Fly-To
+          map.flyTo({
+            center: center,
+            zoom: 11,
+            pitch: 45,
+            bearing: -10,
+            duration: 3000, 
+            speed: 0.8,
+            curve: 1.4,
+            essential: true,
+            padding: { top: 50, bottom: 50, left: 50, right: 50 },
+            easing: (t) => t * (2 - t)
           })
        }
     }
@@ -516,8 +521,9 @@ onMounted(async () => {
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
   // Approx Racha Bounds for instant camera
+  // Expanded Bounds to prevent jitter during high-pitch/arc flights
   const RACHA_BOUNDS = [[42.4, 42.2], [44.2, 43.2]];
-  const MAX_PAN_BOUNDS = [[41.8, 41.9], [44.6, 43.4]];
+  const MAX_PAN_BOUNDS = [[40.5, 40.5], [46.5, 45.0]];
 
   map = new mapboxgl.Map({
     container: mapEl.value,
@@ -600,19 +606,29 @@ onMounted(async () => {
       }
     } catch(err) { console.error('Mask generation failed:', err) }
 
-    // 3. Fly To Region (Smooth Cinematic Ease)
+    // 3. Fly To Region (Smooth Cinematic 3D)
     const bbox = turf.bbox(feature)
-    map.fitBounds(bbox, { 
-      padding: 150, 
+    const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
+    
+    map.flyTo({
+      center: center,
+      zoom: feature.properties.shapeName === 'რაჭა' ? 8.8 : 10.5,
       pitch: 60, 
       bearing: -10, 
       duration: 3000, 
       essential: true,
-      easing: (t) => t * (2 - t) // Smooth Ease-In-Out override
+      padding: { top: 50, bottom: 50, left: 50, right: 50 },
+      easing: (t) => t * (2 - t)
     })
 
     // 4. Update UI
-    activeRegion.value = feature.properties.shapeName
+    if (feature.properties.shapeName === 'რაჭა') {
+        activeRegion.value = 'რაჭა'
+        populationCount.value = '31,000'
+        actualPopNum.value = 31000
+    } else {
+        activeRegion.value = feature.properties.shapeName
+    }
     activeFeature.value = feature
 
     // 5. Data Filtering
@@ -652,6 +668,19 @@ onMounted(async () => {
   }
 
   async function initMapLayers() {
+    // ── Global Boundary Hide ──
+    const hideBoundaries = () => {
+        const style = map.getStyle()
+        if (style && style.layers) {
+          style.layers.forEach(l => {
+            if (l.id.includes('admin') || l.id.includes('boundary')) {
+              try { map.setPaintProperty(l.id, 'line-opacity', 0) } catch(e) {}
+            }
+          })
+        }
+    }
+    hideBoundaries()
+
     // ── Terrain ──
     try {
       if (!map.getSource('dem')) {
@@ -740,12 +769,15 @@ onMounted(async () => {
           const combinedRacha = rachaFeatures.reduce((acc, feat) => {
             return window.turf.union(acc, feat)
           })
-          combinedRacha.properties = { shapeName: 'რაჭა (მთლიანი)' }
+          combinedRacha.properties = { shapeName: 'რაჭა' }
           combinedRachaRef.value = combinedRacha // Store for later use
           
           // We'll use this combined feature as the 'active' region for initial view
-          // This triggers selectRegion which sets the mask data
           selectRegion(combinedRacha)
+          // Double force data for first-frame display
+          activeRegion.value = 'რაჭა'
+          populationCount.value = '31,000'
+          actualPopNum.value = 31000
         }
 
         if (!map.getSource('admin-regions')) {
@@ -1099,11 +1131,11 @@ body.dark-mode .glass-effect {
   box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 12px rgba(114,169,143,.2);
 }
 
-/* ── Active Region Selector (Wide-Pill Redesign) ── */
+/* ── Active Region Selector (Integrated Wide-Pill) ── */
 .region-selector-wrap {
   position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
   z-index: 10000; display: flex; flex-direction: column; align-items: center;
-  pointer-events: none; /* Allow map interaction around the pill */
+  pointer-events: none;
 }
 .region-chip.wide-pill {
   pointer-events: auto; /* Re-enable for the actual interaction */
@@ -1137,18 +1169,19 @@ body.dark-mode .glass-effect {
 .stats-label { opacity: 0.6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
 .stats-value { font-weight: 700; color: #fff; letter-spacing: 0.2px; }
 
-/* Dropdown Menu */
+/* Dropdown Menu - Flush Alignment */
 .region-dropdown-list {
   pointer-events: auto;
-  margin-top: 12px;
-  width: 580px; /* Match wide-pill width */
-  background: rgba(10, 10, 18, 0.7);
+  margin-top: 4px; /* Snap directly below the title pill */
+  width: 580px; 
+  background: rgba(10, 10, 18, 0.85); /* Slightly darker for better contrast */
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 0.5px solid rgba(255, 255, 255, 0.2);
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  z-index: 10001; /* Ensure it appears on top of the header pill */
 }
 .dropdown-item {
   display: flex; justify-content: space-between; align-items: center;
@@ -1357,9 +1390,11 @@ body.dark-mode .glass-effect {
 }
 
 /* ── Z-Index Fixes (Force UI above dark mask) ── */
-.top-bar, .ctrl-panel, .bottom-label, .region-chip, .auth-control-container, .region-tooltip {
-  z-index: 9999 !important;
-  position: absolute; /* Ensure stacking context works */
+.top-bar, .ctrl-panel, .bottom-label, .auth-control-container, .region-tooltip {
+  z-index: 9999;
+}
+.region-selector-wrap {
+  z-index: 10005 !important; /* Force it HIGHER than the top-bar */
 }
 .layer-row:hover { color: var(--accent); }
 .layer-row input { 
