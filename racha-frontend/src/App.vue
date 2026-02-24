@@ -14,10 +14,11 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: "SF Pro Display", "Noto Sans Georgian", sans-serif;
+  font-family: "Montserrat", "SF Pro Display", "Noto Sans Georgian", sans-serif;
   background: #000;
   color: #fff;
   overflow: hidden;
+  letter-spacing: 0.05em; /* Airy and luxurious feel */
 }
 
 * {

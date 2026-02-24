@@ -115,9 +115,9 @@
         </div>
       </div>
 
-      <!-- Layer Control (Hamburger) -->
-        <button class="pill-btn layer-btn" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers">
-          <span class="material-symbols-outlined">layers</span>
+      <!-- Layer Control (Position #3: Logo Placeholder → Premium Logo) -->
+        <button class="pill-btn layer-btn premium-logo-wrap" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers & Antigravity">
+          <img src="@/assets/antigravity_logo.png" alt="Logo" class="antigravity-logo-img" />
         </button>
         <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
           <div class="layer-header">
@@ -174,17 +174,33 @@
       </button>
     </div>
 
-    <!-- Active region chip -->
-    <div v-if="activeRegion" class="region-chip">
-      <div class="region-chip-main">
-        <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)!important">location_on</span>
-        {{ activeRegion }}
-        <span class="material-symbols-outlined" style="font-size:14px;cursor:pointer;opacity:.6" @click="resetRegion">close</span>
+    <!-- Active region chip (Enhanced Wide-Pill) -->
+    <div v-if="activeRegion" class="region-selector-wrap panoramic" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
+      <div class="region-chip wide-pill">
+        <div class="region-chip-main">
+          <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent)!important">location_on</span>
+          <span class="region-title">{{ activeRegion }}</span>
+          <span class="material-symbols-outlined dropdown-chevron" :class="{ open: isRegionDropdownOpen }">expand_more</span>
+        </div>
+        <div class="region-chip-stats">
+          <span class="material-symbols-outlined" style="font-size:14px">groups</span>
+          <span class="stats-label">Population:</span>
+          <span class="stats-value">{{ populationCount }}</span>
+        </div>
       </div>
-      <div class="region-chip-stats">
-        <span class="material-symbols-outlined" style="font-size:12px">groups</span>
-        Population: {{ populationCount }}
-      </div>
+
+      <!-- Premium Glassmorphism Dropdown -->
+      <transition name="dropdown-fade">
+        <div v-if="isRegionDropdownOpen" class="region-dropdown-list" @click.stop>
+          <div v-for="(pop, r) in SUB_REGIONS" :key="r" 
+               class="dropdown-item" 
+               :class="{ active: activeRegion === r }"
+               @click="selectSubRegion(r)">
+            <span class="item-name">{{ r }}</span>
+            <span class="item-pop">{{ pop }}</span>
+          </div>
+        </div>
+      </transition>
     </div>
 
     <!-- Bottom label -->
@@ -223,7 +239,7 @@ const themeIcon   = ref(document.body.classList.contains('dark-theme') ? 'dark_m
 const isLightMode = ref(!document.body.classList.contains('dark-theme'))
 const is3D        = ref(true)
 const showForest  = ref(false)
-const activeRegion = ref('')
+const activeRegion = ref('Racha-Lechkhumi & Qvemo Svaneti')
 const maskingReady = ref(false) // Controls loading screen
 
 // Layer Toggles
@@ -231,7 +247,38 @@ const showLabels    = ref(false)
 const showRoads     = ref(false)
 const showBuildings = ref(false)
 const isLayerWidgetOpen = ref(false)
-const populationCount = ref('28,500')
+const populationCount = ref('48,800')
+const activeFeature = ref(null) 
+const combinedRachaRef = ref(null) // Stores the Union of Ambrolauri + Oni
+
+// Region Selector State
+const isRegionDropdownOpen = ref(false)
+const SUB_REGIONS = {
+  'Racha-Lechkhumi & Qvemo Svaneti': '48,800',
+  'Racha': '28,500',
+  'Lechkhumi': '14,200',
+  'Qvemo Svaneti': '6,100'
+}
+
+function selectSubRegion(r) {
+  activeRegion.value = r
+  populationCount.value = SUB_REGIONS[r]
+  isRegionDropdownOpen.value = false
+  
+  // Trigger Map Restoration for Sub-Region Isolation
+  if (r.includes('&')) {
+    if (combinedRachaRef.value) selectRegion(combinedRachaRef.value)
+    return
+  }
+
+  if (ready && map && map.getSource('admin-regions')) {
+    const data = map.getSource('admin-regions')._data
+    if (data && data.features) {
+       const feat = data.features.find(f => (f.properties.shapeName || '') === r)
+       if (feat) selectRegion(feat)
+    }
+  }
+}
 
 // ── Ad Platform ──
 const adSpaces = ref([])
@@ -270,11 +317,15 @@ function toggleLayerGroup(keyword, isVisible) {
   if (!map || !map.getStyle()) return
   const style = map.getStyle()
   style.layers.forEach(layer => {
-      // Check for keywords or specific layer groups
-      // logic: if keyword matches part of ID, set visibility
-      // Exception: "building" keyword might be '3d-buildings' layer or 'building' standard layer
       if (layer.id.includes(keyword)) {
           map.setLayoutProperty(layer.id, 'visibility', isVisible ? 'visible' : 'none')
+          
+          // STRICT MASKING: Only show if within active region
+          if (isVisible && activeFeature.value) {
+            try { map.setFilter(layer.id, ['within', activeFeature.value]) } catch(e) {}
+          } else if (!isVisible) {
+            // If hiding, we can clear filter if we want, but visibility:none is enough
+          }
       }
   })
 }
@@ -286,6 +337,16 @@ function updateLayers() {
   toggleLayerGroup('place',      showLabels.value || all)
   toggleLayerGroup('poi',        showLabels.value || all)
   
+  // Localized Illumination (Emissive Halo) for matching labels
+  const labelLayers = ['settlement-label', 'place-label', 'poi-label']
+  labelLayers.forEach(id => {
+    if (map.getLayer(id)) {
+      map.setPaintProperty(id, 'text-halo-color', '#72A98F')
+      map.setPaintProperty(id, 'text-halo-width', 2)
+      map.setPaintProperty(id, 'text-color', '#ffffff')
+    }
+  })
+  
   // Roads: road-label, road-line, etc.
   toggleLayerGroup('road',       showRoads.value || all)
   toggleLayerGroup('bridge',     showRoads.value || all)
@@ -294,7 +355,8 @@ function updateLayers() {
   // 3D Buildings
   // Target our custom '3d-buildings' layer
   if (map.getLayer('3d-buildings')) {
-     map.setLayoutProperty('3d-buildings', 'visibility', (showBuildings.value || all) ? 'visible' : 'none')
+     const shouldShow = (showBuildings.value || all) && is3D.value
+     map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none')
   }
 }
 
@@ -302,7 +364,7 @@ watch(showAllLayers, (v) => {
   if(v) { showLabels.value=true; showRoads.value=true; showBuildings.value=true }
   else  { showLabels.value=false; showRoads.value=false; showBuildings.value=false }
 })
-watch([showLabels, showRoads, showBuildings], updateLayers)
+watch([showLabels, showRoads, showBuildings, is3D], updateLayers)
 
 // Filter
 const activeCat = ref('all')
@@ -405,18 +467,26 @@ onMounted(async () => {
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
   // Approx Racha Bounds for instant camera
-  const RACHA_BOUNDS = [[42.8, 42.3], [44.0, 43.1]];
+  const RACHA_BOUNDS = [[42.4, 42.2], [44.2, 43.2]];
+  const MAX_PAN_BOUNDS = [[41.5, 41.5], [45.5, 44.0]];
 
   map = new mapboxgl.Map({
     container: mapEl.value,
     style: 'mapbox://styles/mapbox/satellite-streets-v12', 
     bounds: RACHA_BOUNDS, 
+    maxBounds: MAX_PAN_BOUNDS,
     fitBoundsOptions: { padding: 0, animate: false },
     pitch: 60,
     bearing: -8,
     antialias: true,
     transparent: true,
     projection: 'mercator', 
+  })
+
+  // Lock Zoom: Prevent zooming out beyond initial state
+  map.on('load', () => {
+    const startZoom = map.getZoom();
+    map.setMinZoom(startZoom);
   })
 
   // Safety: Force remove loading screen after 3s max
@@ -437,6 +507,17 @@ onMounted(async () => {
 
   map.on('load', async () => {
     ready = true
+    
+    // CLEAN START: Hide all global data layers initially
+    const style = map.getStyle()
+    if (style && style.layers) {
+      style.layers.forEach(l => {
+        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi') || l.id.includes('building')) {
+          map.setLayoutProperty(l.id, 'visibility', 'none')
+        }
+      })
+    }
+
     updateLayers() 
     initMapLayers()
   })
@@ -471,6 +552,7 @@ onMounted(async () => {
 
     // 4. Update UI
     activeRegion.value = feature.properties.shapeName
+    activeFeature.value = feature
 
     // 5. Data Filtering
     // A. Filter Markers
@@ -483,19 +565,29 @@ onMounted(async () => {
        m.el.style.display = (isInside && catMatch) ? 'block' : 'none'
     })
 
-    // B. Layer Clipping
+    // B. Layer Clipping & Point Lighting Isolation
     const style = map.getStyle()
     if (style && style.layers) {
       style.layers.forEach(l => {
         if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
-          try { map.setFilter(l.id, ['within', feature]) } catch (e) {}
+          try { 
+            // Only show labels/features IF they are within our Racha boundary
+            map.setFilter(l.id, ['within', feature]) 
+          } catch (e) {}
         }
       })
     }
 
     // C. Move mask to top
     if (map.getLayer('dim-mask-layer')) map.moveLayer('dim-mask-layer')
-    if (map.getLayer('focus-region-border')) map.moveLayer('focus-region-border')
+    if (map.getLayer('focus-region-glow')) {
+        map.moveLayer('focus-region-glow')
+        map.setPaintProperty('focus-region-glow', 'line-opacity', 0.6)
+    }
+    if (map.getLayer('focus-region-border')) {
+        map.moveLayer('focus-region-border')
+        map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
+    }
   }
 
   async function initMapLayers() {
@@ -534,51 +626,83 @@ onMounted(async () => {
       } catch(e) {}
     }
 
-    // ── Admin Regions & Masking ──
-    try {
-      const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM1/geoBoundaries-GEO-ADM1_simplified.geojson')
-      const json = await res.json()
-      json.features.forEach((f, i) => { f.id = i })
+      // ── Admin Regions & Masking (ADM2 for Municipality Isolation) ──
+      try {
+        const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson')
+        const json = await res.json()
+        
+        // Filter Ambrolauri & Oni specifically
+        const rachaFeatures = json.features.filter(f => 
+          ['Ambrolauri', 'Oni'].includes(f.properties.shapeName)
+        )
 
-      if (!map.getSource('admin-regions')) {
-        map.addSource('admin-regions', { type:'geojson', data: json })
-        map.addLayer({ id: 'admin-regions-fill', type: 'fill', source: 'admin-regions', paint: { 'fill-color': 'transparent', 'fill-opacity': 0 } })
+        if (!map.getSource('focus-region')) map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
+        if (!map.getSource('dim-mask-source')) map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
 
-        // Interaction Logic
-        let activeFeatureId = null
-        map.on('click', 'admin-regions-fill', (e) => {
-          if (!e.features.length) return
-          const feature = e.features[0]
-          if (!feature.properties.shapeName.includes('Racha')) return
-          if (feature.id === activeFeatureId) return
-          activeFeatureId = feature.id
-          selectRegion(feature)
-        })
+        if (!map.getLayer('dim-mask-layer')) {
+          map.addLayer({ 
+            id: 'dim-mask-layer', 
+            type: 'fill', 
+            source: 'dim-mask-source', 
+            paint: { 'fill-color': '#000000', 'fill-opacity': 0.8 } 
+          })
+        }
+        if (!map.getLayer('focus-region-glow')) {
+          map.addLayer({ 
+            id: 'focus-region-glow', 
+            type: 'line', 
+            source: 'focus-region', 
+            paint: { 
+              'line-color': '#ffffff', 
+              'line-width': 12, 
+              'line-blur': 15,
+              'line-opacity': 0 
+            } 
+          })
+        }
+        if (!map.getLayer('focus-region-border')) {
+          map.addLayer({ 
+            id: 'focus-region-border', 
+            type: 'line', 
+            source: 'focus-region', 
+            paint: { 
+              'line-color': '#ffffff', 
+              'line-width': 1.5, 
+              'line-opacity': 0,
+              'line-blur': 0.5
+            } 
+          })
+        }
 
-        map.on('mouseenter', 'admin-regions-fill', (e) => {
-          if (e.features[0].properties.shapeName.includes('Racha')) {
-            map.getCanvas().style.cursor = 'pointer'
-          }
-        })
-        map.on('mouseleave', 'admin-regions-fill', () => { map.getCanvas().style.cursor = '' })
-      }
+        // Combine into one Racha region for masking
+        if (rachaFeatures.length > 0) {
+          const combinedRacha = rachaFeatures.reduce((acc, feat) => {
+            return window.turf.union(acc, feat)
+          })
+          combinedRacha.properties = { shapeName: 'Racha' }
+          combinedRachaRef.value = combinedRacha // Store for later use
+          
+          // We'll use this combined feature as the 'active' region for initial view
+          // This triggers selectRegion which sets the mask data
+          selectRegion(combinedRacha)
+        }
 
-      if (!map.getSource('focus-region')) map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
-      if (!map.getSource('dim-mask-source')) map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
+        if (!map.getSource('admin-regions')) {
+          map.addSource('admin-regions', { type:'geojson', data: json })
+          map.addLayer({ id: 'admin-regions-fill', type: 'fill', source: 'admin-regions', paint: { 'fill-color': 'transparent', 'fill-opacity': 0 } })
 
-      if (!map.getLayer('dim-mask-layer')) {
-        map.addLayer({ id: 'dim-mask-layer', type: 'fill', source: 'dim-mask-source', paint: { 'fill-color': '#000000', 'fill-opacity': 0.8 } })
-      }
-      if (!map.getLayer('focus-region-border')) {
-        map.addLayer({ id: 'focus-region-border', type: 'line', source: 'focus-region', paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-opacity': 1 } })
-      }
+          // Hide hard boundary lines (Dasher, dots, etc.)
+          const style = map.getStyle()
+          style.layers.forEach(l => {
+            if (l.id.includes('admin') || l.id.includes('boundary')) {
+              map.setPaintProperty(l.id, 'line-opacity', 0)
+            }
+          })
+        }
 
-      if (activeRegion.value) {
-        const feat = json.features.find(f => f.properties.shapeName === activeRegion.value)
-        if (feat) selectRegion(feat)
-      } else {
-        const racha = json.features.find(f => (f.properties.shapeName||'').includes('Racha'))
-        if (racha) selectRegion(racha)
+      if (json.features) {
+        // Initial setup for combined ADM2 (Racha-Lechkhumi & Qvemo Svaneti) 
+        // Logic handled above in reduce()
       }
     } catch(e) {}
 
@@ -652,12 +776,18 @@ onUnmounted(() => {
 // ─── RESET REGION ─────────────────────────────────────────────────────────────
 function resetRegion() {
   activeRegion.value = ''
+  activeFeature.value = null
+  
   if (map.getSource('focus-region')) {
     map.getSource('focus-region').setData({ type: 'FeatureCollection', features: [] })
   }
   if (map.getSource('dim-mask-source')) {
     map.getSource('dim-mask-source').setData({ type: 'FeatureCollection', features: [] })
   }
+
+  // Hide glow/border
+  if (map.getLayer('focus-region-glow')) map.setPaintProperty('focus-region-glow', 'line-opacity', 0)
+  if (map.getLayer('focus-region-border')) map.setPaintProperty('focus-region-border', 'line-opacity', 0)
   
   // Clear layer filters
   const style = map.getStyle()
@@ -743,11 +873,11 @@ function toggleTheme() {
   themeIcon.value = isDark ? 'light_mode' : 'dark_mode'
   
   if (isDark) {
-    document.body.classList.add('dark-mode')
+    document.body.classList.add('dark-theme')
     document.documentElement.style.setProperty('--glass-bg', 'rgba(10, 10, 20, 0.6)')
     document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.1)')
   } else {
-    document.body.classList.remove('dark-mode')
+    document.body.classList.remove('dark-theme')
     document.documentElement.style.setProperty('--glass-bg', 'rgba(255, 255, 255, 0.15)')
     document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.3)')
   }
@@ -902,18 +1032,80 @@ body.dark-mode .glass-effect {
   box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 12px rgba(114,169,143,.2);
 }
 
-/* ── Active Region Chip ── */
-.region-chip {
+/* ── Active Region Selector (Wide-Pill Redesign) ── */
+.region-selector-wrap {
   position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
-  z-index: 25; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  background: var(--glass-bg); backdrop-filter: var(--glass-blur);
-  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 20px;
-  padding: 8px 16px; color: #fff;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  transition: all 0.3s ease;
+  z-index: 10000; display: flex; flex-direction: column; align-items: center;
+  pointer-events: none; /* Allow map interaction around the pill */
 }
-.region-chip-main { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
-.region-chip-stats { font-size: 11px; opacity: 0.7; display: flex; align-items: center; gap: 4px; }
+.region-chip.wide-pill {
+  pointer-events: auto; /* Re-enable for the actual interaction */
+  display: flex; align-items: center; justify-content: space-between;
+  width: 580px; height: 38px; /* Slimmer and wider */
+  background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50px;
+  padding: 0 28px; color: #fff;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  cursor: pointer;
+}
+.region-chip:hover { 
+  background: rgba(255, 255, 255, 0.12); 
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+
+.dropdown-chevron {
+  font-size: 20px !important; transition: transform 0.3s ease;
+  opacity: 0.5; margin-left: 4px;
+}
+.dropdown-chevron.open { transform: rotate(180deg); opacity: 1; color: var(--accent); }
+
+.region-chip-main { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; }
+.region-chip-stats { 
+  display: flex; align-items: center; gap: 8px; font-size: 12px;
+  border-left: 1px solid rgba(255,255,255,0.15); padding-left: 20px;
+}
+.stats-label { opacity: 0.6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.stats-value { font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+
+/* Dropdown Menu */
+.region-dropdown-list {
+  pointer-events: auto;
+  margin-top: 12px;
+  width: 580px; /* Match wide-pill width */
+  background: rgba(10, 10, 18, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+.dropdown-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.dropdown-item:last-child { border-bottom: none; }
+.dropdown-item:hover { background: rgba(255, 255, 255, 0.1); }
+.dropdown-item.active { background: rgba(114, 169, 143, 0.2); }
+.dropdown-item.active .item-name { color: var(--accent); font-weight: 600; }
+
+.item-name { font-size: 13px; color: #fff; }
+.item-pop { font-size: 11px; opacity: 0.6; }
+
+/* Animations */
+.dropdown-fade-enter-active, .dropdown-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dropdown-fade-enter-from, .dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
 
 /* ── Apple Pin ── */
 .pin {
@@ -981,8 +1173,26 @@ body.dark-mode .glass-effect {
 .pill-btn.active {
   background: var(--accent);
   color: #fff;
-  box-shadow: var(--neon-glow);
-  border-color: rgba(255,255,255,0.3);
+  box-shadow: 0 0 20px rgba(114,169,143,0.4);
+}
+
+/* Premium Logo Styling (Antigravity Floating) */
+.premium-logo-wrap {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2) !important;
+}
+.antigravity-logo-img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
+    transition: transform 0.3s ease;
+}
+.premium-logo-wrap:hover .antigravity-logo-img {
+    transform: scale(1.1) rotate(5deg);
 }
 .pill-btn.sm { width: 32px; height: 32px; border-radius: 8px; }
 
@@ -1054,24 +1264,6 @@ body.dark-mode .glass-effect {
 }
 
 /* Layer Control (Drawer Redesign) */
-.layer-wrap { position: relative; }
-.layer-card {
-  position: absolute; left: 60px; top: 0; /* Redesign: Pop to RIGHT */
-  width: 220px;
-  background: rgba(14,14,20,0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 18px;
-  padding: 16px;
-  display: flex; flex-direction: column; gap: 12px;
-  transform: translateX(-20px) scale(0.95); opacity: 0; pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-  z-index: 100;
-}
-.layer-wrap:hover .layer-card {
-  /* Removed hover trigger for persistence */
-}
 .layer-card {
   position: absolute; left: 60px; top: 0;
   width: 220px;
@@ -1083,8 +1275,9 @@ body.dark-mode .glass-effect {
   padding: 16px;
   display: flex; flex-direction: column; gap: 12px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-  z-index: 100;
+  z-index: 10000; /* Above all map elements and masking */
   color: #fff;
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .layer-header { 
   font-size: 10px; text-transform: uppercase; letter-spacing: 1px; 
@@ -1143,22 +1336,47 @@ body.dark-mode .glass-effect {
 }
 
 /* ── Geocoder ── */
+/* ── Geocoder (Compact & Glassmorphism) ── */
 .mapboxgl-ctrl-geocoder {
-  background: rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
-  border-radius: 24px !important;
-  width: 280px !important; min-width: 0 !important; height: 44px !important;
-  display: flex !important; align-items: center !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-radius: 50px !important;
+  width: 220px !important; min-width: 0 !important; height: 36px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
   overflow: visible !important;
 }
-.mapboxgl-ctrl-geocoder--icon-search {
-  left: 14px !important; top: 50% !important; transform: translateY(-50%) !important;
-  width: 20px !important; height: 20px !important; fill: #fff !important;
-  opacity: 0.8; margin: 0 !important;
+.mapboxgl-ctrl-geocoder--input {
+  color: #fff !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  padding: 0 36px !important;
+  text-align: center !important;
+  transition: all 0.3s ease;
 }
+.mapboxgl-ctrl-geocoder--input:focus {
+  color: #72A98F !important;
+}
+.mapboxgl-ctrl-geocoder--input::placeholder {
+  color: rgba(255,255,255,0.4) !important;
+  text-align: center !important;
+  letter-spacing: 0.5px;
+}
+.mapboxgl-ctrl-geocoder--icon-search {
+  left: 50% !important; top: 50% !important; transform: translate(-50%, -50%) !important;
+  width: 16px !important; height: 16px !important; fill: #fff !important;
+  opacity: 0.5; margin: 0 !important;
+  pointer-events: none;
+  display: none !important; /* Hide standard icon to use centered placeholder logic */
+}
+/* Re-enable icon if query exists */
+.mapboxgl-ctrl-geocoder--input:not(:placeholder-shown) + .mapboxgl-ctrl-geocoder--icon-search {
+    display: none !important;
+}
+/* Center placeholder logic hack */
+.mapboxgl-ctrl-geocoder--input { background: transparent !important; }
 .mapboxgl-ctrl-geocoder--button {
   background: transparent !important;
   top: 50% !important; transform: translateY(-50%) !important;
