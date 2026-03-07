@@ -81,43 +81,54 @@
         <span class="material-symbols-outlined">{{ themeIcon }}</span>
       </button>
 
-      <!-- Weather Widget (Smart/Expandable) -->
+      <!-- Weather Widget (Smart Hover) -->
       <div class="weather-wrap">
-        <div class="weather-btn-group">
-          <button class="pill-btn weather-icon-btn">
-            <span class="material-symbols-outlined" style="color:#ffcc00">wb_sunny</span>
-          </button>
-          <div class="weather-info">
-            <div class="weather-loc">{{ displayLocation }}</div>
-            <div class="weather-row-main">
-              <span class="temp-main">{{ parseInt(btnTemp) }}°</span>
+        <div class="weather-pill" ref="weatherPill" @mouseenter="checkWeatherCollision">
+          <span class="temp-main">{{ Math.round(parseFloat(btnTemp)) }}°</span>
+          
+          <!-- Detailed Tooltip (Hover) -->
+          <div class="weather-tooltip" :class="{ flipped: isTooltipFlipped }">
+            <div class="tooltip-loc">
+              <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; margin-right:4px">location_on</span>
+              {{ displayLocation }}
             </div>
-          </div>
-          <div class="weather-tooltip">
-            <div class="tooltip-loc">{{ displayLocation }}</div>
-            <div class="tooltip-row">
-              <span>Temperature</span>
-              <span class="accent-color">{{ btnTemp }}</span>
+            
+            <div class="tooltip-grid">
+                <div class="tooltip-item">
+                    <span class="item-label">ტემპერატურა</span>
+                    <span class="item-val accent-color">{{ btnTemp }}</span>
+                </div>
+                <div class="tooltip-item">
+                    <span class="item-label">აღქმული</span>
+                    <span class="item-val">{{ feelsLike }}</span>
+                </div>
+                <div class="tooltip-item">
+                    <span class="item-label">ტენიანობა</span>
+                    <span class="item-val">{{ humidity }}</span>
+                </div>
+                <div class="tooltip-item">
+                    <span class="item-label">ქარი</span>
+                    <span class="item-val">{{ windSpeed }}</span>
+                </div>
             </div>
-            <div class="tooltip-row">
-              <span>Humidity</span>
-              <span class="accent-color">{{ humidity }}</span>
-            </div>
-            <div class="tooltip-row">
-              <span>Altitude</span>
-              <span class="accent-color">{{ elevation }}</span>
-            </div>
-            <div class="tooltip-row" style="margin-top:5px; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px">
-              <span>Condition</span>
-              <span class="material-symbols-outlined" style="color:#ffcc00!important;font-size:16px">wb_sunny</span>
+
+            <div class="tooltip-footer">
+              <span class="material-symbols-outlined" :style="{ color: getWeatherIcon(weatherCode).color }">
+                {{ getWeatherIcon(weatherCode).icon }}
+              </span>
+              <span class="condition-text">{{ getWeatherIcon(weatherCode).text }}</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Layer Control (Position #3: Logo Placeholder → Premium Logo) -->
-        <button class="pill-btn layer-btn premium-logo-wrap" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers & Antigravity">
-          <img src="@/assets/antigravity_logo.png" alt="Logo" class="antigravity-logo-img" />
+        <button class="pill-btn layer-btn premium-logo-wrap" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers">
+          <svg class="antigravity-logo-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </button>
         <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
           <div class="layer-header">
@@ -127,13 +138,19 @@
             </label>
           </div>
           <label class="layer-row">
-            <input type="checkbox" v-model="showLabels"> <span>Villages & Towns</span>
+            <input type="checkbox" v-model="showLabels" class="road-layer-toggle"> <span>Villages & Towns</span>
           </label>
           <label class="layer-row">
-            <input type="checkbox" v-model="showRoads"> <span>Roads & Paths</span>
+            <input type="checkbox" v-model="showRoads" class="road-layer-toggle"> 
+            <svg class="layer-icon-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 16c0-1.1-.9-2-2-2h-4c-1.1 0-2-.9-2-2V8"/>
+              <circle cx="16" cy="18" r="2"/>
+              <circle cx="8" cy="6" r="2"/>
+            </svg>
+            <span>Roads & Paths</span>
           </label>
           <label class="layer-row">
-            <input type="checkbox" v-model="showBuildings"> <span>3D Buildings</span>
+            <input type="checkbox" v-model="showBuildings" class="road-layer-toggle"> <span>3D Buildings</span>
           </label>
         </div>
 
@@ -361,7 +378,33 @@ const btnTemp    = ref('--°')
 const widgetTemp = ref('--°C')
 const humidity   = ref('--%')
 const elevation  = ref('-- მ')
+const windSpeed  = ref('-- მ/წ')
+const feelsLike  = ref('--°C')
+const weatherCode = ref(0)
 const displayLocation = ref('Racha')
+const isTooltipFlipped = ref(false)
+const weatherPill = ref(null)
+
+function checkWeatherCollision() {
+  if (!weatherPill.value) return
+  const rect = weatherPill.value.getBoundingClientRect()
+  const screenWidth = window.innerWidth
+  // If pill is in the right half of the screen, flip tooltip to open left
+  isTooltipFlipped.value = (rect.left + 220) > screenWidth
+}
+
+const getWeatherIcon = (code) => {
+  // WMO Weather interpretation codes (WW)
+  // https://open-meteo.com/en/docs
+  if (code === 0) return { icon: 'wb_sunny', color: '#ffcc00', text: 'მოწმენდილი' }
+  if (code >= 1 && code <= 3) return { icon: 'partly_cloudy_day', color: '#bdc3c7', text: 'ცვალებადი მოღრუბლულობა' }
+  if (code >= 45 && code <= 48) return { icon: 'foggy', color: '#95a5a6', text: 'ნისლი' }
+  if (code >= 51 && code <= 67) return { icon: 'rainy', color: '#3498db', text: 'წვიმა' }
+  if (code >= 71 && code <= 77) return { icon: 'ac_unit', color: '#ecf0f1', text: 'თოვლი' }
+  if (code >= 80 && code <= 82) return { icon: 'umbrella', color: '#2980b9', text: 'ძლიერი წვიმა' }
+  if (code >= 95) return { icon: 'thunderstorm', color: '#f1c40f', text: 'ჭექა-ქუხილი' }
+  return { icon: 'wb_cloudy', color: '#7f8c8d', text: 'მოღრუბლული' }
+}
 
 // ── Layer Visibility Logic ──
 // ── Layer Visibility Logic ──
@@ -572,14 +615,15 @@ onMounted(async () => {
     const style = map.getStyle()
     if (style && style.layers) {
       style.layers.forEach(l => {
-        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi') || l.id.includes('building')) {
+        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi')) {
           map.setLayoutProperty(l.id, 'visibility', 'none')
         }
       })
     }
 
+    await initMapLayers()
     updateLayers() 
-    initMapLayers()
+    window.map = map // Expose for debugging
   })
 
   map.on('style.load', () => {
@@ -646,7 +690,8 @@ onMounted(async () => {
     const style = map.getStyle()
     if (style && style.layers) {
       style.layers.forEach(l => {
-        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
+        // Exclude 3d-buildings from regional masking to prevent filter collision
+        if ((l.id.includes('label') || l.id.includes('road') || l.id.includes('poi')) && l.id !== '3d-buildings') {
           try { 
             // Only show labels/features IF they are within our Racha boundary
             map.setFilter(l.id, ['within', feature]) 
@@ -704,15 +749,20 @@ onMounted(async () => {
     if (!map.getLayer('3d-buildings')) {
       try {
         map.addLayer({
-          'id': '3d-buildings', 'source': 'composite', 'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 14,
+          'id': '3d-buildings', 
+          'source': 'composite', 
+          'source-layer': 'building',
+          'filter': ['==', 'extrude', 'true'], 
+          'type': 'fill-extrusion', 
+          'minzoom': 13,
           'paint': {
             'fill-extrusion-color': '#72A98F',
-            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
-            'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
+            'fill-extrusion-height': ['coalesce', ['get', 'height'], 20],
+            'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0],
             'fill-extrusion-opacity': 0.85
           }
         })
+        updateLayers()
       } catch(e) {}
     }
 
@@ -936,19 +986,36 @@ async function updateWeather() {
     elevation.value = Math.round(elev) + ' მ'
     
     // 2. Weather API (Open-Meteo)
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lng}&current_weather=true&hourly=relativehumidity_2m`)
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lng}&current_weather=true&hourly=relativehumidity_2m,apparent_temperature,windspeed_10m`)
     const d = await r.json()
     const t = Math.round(d.current_weather.temperature)
     btnTemp.value = t+'°'; widgetTemp.value = t+'°C'
     humidity.value = d.hourly.relativehumidity_2m[0]+'%'
+    windSpeed.value = d.current_weather.windspeed + ' მ/წ'
+    feelsLike.value = Math.round(d.hourly.apparent_temperature[0]) + '°C'
+    weatherCode.value = d.current_weather.weathercode
     
     // 3. Reverse Geocode for Location Name
-    const geoRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${c.lng},${c.lat}.json?types=place,locality,neighborhood&access_token=${mapboxgl.accessToken}`)
+    const geoRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${c.lng},${c.lat}.json?types=place,locality,neighborhood&language=ka&access_token=${mapboxgl.accessToken}`)
     const geoJson = await geoRes.json()
+    
     if (geoJson.features && geoJson.features.length > 0) {
-      displayLocation.value = geoJson.features[0].text
+      const feat = geoJson.features[0]
+      let locName = feat.text
+      const types = feat.place_type
+      
+      // Detailed Racha context logic
+      const isVillage = types.some(t => ['neighborhood', 'locality', 'subvillage'].includes(t))
+      const isCity = locName === 'ამბროლაური' || locName === 'ონი'
+      
+      if (isCity) locName = 'ქალაქი ' + locName
+      else if (isVillage || locName.length > 3) locName = 'სოფელი ' + locName // Heuristic fallback for Georgian place names
+      
+      displayLocation.value = locName
     } else {
-      displayLocation.value = activeRegion.value || 'Racha'
+      // Fallback logic for Racha centers
+      displayLocation.value = activeRegion.value === 'ამბროლაური' ? 'ქალაქი ამბროლაური' : 
+                          activeRegion.value === 'ონი' ? 'ქალაქი ონი' : 'რაჭა'
     }
 
     // 4. Update Population dynamically based on activeRegion
@@ -962,9 +1029,14 @@ async function updateWeather() {
 // ─── CONTROLS ─────────────────────────────────────────────────────────────────
 function toggle3D() {
   if (!map) return
-  const p = map.getPitch() > 0
-  map.easeTo({ pitch:p?0:55, bearing:p?0:-5, duration:900 })
-  is3D.value = !p
+  is3D.value = !is3D.value
+  const active = is3D.value
+  
+  map.easeTo({ 
+    pitch: active ? 60 : 0, 
+    bearing: active ? -10 : 0, 
+    duration: 1000 
+  })
 }
 function toggleTheme() {
   isLightMode.value = !isLightMode.value
@@ -1284,15 +1356,16 @@ body.dark-mode .glass-effect {
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2) !important;
 }
-.antigravity-logo-img {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
-    filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
-    transition: transform 0.3s ease;
+.antigravity-logo-svg {
+    width: 22px;
+    height: 22px;
+    color: var(--accent);
+    filter: drop-shadow(0 0 8px rgba(46, 204, 113, 0.4));
+    transition: all 0.3s ease;
 }
-.premium-logo-wrap:hover .antigravity-logo-img {
-    transform: scale(1.1) rotate(5deg);
+.premium-logo-wrap:hover .antigravity-logo-svg {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 12px rgba(46, 204, 113, 0.8));
 }
 .pill-btn.sm { width: 32px; height: 32px; border-radius: 8px; }
 
@@ -1304,59 +1377,129 @@ body.dark-mode .glass-effect {
   width: 44px; height: 44px; border-radius: 50%;
 }
 
-/* Weather Widget (Smart Expand - Left Aligned) */
-.weather-wrap { position: relative; display: flex; align-items: center; }
-.weather-btn-group {
-  display: flex; align-items: center;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(12px);
-  border-radius: 50px; /* Pill shape for group */
-  padding: 0;
-  transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.15);
+/* Weather Widget (Smart Hover Redesign) */
+.weather-wrap { 
+  position: relative; 
+  display: flex; 
+  align-items: center;
+  z-index: 99999 !important; /* Absolute dominance */
+}
+.weather-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center the temperature */
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%; /* Perfect circle */
+  padding: 0; /* No padding for circle */
+  width: 44px; /* Standard circular diameter */
   height: 44px;
-  width: 44px; /* Collapsed */
-  position: relative; z-index: 20;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  position: relative; /* Relative for tooltip anchoring */
 }
-.weather-wrap:hover .weather-btn-group {
-  width: 156px; /* Expanded */
-  background: rgba(18,18,24,0.85);
-  border-color: rgba(255,255,255,0.3);
+.weather-pill:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
 }
-.weather-icon-btn {
-  width: 44px; height: 44px;
-  background: transparent; border: none; box-shadow: none; flex-shrink: 0;
-  border-radius: 50%;
+.weather-main-icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 5px rgba(255, 204, 0, 0.3));
 }
-.weather-info {
-  display: flex; flex-direction: column;
-  padding-right: 14px;
-  white-space: nowrap;
-  opacity: 0; transform: translateX(-10px); /* Slide from left */
-  transition: all 0.3s ease 0.05s;
+.temp-main {
+  font-size: 17px; /* Slightly larger for visibility */
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
 }
-.weather-wrap:hover .weather-info {
-  opacity: 1; transform: translateX(0);
-}
+
+/* Tooltip (Glassmorphism + Side-Aligned) */
 .weather-tooltip {
-  position: absolute; left: 100%; top: 50%; transform: translateY(-50%) translateX(10px);
-  width: 200px; padding: 15px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
+  position: absolute;
+  left: calc(100% + 14px); /* Offset to the right */
+  top: 50%;
+  transform: translateY(-50%) scale(0.95); /* Center vertically */
+  width: 220px;
+  padding: 18px;
+  background: rgba(15, 15, 25, 0.85);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  z-index: 1000;
-  display: flex; flex-direction: column; gap: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  pointer-events: none; opacity: 0;
-  transition: all 0.3s ease;
+  border-radius: 20px;
+  z-index: 99999 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 0 20px rgba(255,255,255,0.02);
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: center left;
+  transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.weather-wrap:hover .weather-tooltip { opacity: 1; transform: translateY(-50%) translateX(20px); }
-.tooltip-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-.tooltip-loc { font-weight: 700; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
+
+/* Collision flip logic (Open to the left if needed) */
+.weather-tooltip.flipped {
+  left: auto;
+  right: calc(100% + 14px);
+  transform-origin: center right;
+}
+
+.weather-pill:hover .weather-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+  pointer-events: auto;
+}
+
+.tooltip-loc {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+}
+.tooltip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tooltip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.item-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.5);
+}
+.item-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.tooltip-footer {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tooltip-footer .material-symbols-outlined {
+  font-size: 20px;
+}
+.condition-text {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  font-weight: 500;
+}
 
 /* Fixed 3D Buildings Rendering */
 .map-view .mapboxgl-fill-extrusion {
@@ -1399,6 +1542,50 @@ body.dark-mode .glass-effect {
 .layer-row:hover { color: var(--accent); }
 .layer-row input { 
   accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; 
+}
+
+/* ── Circular Road Layer Toggle ── */
+.layer-icon-svg {
+  opacity: 0.8;
+  margin-left: 4px;
+  color: var(--accent);
+}
+
+.road-layer-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.road-layer-toggle:checked {
+  background-color: #2ECC71;
+  border-color: #2ECC71;
+  box-shadow: 0 0 15px rgba(46, 204, 113, 0.8);
+}
+
+.road-layer-toggle:checked::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+}
+
+.road-layer-toggle:hover {
+  border-color: rgba(255,255,255,0.8);
+  transform: scale(1.1);
 }
 
 /* ── Top Bar (Synced with Admin Header) ── */
