@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="map-root">
     
     <!-- Animated Sky Background -->
@@ -8,32 +8,30 @@
     
 
     <!-- Auth Modal -->
-
-    <!-- Auth Modal -->
     <div v-if="showAuth" class="modal-overlay" @click.self="closeAuth">
       <div class="glass-modal">
         <span class="material-symbols-outlined close-modal" @click="closeAuth">close</span>
         <div v-show="authView==='login'">
-          <h2 style="margin-top:0">შესვლა</h2>
-          <input type="text" v-model="loginUser" class="glass-input" placeholder="მომხმარებელი">
-          <input type="password" v-model="loginPass" class="glass-input" placeholder="პაროლი">
-          <button class="glass-btn" @click="processLogin">შესვლა</button>
+          <h2 style="margin-top:0">??????</h2>
+          <input type="text" v-model="loginUser" class="glass-input" placeholder="????????????">
+          <input type="password" v-model="loginPass" class="glass-input" placeholder="??????">
+          <button class="glass-btn" @click="processLogin">??????</button>
           <div style="margin-top:12px;font-size:11px;opacity:.7;display:flex;justify-content:space-between">
-            <span style="cursor:pointer" @click="authView='recover'">პაროლის აღდგენა</span>
-            <span style="cursor:pointer;color:var(--accent)" @click="authView='register'">რეგისტრაცია</span>
+            <span style="cursor:pointer" @click="authView='recover'">??????? ???????</span>
+            <span style="cursor:pointer;color:var(--accent)" @click="authView='register'">???????????</span>
           </div>
         </div>
         <div v-show="authView==='register'">
-          <h2 style="margin-top:0">რეგისტრაცია</h2>
-          <input type="text" v-model="regUser" class="glass-input" placeholder="მომხმარებელი">
-          <input type="email" v-model="regEmail" class="glass-input" placeholder="ელ.ფოსტა">
-          <input type="password" v-model="regPass" class="glass-input" placeholder="პაროლი">
-          <button class="glass-btn" @click="processRegister">რეგისტრაცია</button>
+          <h2 style="margin-top:0">???????????</h2>
+          <input type="text" v-model="regUser" class="glass-input" placeholder="????????????">
+          <input type="email" v-model="regEmail" class="glass-input" placeholder="??.?????">
+          <input type="password" v-model="regPass" class="glass-input" placeholder="??????">
+          <button class="glass-btn" @click="processRegister">???????????</button>
         </div>
         <div v-show="authView==='recover'">
-          <h2 style="margin-top:0">პაროლის აღდგენა</h2>
-          <input type="email" v-model="recEmail" class="glass-input" placeholder="ელ.ფოსტა">
-          <button class="glass-btn" @click="sendRecovery">გაგზავნა</button>
+          <h2 style="margin-top:0">??????? ???????</h2>
+          <input type="email" v-model="recEmail" class="glass-input" placeholder="??.?????">
+          <button class="glass-btn" @click="sendRecovery">????????</button>
         </div>
       </div>
     </div>
@@ -45,7 +43,7 @@
         <h2 style="margin-top:0">{{ selectedAd.name }}</h2>
         <div class="ad-status-badge" :class="selectedAd.status.toLowerCase()">{{ selectedAd.status }}</div>
         
-        <p style="opacity:0.7; font-size:12px; margin-bottom:15px">{{ selectedAd.type }} • ${{ selectedAd.priceMonthly }}/mo</p>
+        <p style="opacity:0.7; font-size:12px; margin-bottom:15px">{{ selectedAd.type }} � ${{ selectedAd.priceMonthly }}/mo</p>
 
         <div v-if="selectedAd.status === 'Available'">
             <input type="text" v-model="rentImage" class="glass-input" placeholder="Image URL (Creative)">
@@ -65,6 +63,7 @@
         <div class="spinner"></div>
     </div>
     <div ref="mapEl" class="map-view" :style="{ opacity: 1 }"></div> <!-- Ensure visible but covered by overlay -->
+    <div class="bloom-overlay"></div>
     </div>
 
     <!-- Studio gradient: multiply blend darkens only the white void at edges -->
@@ -84,7 +83,7 @@
       <!-- Weather Widget (Smart Hover) -->
       <div class="weather-wrap">
         <div class="weather-pill" ref="weatherPill" @mouseenter="checkWeatherCollision">
-          <span class="temp-main">{{ Math.round(parseFloat(btnTemp)) }}°</span>
+          <span class="temp-main">{{ Math.round(parseFloat(btnTemp)) }}�</span>
           
           <!-- Detailed Tooltip (Hover) -->
           <div class="weather-tooltip" :class="{ flipped: isTooltipFlipped }">
@@ -95,19 +94,19 @@
             
             <div class="tooltip-grid">
                 <div class="tooltip-item">
-                    <span class="item-label">ტემპერატურა</span>
+                    <span class="item-label">???????????</span>
                     <span class="item-val accent-color">{{ btnTemp }}</span>
                 </div>
                 <div class="tooltip-item">
-                    <span class="item-label">აღქმული</span>
+                    <span class="item-label">???????</span>
                     <span class="item-val">{{ feelsLike }}</span>
                 </div>
                 <div class="tooltip-item">
-                    <span class="item-label">ტენიანობა</span>
+                    <span class="item-label">?????????</span>
                     <span class="item-val">{{ humidity }}</span>
                 </div>
                 <div class="tooltip-item">
-                    <span class="item-label">ქარი</span>
+                    <span class="item-label">????</span>
                     <span class="item-val">{{ windSpeed }}</span>
                 </div>
             </div>
@@ -122,7 +121,7 @@
         </div>
       </div>
 
-      <!-- Layer Control (Position #3: Logo Placeholder → Premium Logo) -->
+      <!-- Layer Control (Position #3: Logo Placeholder ? Premium Logo) -->
         <button class="pill-btn layer-btn premium-logo-wrap" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers">
           <svg class="antigravity-logo-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -158,6 +157,11 @@
       <button class="pill-btn" :class="{ active: is3D }" @click="toggle3D" title="2D/3D Toggle">
         <span class="material-symbols-outlined" style="font-size:20px">{{ is3D ? 'view_in_ar' : 'public' }}</span>
       </button>
+
+      <!-- Routing Toggle -->
+      <button class="pill-btn routing-toggle-btn" :class="{ active: isRoutingPanelOpen }" @click="isRoutingPanelOpen = !isRoutingPanelOpen" title="Multi-Stop Routing">
+        <span class="material-symbols-outlined">directions</span>
+      </button>
       
       <!-- Zoom Controls -->
       <div class="zoom-group">
@@ -191,40 +195,190 @@
       </button>
     </div>
 
-    <!-- Active region chip (Enhanced Wide-Pill) -->
-    <div v-if="activeRegion" class="region-selector-wrap panoramic" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
-      <div class="region-chip wide-pill">
-        <div class="region-chip-main">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent)!important">location_on</span>
-          <span class="region-title">{{ activeRegion }}</span>
-          <span class="material-symbols-outlined dropdown-chevron" :class="{ open: isRegionDropdownOpen }">expand_more</span>
-        </div>
-        <div class="region-chip-stats">
-          <span class="material-symbols-outlined" style="font-size:14px">groups</span>
-          <span class="stats-label">Population:</span>
-          <span class="stats-value">{{ populationCount }}</span>
-        </div>
-      </div>
-
-      <!-- Premium Glassmorphism Dropdown -->
-      <transition name="dropdown-fade">
-        <div v-if="isRegionDropdownOpen" class="region-dropdown-list" @click.stop>
-          <div v-for="(pop, r) in SUB_REGIONS" :key="r" 
-               class="dropdown-item" 
-               :class="{ active: activeRegion === r }"
-               @click="selectSubRegion(r)">
-            <span class="item-name">{{ r }}</span>
-            <span class="item-pop">{{ pop.toLocaleString() }}</span>
-          </div>
-        </div>
-      </transition>
-    </div>
 
     <!-- Bottom label -->
     <div class="bottom-label">
-      <span class="bl-main">საქართველო</span>
-      <span class="bl-sub">Georgia · Interactive 3D Map</span>
+      <span class="bl-main">??????????</span>
+      <span class="bl-sub">Georgia � Interactive 3D Map</span>
     </div>
+
+    <!-- Routing Panel -->
+    <transition name="slide-left">
+      <div v-if="isRoutingPanelOpen" class="routing-panel glass-card">
+        <div class="routing-header">
+          <span class="material-symbols-outlined">navigation</span>
+          <h3>Routing & Logistics</h3>
+          <span class="material-symbols-outlined close-icon" @click="isRoutingPanelOpen = false">close</span>
+        </div>
+
+        <div class="routing-inputs-stack">
+          <div class="routing-input-row" v-for="(wp, idx) in waypoints" :key="wp.id">
+            <div class="input-marker-group">
+              <div :class="['dot', { start: idx === 0, end: idx === waypoints.length - 1 }]"></div>
+              <div v-if="idx < waypoints.length - 1" class="connecting-line"></div>
+            </div>
+            
+            <div class="input-wrapper">
+              <div class="glass-input-container">
+                <input 
+                  type="text" 
+                  v-model="wp.query" 
+                  :placeholder="idx === 0 ? 'Choose starting point...' : idx === waypoints.length - 1 ? 'Choose destination...' : 'Add stop...'"
+                  @input="searchWaypointPOI(idx)"
+                  @focus="activeWaypointIndex = idx"
+                />
+                <span v-if="wp.query" class="material-symbols-outlined clear-input" @click="wp.query = ''; wp.results = []">close</span>
+              </div>
+              
+              <!-- Autocomplete Results -->
+              <div v-if="activeWaypointIndex === idx && wp.results.length > 0" class="wp-autocomplete-results glass-card">
+                <div v-for="res in wp.results" :key="res.name" class="wp-result-item" @click="selectWaypointPOI(idx, res)">
+                  <span class="material-symbols-outlined">{{ res.type === 'internal' ? (CAT_CFG[res.cat]?.icon || 'place') : 'location_on' }}</span>
+                  <div class="res-info">
+                    <span class="res-name">{{ res.name }}</span>
+                    <span class="res-desc">{{ res.description }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <span v-if="idx > 0 && idx < waypoints.length - 1" class="material-symbols-outlined remove-wp-btn" @click="removeWaypoint(idx)">close</span>
+          </div>
+
+          <div class="routing-controls-row">
+            <button class="add-stop-btn" @click="addIntermediateStop">
+              <span class="material-symbols-outlined">add_circle</span>
+              Add stop
+            </button>
+            <button class="reverse-btn" @click="reverseRoute" title="Reverse Route">
+              <span class="material-symbols-outlined">swap_vert</span>
+            </button>
+          </div>
+        </div>
+          
+          <div v-if="waypoints.length < 12" class="add-wp-hint">
+            <span class="material-symbols-outlined">add_location_alt</span>
+            <span>Click on map to add stop</span>
+          </div>
+        <div v-if="routeInfo" class="route-summary-compact">
+          <div class="summary-item">
+            <span class="label">Distance</span>
+            <span class="value">{{ (routeInfo.distance / 1000).toFixed(1) }} km</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">Duration</span>
+            <span class="value">{{ Math.round(routeInfo.duration / 60) }} min</span>
+          </div>
+        </div>
+
+        <div class="routing-actions">
+          <button class="glass-btn optimize-btn" :disabled="waypoints.length < 3 || isOptimizing" @click="optimizeRoute">
+            <span class="material-symbols-outlined">{{ isOptimizing ? 'settings_backup_restore' : 'auto_fix_high' }}</span>
+            {{ isOptimizing ? 'Optimizing...' : 'Best Route' }}
+          </button>
+          <button class="glass-btn clear-btn" @click="clearRouting">
+            <span class="material-symbols-outlined">layers_clear</span>
+            Clear
+          </button>
+        </div>
+
+        <!-- Start Navigation Button (shows when route is calculated) -->
+        <div v-if="routeInfo && !isNavigating" class="start-nav-wrap">
+          <button class="start-nav-btn" @click="startNavigation">
+            <span class="material-symbols-outlined">navigation</span>
+            Start Journey
+          </button>
+        </div>
+      </div>
+    </transition>
+
+    <!-- TOP-CENTER COLUMN: Region chip only (hidden during navigation) -->
+    <div class="top-center-column">
+      <div v-if="activeRegion && !isNavigating" class="region-selector-wrap" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
+        <div class="region-chip wide-pill racha-glass">
+          <div class="region-chip-main">
+            <span class="material-symbols-outlined" style="font-size:16px;color:rgba(255,255,255,0.8)!important">location_on</span>
+            <span class="region-title">{{ activeRegion }}</span>
+            <span class="material-symbols-outlined dropdown-chevron" :class="{ open: isRegionDropdownOpen }">expand_more</span>
+          </div>
+          <div class="region-chip-stats">
+            <span class="material-symbols-outlined" style="font-size:14px">groups</span>
+            <span class="stats-label">Population:</span>
+            <span class="stats-value">{{ populationCount }}</span>
+          </div>
+        </div>
+        <transition name="dropdown-fade">
+          <div v-if="isRegionDropdownOpen" class="region-dropdown-list racha-glass" @click.stop>
+            <div v-for="(pop, r) in SUB_REGIONS" :key="r"
+                 class="dropdown-item"
+                 :class="{ active: activeRegion === r }"
+                 @click="selectSubRegion(r)">
+              <span class="item-name">{{ r }}</span>
+              <span class="item-pop">{{ pop.toLocaleString() }}</span>
+            </div>
+          </div>
+        </transition>
+      </div>
+    </div><!-- /top-center-column -->
+
+    <!-- BOTTOM NAVIGATION HUD -->
+    <transition name="hud-slide">
+      <div v-if="isNavigating" class="nav-hud racha-glass">
+
+        <div v-if="navHUD.isRerouting" class="hud-rerouting-banner">
+          <span class="material-symbols-outlined hud-reroute-spin">sync</span>
+          Recalculating route…
+        </div>
+
+        <div class="hud-turn-row">
+          <div class="hud-turn-icon" :class="{ 'hud-turn-icon-pulse': navHUD.isRerouting }">
+            <span class="material-symbols-outlined">
+              {{ navHUD.nextTurnType === 'arrive'    ? 'flag' :
+                 navHUD.nextTurnType === 'rerouting' ? 'sync' :
+                 navHUD.nextTurnMod?.includes('left')
+                   ? (navHUD.nextTurnMod.includes('sharp') ? 'turn_sharp_left' : navHUD.nextTurnMod.includes('slight') ? 'turn_slight_left' : 'turn_left')
+                 : navHUD.nextTurnMod?.includes('right')
+                   ? (navHUD.nextTurnMod.includes('sharp') ? 'turn_sharp_right' : navHUD.nextTurnMod.includes('slight') ? 'turn_slight_right' : 'turn_right')
+                 : navHUD.nextTurnType === 'roundabout' ? 'rotate_right' : 'straight' }}
+            </span>
+          </div>
+          <div class="hud-instruction">{{ navHUD.nextTurn || 'Follow the route…' }}</div>
+        </div>
+
+        <div class="hud-eta-row">
+          <div class="hud-eta-item">
+            <span class="material-symbols-outlined hud-icon">schedule</span>
+            <span class="hud-value">{{ navHUD.etaMin }} min</span>
+          </div>
+          <div class="hud-divider"></div>
+          <div class="hud-eta-item">
+            <span class="material-symbols-outlined hud-icon">near_me</span>
+            <span class="hud-value">{{ navHUD.distRemaining }}</span>
+          </div>
+          <div class="hud-divider"></div>
+          <div class="hud-eta-item">
+            <span class="material-symbols-outlined hud-icon">speed</span>
+            <span class="hud-value">{{ navHUD.speed }} km/h</span>
+          </div>
+        </div>
+
+        <div class="hud-progress-bar">
+          <div class="hud-progress-fill" :style="{ width: navHUD.totalSteps ? ((navHUD.stepIndex / navHUD.totalSteps) * 100) + '%' : '0%' }"></div>
+        </div>
+
+        <div class="hud-controls">
+          <button class="racha-btn" @click="recenterCamera" title="Recenter">
+            <span class="material-symbols-outlined">my_location</span>
+            Recenter
+          </button>
+          <button class="racha-btn racha-btn-danger" @click="stopNavigation" title="Exit Navigation">
+            <span class="material-symbols-outlined">close</span>
+            Exit
+          </button>
+        </div>
+
+      </div>
+    </transition>
 
   </div>
 </template>
