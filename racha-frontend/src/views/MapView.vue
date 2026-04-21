@@ -81,61 +81,65 @@
         <span class="material-symbols-outlined">{{ themeIcon }}</span>
       </button>
 
-      <!-- Weather Widget (Smart/Expandable) -->
+      <!-- Weather Widget (Click-to-expand, Round) -->
       <div class="weather-wrap">
-        <div class="weather-btn-group">
-          <button class="pill-btn weather-icon-btn">
-            <span class="material-symbols-outlined" style="color:#ffcc00">wb_sunny</span>
-          </button>
-          <div class="weather-info">
-            <div class="weather-loc">{{ displayLocation }}</div>
-            <div class="weather-row-main">
-              <span class="temp-main">{{ parseInt(btnTemp) }}°</span>
+        <button class="pill-btn" @click.stop="isWeatherOpen = !isWeatherOpen; isLayerWidgetOpen = false; showRoutePanel = false" :class="{ active: isWeatherOpen }" title="ამინდი" style="position:relative">
+          <span class="material-symbols-outlined" :style="{ color: weatherIconColor }">{{ weatherIcon }}</span>
+          <span class="weather-temp-badge">{{ parseInt(btnTemp) }}°</span>
+        </button>
+        <transition name="weather-expand">
+          <div v-if="isWeatherOpen" class="weather-detail-panel" @click.stop>
+            <div class="wdp-header">
+              <span class="material-symbols-outlined wdp-big-icon" :style="{ color: weatherIconColor }">{{ weatherIcon }}</span>
+              <div>
+                <div class="wdp-loc">{{ displayLocation }}</div>
+                <div class="wdp-condition">{{ weatherCondition }}</div>
+              </div>
+            </div>
+            <div class="wdp-temp-big">{{ parseInt(btnTemp) }}°C</div>
+            <div class="wdp-divider"></div>
+            <div class="wdp-row">
+              <span class="material-symbols-outlined wdp-row-icon">water_drop</span>
+              <span>ტენიანობა</span>
+              <span class="wdp-val">{{ humidity }}</span>
+            </div>
+            <div class="wdp-row">
+              <span class="material-symbols-outlined wdp-row-icon">altitude</span>
+              <span>სიმაღლე</span>
+              <span class="wdp-val">{{ elevation }}</span>
             </div>
           </div>
-          <div class="weather-tooltip">
-            <div class="tooltip-loc">{{ displayLocation }}</div>
-            <div class="tooltip-row">
-              <span>Temperature</span>
-              <span class="accent-color">{{ btnTemp }}</span>
-            </div>
-            <div class="tooltip-row">
-              <span>Humidity</span>
-              <span class="accent-color">{{ humidity }}</span>
-            </div>
-            <div class="tooltip-row">
-              <span>Altitude</span>
-              <span class="accent-color">{{ elevation }}</span>
-            </div>
-            <div class="tooltip-row" style="margin-top:5px; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px">
-              <span>Condition</span>
-              <span class="material-symbols-outlined" style="color:#ffcc00!important;font-size:16px">wb_sunny</span>
-            </div>
-          </div>
-        </div>
+        </transition>
       </div>
 
-      <!-- Layer Control (Position #3: Logo Placeholder → Premium Logo) -->
-        <button class="pill-btn layer-btn premium-logo-wrap" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen" title="Map Layers & Antigravity">
-          <img src="@/assets/antigravity_logo.png" alt="Logo" class="antigravity-logo-img" />
-        </button>
-        <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
-          <div class="layer-header">
-            Map Layers
-            <label class="master-switch" title="Toggle All">
-              <input type="checkbox" v-model="showAllLayers">
-            </label>
-          </div>
-          <label class="layer-row">
-            <input type="checkbox" v-model="showLabels"> <span>Villages & Towns</span>
-          </label>
-          <label class="layer-row">
-            <input type="checkbox" v-model="showRoads"> <span>Roads & Paths</span>
-          </label>
-          <label class="layer-row">
-            <input type="checkbox" v-model="showBuildings"> <span>3D Buildings</span>
+      <!-- Layer Control -->
+      <button class="pill-btn" :class="{ active: isLayerWidgetOpen }" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen; isWeatherOpen = false; showRoutePanel = false" title="ფენები">
+        <span class="material-symbols-outlined">layers</span>
+      </button>
+      <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
+        <div class="layer-header">
+          <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">layers</span>
+          ფენები
+          <label class="master-switch" title="ყველა">
+            <input type="checkbox" v-model="showAllLayers">
           </label>
         </div>
+        <label class="layer-row">
+          <span class="material-symbols-outlined layer-row-icon">holiday_village</span>
+          <span>სოფლები / ქალაქები</span>
+          <input type="checkbox" v-model="showLabels" class="layer-check">
+        </label>
+        <label class="layer-row">
+          <span class="material-symbols-outlined layer-row-icon">route</span>
+          <span>გზები</span>
+          <input type="checkbox" v-model="showRoads" class="layer-check">
+        </label>
+        <label class="layer-row">
+          <span class="material-symbols-outlined layer-row-icon">domain</span>
+          <span>3D შენობები</span>
+          <input type="checkbox" v-model="showBuildings" class="layer-check">
+        </label>
+      </div>
 
       <!-- 3D Toggle -->
       <button class="pill-btn" :class="{ active: is3D }" @click="toggle3D" title="2D/3D Toggle">
@@ -152,7 +156,229 @@
         </button>
       </div>
 
+      <!-- Route Planner Button -->
+      <button class="pill-btn" :class="{ active: showRoutePanel }" @click.stop="showRoutePanel = !showRoutePanel; isWeatherOpen = false; isLayerWidgetOpen = false" title="მარშრუტი">
+        <span class="material-symbols-outlined">route</span>
+      </button>
+
     </div>
+
+    <!-- Route Sidebar (full-height left drawer) -->
+    <transition name="route-drawer">
+      <div v-if="showRoutePanel" class="route-drawer" @click.stop>
+
+        <!-- Header -->
+        <div class="rd-head">
+          <div class="rd-title">
+            <span class="material-symbols-outlined" style="color:var(--accent)">route</span>
+            მარშრუტის დაგეგმვა
+          </div>
+          <button class="rd-close" @click="showRoutePanel = false; clearRouteLayer()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="rd-tabs">
+          <button :class="['rd-tab', { active: routeTab === 'plan' }]" @click="routeTab = 'plan'">
+            <span class="material-symbols-outlined">map</span> გეგმა
+          </button>
+          <button :class="['rd-tab', { active: routeTab === 'transport' }]" @click="routeTab = 'transport'">
+            <span class="material-symbols-outlined">commute</span> ტრანსპორტი
+          </button>
+          <button :class="['rd-tab', { active: routeTab === 'ticket' }]" @click="routeTab = 'ticket'">
+            <span class="material-symbols-outlined">confirmation_number</span> ბილეთი
+          </button>
+        </div>
+
+        <!-- ─── TAB: PLAN ─── -->
+        <div v-if="routeTab === 'plan'" class="rd-body">
+
+          <!-- Hint when selecting -->
+          <div v-if="selectingWaypointIdx >= 0" class="rd-hint">
+            <span class="material-symbols-outlined">touch_app</span>
+            რუკაზე დააწკაპეთ წ. {{ selectingWaypointIdx + 1 }}-ის დასამატებლად
+          </div>
+
+          <!-- Waypoints -->
+          <div class="rd-section-label">წერტილები</div>
+          <div class="rd-waypoints">
+            <div v-for="(wp, i) in routeWaypoints" :key="i" class="rd-wp">
+              <div class="rd-wp-line">
+                <div class="rd-wp-dot" :style="{ background: i === 0 ? '#4CAF50' : i === routeWaypoints.length-1 ? '#F44336' : '#72A98F' }"></div>
+                <div v-if="i < routeWaypoints.length - 1" class="rd-wp-connector"></div>
+              </div>
+              <div class="rd-wp-field" :class="{ active: selectingWaypointIdx === i }">
+                <input
+                  type="text"
+                  v-model="wp.name"
+                  @keydown.enter.prevent="geocodeWaypoint(i, wp.name)"
+                  :placeholder="i === 0 ? '🟢 საწყისი ადგილი...' : i === routeWaypoints.length-1 ? '🔴 დანიშნულება...' : `⚪ გამავალი წ. ${i}...`"
+                  class="rd-wp-input"
+                />
+                <div class="rd-wp-actions">
+                  <span v-if="wp.lat !== null" class="rd-wp-ok">✓</span>
+                  <button class="rd-wp-pin-btn" :class="{ active: selectingWaypointIdx === i }"
+                    @click.stop="selectingWaypointIdx = selectingWaypointIdx === i ? -1 : i"
+                    title="რუკაზე მონიშვნა">
+                    <span class="material-symbols-outlined">my_location</span>
+                  </button>
+                  <button v-if="routeWaypoints.length > 2" class="rd-wp-del-btn" @click.stop="removeRouteWaypoint(i)">
+                    <span class="material-symbols-outlined">remove_circle</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="rd-add-wp" @click="addWaypointToRoute" v-if="routeWaypoints.length < 5">
+            <span class="material-symbols-outlined">add_location</span> გამავალი წერტილის დამატება
+          </button>
+
+          <!-- Transport Mode -->
+          <div class="rd-section-label" style="margin-top:16px">გადაადგილების ტიპი</div>
+          <div class="rd-modes">
+            <button v-for="m in ROUTE_MODES" :key="m.val"
+              class="rd-mode-btn" :class="{ active: routeMode === m.val }"
+              @click="routeMode = m.val; clearRouteLayer()">
+              <span class="material-symbols-outlined">{{ m.icon }}</span>
+              <span class="rd-mode-label">{{ m.label }}</span>
+            </button>
+          </div>
+
+          <!-- Calculate -->
+          <button class="rd-calc-btn" @click="calculateRoute"
+            :disabled="routeWaypoints.filter(w => w.lat !== null).length < 2">
+            <span class="material-symbols-outlined">navigation</span>
+            მარშრუტის გამოთვლა
+          </button>
+
+          <!-- Result -->
+          <div v-if="routeResult" class="rd-result">
+            <div class="rd-result-hero">
+              <div class="rd-res-item">
+                <span class="material-symbols-outlined">straighten</span>
+                <span class="rd-res-val">{{ routeResult.distance }}</span>
+                <span class="rd-res-lbl">მანძილი</span>
+              </div>
+              <div class="rd-res-sep"></div>
+              <div class="rd-res-item">
+                <span class="material-symbols-outlined">schedule</span>
+                <span class="rd-res-val">{{ routeResult.duration }}</span>
+                <span class="rd-res-lbl">სავ. დრო</span>
+              </div>
+              <div v-if="routeResult.cost" class="rd-res-sep"></div>
+              <div v-if="routeResult.cost" class="rd-res-item">
+                <span class="material-symbols-outlined">local_taxi</span>
+                <span class="rd-res-val accent">{{ routeResult.cost }}</span>
+                <span class="rd-res-lbl">ტაქსი</span>
+              </div>
+            </div>
+
+            <!-- Steps breakdown -->
+            <div class="rd-breakdown">
+              <div class="rd-bk-row">
+                <span class="material-symbols-outlined" style="color:#4CAF50">radio_button_checked</span>
+                <span>{{ routeWaypoints[0].name || 'საწყისი' }}</span>
+              </div>
+              <div v-for="(wp, i) in routeWaypoints.slice(1, -1)" :key="i" class="rd-bk-row">
+                <span class="material-symbols-outlined" style="color:#72A98F">radio_button_unchecked</span>
+                <span>{{ wp.name || `წ. ${i+2}` }}</span>
+              </div>
+              <div class="rd-bk-row">
+                <span class="material-symbols-outlined" style="color:#F44336">location_on</span>
+                <span>{{ routeWaypoints[routeWaypoints.length-1].name || 'დანიშნულება' }}</span>
+              </div>
+            </div>
+
+            <button class="rd-book-shortcut" @click="routeTab = 'ticket'">
+              <span class="material-symbols-outlined">confirmation_number</span>
+              ტაქსის დაჯავშნა →
+            </button>
+          </div>
+        </div>
+
+        <!-- ─── TAB: TRANSPORT ─── -->
+        <div v-if="routeTab === 'transport'" class="rd-body">
+          <div class="rd-section-label">ხელმისაწვდომი ტრანსპორტი</div>
+          <div class="rd-transport-list">
+            <div v-for="t in TRANSPORT_OPTIONS" :key="t.type" class="rd-transport-card"
+              :class="{ selected: selectedTransport === t.type }"
+              @click="selectedTransport = t.type">
+              <div class="rd-tc-icon">
+                <span class="material-symbols-outlined">{{ t.icon }}</span>
+              </div>
+              <div class="rd-tc-info">
+                <div class="rd-tc-name">{{ t.name }}</div>
+                <div class="rd-tc-desc">{{ t.desc }}</div>
+              </div>
+              <div class="rd-tc-price">
+                <span v-if="routeResult && t.costFn">{{ t.costFn(routeResult.rawDist) }}</span>
+                <span v-else class="rd-tc-free">{{ t.basePrice }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="!routeResult" class="rd-transport-hint">
+            ჯერ გამოთვალეთ მარშრუტი "გეგმა" ჩანართიდან
+          </div>
+        </div>
+
+        <!-- ─── TAB: TICKET ─── -->
+        <div v-if="routeTab === 'ticket'" class="rd-body">
+          <div v-if="!ticketBooked">
+            <div class="rd-section-label">ტაქსის დაჯავშნა</div>
+
+            <div v-if="routeResult" class="rd-ticket-summary">
+              <div class="rd-ts-row">
+                <span class="material-symbols-outlined">straighten</span>
+                <span>{{ routeResult.distance }}</span>
+              </div>
+              <div class="rd-ts-row">
+                <span class="material-symbols-outlined">schedule</span>
+                <span>{{ routeResult.duration }}</span>
+              </div>
+              <div class="rd-ts-row accent">
+                <span class="material-symbols-outlined">payments</span>
+                <span>{{ routeResult.cost || '—' }}</span>
+              </div>
+            </div>
+            <div v-else class="rd-transport-hint">ჯერ გამოთვალეთ მარშრუტი</div>
+
+            <div class="rd-form">
+              <div class="rd-form-label">სახელი</div>
+              <input type="text" v-model="ticketName" placeholder="შენი სახელი..." class="rd-form-input" />
+              <div class="rd-form-label">ტელეფონი</div>
+              <input type="tel" v-model="ticketPhone" placeholder="+995 5XX XXX XXX" class="rd-form-input" />
+              <div class="rd-form-label">ტრანსპორტი</div>
+              <select v-model="ticketType" class="rd-form-input">
+                <option value="taxi">🚗 ტაქსი (სტანდარტი)</option>
+                <option value="minibus">🚌 მიქსვანი</option>
+                <option value="private">🚙 კერძო მძღოლი</option>
+              </select>
+              <div class="rd-form-label">სასურველი დრო</div>
+              <input type="datetime-local" v-model="ticketTime" class="rd-form-input" />
+              <button class="rd-book-btn" @click="bookTicket" :disabled="!ticketName || !ticketPhone">
+                <span class="material-symbols-outlined">confirmation_number</span>
+                ბილეთის დაჯავშნა
+              </button>
+            </div>
+          </div>
+
+          <!-- Booked confirmation -->
+          <div v-else class="rd-booked">
+            <div class="rd-booked-icon">
+              <span class="material-symbols-outlined">check_circle</span>
+            </div>
+            <div class="rd-booked-title">წარმატებით დაჯავშნა!</div>
+            <div class="rd-booked-sub">{{ ticketName }}, მძღოლი მალე დაგიკავშირდება</div>
+            <div class="rd-booked-ref"># {{ ticketRef }}</div>
+            <button class="rd-book-btn" @click="ticketBooked = false; ticketName = ''; ticketPhone = ''" style="margin-top:16px">
+              ახალი ჯავშანი
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </transition>
 
     <!-- Top Bar -->
     <div class="top-bar">
@@ -241,6 +467,47 @@ const is3D        = ref(true)
 const showForest  = ref(false)
 const activeRegion = ref('რაჭა')
 const maskingReady = ref(false) // Controls loading screen
+
+// Weather expand state
+const isWeatherOpen    = ref(false)
+const weatherIcon      = ref('wb_sunny')
+const weatherIconColor = ref('#ffcc00')
+const weatherCondition = ref('Clear')
+
+// Route Panel
+const showRoutePanel      = ref(false)
+const routeWaypoints      = ref([{ name: 'Start', lng: null, lat: null }, { name: 'End', lng: null, lat: null }])
+const routeMode           = ref('driving')
+const routeResult         = ref(null)
+const selectingWaypointIdx = ref(-1)
+const routeTab            = ref('plan')
+const selectedTransport   = ref('taxi')
+const ticketBooked        = ref(false)
+const ticketName          = ref('')
+const ticketPhone         = ref('')
+const ticketType          = ref('taxi')
+const ticketTime          = ref('')
+const ticketRef           = ref('')
+
+const ROUTE_MODES = [
+  { val: 'driving', icon: 'directions_car',  label: 'ავტო'   },
+  { val: 'walking', icon: 'directions_walk', label: 'ფეხით'  },
+  { val: 'cycling', icon: 'directions_bike', label: 'ველო'   },
+]
+
+const TRANSPORT_OPTIONS = [
+  { type: 'taxi',    icon: 'local_taxi',      name: 'ტაქსი',         desc: 'სტანდარტი, 24/7',      basePrice: '~3 ₾/კმ', costFn: d => `~${(3 + d * 1.5).toFixed(0)} ₾` },
+  { type: 'minibus', icon: 'airport_shuttle', name: 'მიქსვანი',      desc: 'ბათუმი-ამბ. / ონი',    basePrice: '5–15 ₾',  costFn: null },
+  { type: 'private', icon: 'directions_car',  name: 'კერძო მძღოლი', desc: 'დასაჯავშნია ადრე',     basePrice: 'შეთანხმება', costFn: d => `~${(2.5 + d * 1.2).toFixed(0)} ₾` },
+  { type: 'walk',    icon: 'directions_walk', name: 'ფეხი',          desc: 'ბილიკები / ბუნება',    basePrice: 'უფასო',   costFn: null },
+]
+
+function bookTicket() {
+  if (!ticketName.value || !ticketPhone.value) return
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  ticketRef.value = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  ticketBooked.value = true
+}
 
 // Layer Toggles
 const showLabels    = ref(false)
@@ -385,8 +652,9 @@ function toggleLayerGroup(keyword, isVisible) {
 }
 
 function updateLayers() {
+  if (!map || !ready || !map.getStyle()) return
   const all = showAllLayers.value
-  // Villages/Towns: settlement-label, place-label, etc.
+  // Villages/Towns
   toggleLayerGroup('settlement', showLabels.value || all)
   toggleLayerGroup('place',      showLabels.value || all)
   toggleLayerGroup('poi',        showLabels.value || all)
@@ -445,6 +713,32 @@ let ready   = false
 let markers = []
 let hoveredId    = null
 let adm1HoveredId = null
+
+// ─── CATEGORY CONFIG ──────────────────────────────────────────────────────────
+const CAT_CFG = {
+  waterfall:  { color: '#6699cc', label: '🌊 Waterfall',  icon: 'water'      },
+  landmark:   { color: '#72A98F', label: '🏔️ Landmark',   icon: 'landscape'  },
+  hotel:      { color: '#FF9F0A', label: '🏨 Hotel',       icon: 'hotel'      },
+  restaurant: { color: '#FF453A', label: '🍽️ Restaurant', icon: 'restaurant' },
+  default:    { color: '#72A98F', label: '📍 Place',       icon: 'place'      }
+}
+
+const FALLBACK = []
+
+function makePin(pt) {
+  const cfg = CAT_CFG[pt.category] || CAT_CFG.default
+  const el = document.createElement('div')
+  el.className = `pin cat-${pt.category}`
+  el.innerHTML = `
+    <div class="pin-label">${pt.name}</div>
+    <div class="pin-badge" style="background:${cfg.color}22;border-color:${cfg.color}">
+      <span class="material-symbols-outlined" style="font-size:20px;color:${cfg.color}">${cfg.icon}</span>
+    </div>
+    <div class="pin-stem"></div>
+    <div class="pin-dot"></div>
+  `
+  return el
+}
 
 // ─── GEORGIA INTERNATIONAL BORDER (simplified) ───────────────────────────────
 // Outer ring covers world; inner ring (hole) = Georgia border
@@ -853,8 +1147,36 @@ onMounted(async () => {
 
   map.on('moveend', updateWeather)
 
+  // Click handler for route waypoints
+  map.on('click', (e) => {
+    if (selectingWaypointIdx.value >= 0 && showRoutePanel.value) {
+      const idx = selectingWaypointIdx.value
+      const wp = routeWaypoints.value[idx]
+      if (wp) {
+        wp.lng = parseFloat(e.lngLat.lng.toFixed(6))
+        wp.lat = parseFloat(e.lngLat.lat.toFixed(6))
+        wp.name = idx === 0 ? 'Start' : idx === routeWaypoints.value.length - 1 ? 'End' : `Point ${idx+1}`
+      }
+      selectingWaypointIdx.value = -1
+    }
+  })
+
   try {
-    const gc = new MapboxGeocoder({ accessToken:mapboxgl.accessToken, mapboxgl, placeholder:'Search Georgia...', marker:false })
+    const gc = new MapboxGeocoder({
+      accessToken: mapboxgl.accessToken,
+      mapboxgl,
+      placeholder: 'ძებნა...',
+      marker: false,
+      flyTo: false
+    })
+    gc.on('result', (e) => {
+      const [lng, lat] = e.result.geometry.coordinates
+      map.flyTo({
+        center: [lng, lat], zoom: 13, duration: 2500,
+        easing: t => { const ts = t-1; return ts*ts*ts+1 },
+        essential: true
+      })
+    })
     geocoderEl.value.appendChild(gc.onAdd(map))
   } catch(e) {}
 
@@ -941,6 +1263,17 @@ async function updateWeather() {
     const t = Math.round(d.current_weather.temperature)
     btnTemp.value = t+'°'; widgetTemp.value = t+'°C'
     humidity.value = d.hourly.relativehumidity_2m[0]+'%'
+
+    // Weather condition icon from WMO code
+    const wc = d.current_weather.weathercode || 0
+    if (wc === 0) { weatherIcon.value='wb_sunny'; weatherIconColor.value='#ffcc00'; weatherCondition.value='მზიანი' }
+    else if (wc <= 3) { weatherIcon.value='partly_cloudy_day'; weatherIconColor.value='#aaccee'; weatherCondition.value='ნაწილობრივ მოღრუბლული' }
+    else if (wc <= 48) { weatherIcon.value='foggy'; weatherIconColor.value='#aaaaaa'; weatherCondition.value='ნისლიანი' }
+    else if (wc <= 57) { weatherIcon.value='grain'; weatherIconColor.value='#6699cc'; weatherCondition.value='წვიმიანი (სუსტი)' }
+    else if (wc <= 67) { weatherIcon.value='rainy'; weatherIconColor.value='#6699cc'; weatherCondition.value='წვიმიანი' }
+    else if (wc <= 77) { weatherIcon.value='ac_unit'; weatherIconColor.value='#99ccff'; weatherCondition.value='თოვლიანი' }
+    else if (wc <= 82) { weatherIcon.value='rainy'; weatherIconColor.value='#4477aa'; weatherCondition.value='საშუალო წვიმა' }
+    else { weatherIcon.value='thunderstorm'; weatherIconColor.value='#ffaa44'; weatherCondition.value='ჭექა-ქუხილი' }
     
     // 3. Reverse Geocode for Location Name
     const geoRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${c.lng},${c.lat}.json?types=place,locality,neighborhood&access_token=${mapboxgl.accessToken}`)
@@ -1011,6 +1344,106 @@ function toggleForest() {
   try {
     map.setLayoutProperty('forest', 'visibility', showForest.value ? 'visible' : 'none')
   } catch(e) {}
+}
+
+// ─── ROUTE ────────────────────────────────────────────────────────────────────
+let routeMarkers = []
+
+function updateRouteMarkers() {
+  routeMarkers.forEach(m => m.remove())
+  routeMarkers = []
+  if (!map || !showRoutePanel.value) return
+  routeWaypoints.value.forEach((wp, i) => {
+    if (wp.lat === null) return
+    const color = i === 0 ? '#4CAF50' : i === routeWaypoints.value.length - 1 ? '#F44336' : '#72A98F'
+    const el = document.createElement('div')
+    el.style.cssText = `width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;`
+    const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
+      .setLngLat([wp.lng, wp.lat]).addTo(map)
+    routeMarkers.push(mk)
+  })
+}
+
+watch([routeWaypoints, showRoutePanel], updateRouteMarkers, { deep: true })
+
+watch(selectingWaypointIdx, (idx) => {
+  if (!map) return
+  map.getCanvas().style.cursor = idx >= 0 ? 'crosshair' : ''
+})
+
+async function geocodeWaypoint(idx, name) {
+  if (!name?.trim()) return
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(name)}.json?country=ge&access_token=${mapboxgl.accessToken}`
+    )
+    const data = await res.json()
+    if (data.features?.length) {
+      const [lng, lat] = data.features[0].geometry.coordinates
+      routeWaypoints.value[idx].lng = parseFloat(lng.toFixed(6))
+      routeWaypoints.value[idx].lat = parseFloat(lat.toFixed(6))
+      routeWaypoints.value[idx].name = data.features[0].text || name
+    }
+  } catch(e) {}
+}
+
+function addWaypointToRoute() {
+  if (routeWaypoints.value.length >= 5) return
+  const mid = { name: '', lng: null, lat: null }
+  routeWaypoints.value.splice(routeWaypoints.value.length - 1, 0, mid)
+  selectingWaypointIdx.value = routeWaypoints.value.length - 2
+}
+
+function removeRouteWaypoint(i) {
+  if (routeWaypoints.value.length <= 2) return
+  routeWaypoints.value.splice(i, 1)
+  clearRouteLayer()
+}
+
+function clearRouteLayer() {
+  routeResult.value = null
+  if (!map) return
+  try { if (map.getLayer('route-line')) map.removeLayer('route-line') } catch(e) {}
+  try { if (map.getSource('route-source')) map.removeSource('route-source') } catch(e) {}
+  routeMarkers.forEach(m => m.remove()); routeMarkers = []
+}
+
+async function calculateRoute() {
+  const valid = routeWaypoints.value.filter(wp => wp.lat !== null && wp.lng !== null)
+  if (valid.length < 2) return
+  const coords = valid.map(wp => `${wp.lng},${wp.lat}`).join(';')
+  const profile = routeMode.value === 'cycling' ? 'cycling' : routeMode.value === 'walking' ? 'walking' : 'driving'
+  const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coords}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+  try {
+    const res = await fetch(url)
+    const data = await res.json()
+    if (!data.routes?.length) { alert('მარშრუტი ვერ მოიძებნა'); return }
+    const route = data.routes[0]
+    const distKm = (route.distance / 1000).toFixed(1)
+    const durMin = Math.round(route.duration / 60)
+    const durStr = durMin >= 60 ? `${Math.floor(durMin/60)}სთ ${durMin%60}წთ` : `${durMin} წთ`
+    const gelCost = routeMode.value === 'driving'
+      ? `~${(3 + parseFloat(distKm) * 1.5).toFixed(0)} ₾`
+      : null
+    routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost: gelCost, rawDist: parseFloat(distKm) }
+
+    clearRouteLayer()
+    map.addSource('route-source', { type: 'geojson', data: route.geometry })
+    const beforeLayer = map.getLayer('dim-mask-layer') ? 'dim-mask-layer' : undefined
+    map.addLayer({
+      id: 'route-line', type: 'line', source: 'route-source',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#72A98F', 'line-width': 5, 'line-opacity': 0.9,
+               'line-dasharray': routeMode.value === 'walking' ? [1.5, 2] : [1] }
+    }, beforeLayer)
+
+    const bounds = new mapboxgl.LngLatBounds()
+    route.geometry.coordinates.forEach(c => bounds.extend(c))
+    map.fitBounds(bounds, {
+      padding: { top: 100, bottom: 100, left: 100, right: 360 },
+      duration: 2000, easing: t => { const ts = t-1; return ts*ts*ts+1 }
+    })
+  } catch(e) { console.error('Route error', e) }
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -1304,59 +1737,8 @@ body.dark-mode .glass-effect {
   width: 44px; height: 44px; border-radius: 50%;
 }
 
-/* Weather Widget (Smart Expand - Left Aligned) */
+/* Weather Widget Base */
 .weather-wrap { position: relative; display: flex; align-items: center; }
-.weather-btn-group {
-  display: flex; align-items: center;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(12px);
-  border-radius: 50px; /* Pill shape for group */
-  padding: 0;
-  transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.15);
-  height: 44px;
-  width: 44px; /* Collapsed */
-  position: relative; z-index: 20;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-}
-.weather-wrap:hover .weather-btn-group {
-  width: 156px; /* Expanded */
-  background: rgba(18,18,24,0.85);
-  border-color: rgba(255,255,255,0.3);
-}
-.weather-icon-btn {
-  width: 44px; height: 44px;
-  background: transparent; border: none; box-shadow: none; flex-shrink: 0;
-  border-radius: 50%;
-}
-.weather-info {
-  display: flex; flex-direction: column;
-  padding-right: 14px;
-  white-space: nowrap;
-  opacity: 0; transform: translateX(-10px); /* Slide from left */
-  transition: all 0.3s ease 0.05s;
-}
-.weather-wrap:hover .weather-info {
-  opacity: 1; transform: translateX(0);
-}
-.weather-tooltip {
-  position: absolute; left: 100%; top: 50%; transform: translateY(-50%) translateX(10px);
-  width: 200px; padding: 15px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  z-index: 1000;
-  display: flex; flex-direction: column; gap: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  pointer-events: none; opacity: 0;
-  transition: all 0.3s ease;
-}
-.weather-wrap:hover .weather-tooltip { opacity: 1; transform: translateY(-50%) translateX(20px); }
-.tooltip-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-.tooltip-loc { font-weight: 700; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px; }
 
 /* Fixed 3D Buildings Rendering */
 .map-view .mapboxgl-fill-extrusion {
@@ -1649,6 +2031,420 @@ body.dark-theme .sky-background {
 .ad-status-badge.pending { background:rgba(255,165,0,0.2); color:orange; }
 .ad-status-badge.rented { background:rgba(255,68,68,0.2); color:#ff4444; }
 body.dark-theme .clouds {
-  opacity: 0.15; /* Subtle night clouds */
+  opacity: 0.15;
+}
+
+/* ── Layer Row Icons ── */
+.layer-row-icon { font-size: 15px !important; opacity: 0.65; flex-shrink: 0; color: var(--accent); }
+.layer-header .master-switch { margin-left: auto; }
+
+/* ── Weather Badge (small temp over round button) ── */
+.weather-temp-badge {
+  position: absolute;
+  bottom: -5px; right: -5px;
+  background: rgba(10,10,18,0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 5px; color: #fff;
+  white-space: nowrap; line-height: 1.4;
+  pointer-events: none;
+}
+
+/* ── Weather Detail Panel ── */
+.weather-detail-panel {
+  position: absolute; left: 60px; top: 0;
+  width: 230px;
+  background: rgba(10,10,18,0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  z-index: 10000; color: #fff;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+.wdp-header { display: flex; align-items: center; gap: 10px; }
+.wdp-big-icon { font-size: 28px !important; flex-shrink: 0; }
+.wdp-loc { font-weight: 700; font-size: 13px; }
+.wdp-condition { font-size: 11px; opacity: 0.6; margin-top: 2px; }
+.wdp-temp-big { font-size: 38px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+.wdp-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 2px 0; }
+.wdp-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.8); }
+.wdp-row-icon { font-size: 16px !important; color: var(--accent); }
+.wdp-val { margin-left: auto; font-weight: 600; color: #fff; }
+
+.weather-expand-enter-active, .weather-expand-leave-active { transition: all 0.25s cubic-bezier(0.2,0.8,0.2,1); }
+.weather-expand-enter-from, .weather-expand-leave-to { opacity: 0; transform: translateX(-8px) scale(0.97); }
+
+/* ── Route Panel ── */
+.route-panel {
+  position: absolute; left: 80px; top: 120px;
+  width: 285px;
+  background: rgba(10,10,18,0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px; padding: 16px;
+  z-index: 9998; color: #fff;
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.rp-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;
+}
+.rp-close {
+  margin-left: auto; background: transparent; border: none;
+  color: rgba(255,255,255,0.4); cursor: pointer;
+  display: flex; align-items: center; transition: color 0.2s;
+}
+.rp-close:hover { color: #fff; }
+.rp-waypoints { display: flex; flex-direction: column; gap: 6px; }
+.rp-wp-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid transparent; border-radius: 10px;
+  cursor: pointer; transition: all 0.2s;
+}
+.rp-wp-item:hover { background: rgba(255,255,255,0.09); }
+.rp-wp-item.selecting { border-color: var(--accent); background: rgba(114,169,143,0.12); }
+.rp-wp-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.rp-wp-info { flex: 1; }
+.rp-wp-coords { font-family: monospace; font-size: 11px; color: #fff; }
+.rp-wp-placeholder { font-size: 11px; color: rgba(255,255,255,0.35); }
+.rp-wp-input-wrap {
+  flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0;
+}
+.rp-wp-text-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #fff; font-size: 11px; min-width: 0;
+}
+.rp-wp-text-input::placeholder { color: rgba(255,255,255,0.35); }
+.rp-wp-ok { font-size: 11px; color: #4CAF50; flex-shrink: 0; }
+.rp-wp-map-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px; color: rgba(255,255,255,0.4);
+  cursor: pointer; display: flex; align-items: center;
+  padding: 3px; transition: all 0.2s; flex-shrink: 0;
+}
+.rp-wp-map-btn .material-symbols-outlined { font-size: 14px !important; }
+.rp-wp-map-btn:hover { border-color: var(--accent); color: var(--accent); }
+.rp-wp-map-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rp-wp-del {
+  background: transparent; border: none; color: rgba(255,255,255,0.25);
+  cursor: pointer; display: flex; align-items: center; transition: color 0.2s;
+}
+.rp-wp-del:hover { color: #ff4444; }
+.rp-selecting-hint {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: rgba(255,255,255,0.6);
+  padding: 8px 10px;
+  background: rgba(114,169,143,0.1);
+  border: 1px solid rgba(114,169,143,0.3);
+  border-radius: 10px; animation: pulse-hint 1.5s ease-in-out infinite;
+}
+@keyframes pulse-hint {
+  0%, 100% { border-color: rgba(114,169,143,0.3); }
+  50% { border-color: rgba(114,169,143,0.7); }
+}
+.rp-add-wp {
+  background: transparent;
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 10px; color: rgba(255,255,255,0.45);
+  padding: 8px; cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  transition: all 0.2s;
+}
+.rp-add-wp:hover { border-color: var(--accent); color: var(--accent); }
+.rp-modes { display: flex; gap: 8px; }
+.rp-mode-btn {
+  flex: 1; padding: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; color: rgba(255,255,255,0.55);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.rp-mode-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.rp-mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 12px rgba(114,169,143,0.4); }
+.rp-calc-btn {
+  width: 100%; padding: 12px; background: var(--accent);
+  border: none; border-radius: 12px; color: #fff;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all 0.2s; box-shadow: 0 4px 15px rgba(114,169,143,0.3);
+}
+.rp-calc-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.rp-calc-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; filter: none; }
+.rp-result {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.rp-result-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: rgba(255,255,255,0.8);
+}
+.rp-result-row .material-symbols-outlined { font-size: 16px !important; color: var(--accent); }
+.rp-result-val { margin-left: auto; font-weight: 700; color: #fff; }
+.rp-result-val.accent { color: var(--accent); }
+.rp-result-cost { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; margin-top: 2px; }
+
+.panel-slide-enter-active, .panel-slide-leave-active { transition: all 0.3s cubic-bezier(0.2,0.8,0.2,1); }
+.panel-slide-enter-from, .panel-slide-leave-to { opacity: 0; transform: translateX(-12px) scale(0.97); }
+
+/* ══════════════════════════════════════════════
+   Route Drawer — full-height left sidebar
+══════════════════════════════════════════════ */
+.route-drawer {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 340px;
+  background: rgba(8, 8, 18, 0.96);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-right: 1px solid rgba(255,255,255,0.10);
+  z-index: 20000;
+  display: flex; flex-direction: column;
+  box-shadow: 8px 0 48px rgba(0,0,0,0.6);
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Drawer slide transition */
+.route-drawer-enter-active, .route-drawer-leave-active { transition: transform 0.35s cubic-bezier(0.2,0.8,0.2,1); }
+.route-drawer-enter-from, .route-drawer-leave-to { transform: translateX(-100%); }
+
+/* Header */
+.rd-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.rd-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 700; flex: 1;
+}
+.rd-close {
+  background: transparent; border: none;
+  color: rgba(255,255,255,0.35); cursor: pointer;
+  display: flex; align-items: center; padding: 4px;
+  border-radius: 8px; transition: all 0.2s;
+}
+.rd-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+
+/* Tabs */
+.rd-tabs {
+  display: flex; border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.rd-tab {
+  flex: 1; padding: 12px 4px; background: transparent; border: none;
+  color: rgba(255,255,255,0.4); font-size: 11px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;
+  border-bottom: 2px solid transparent; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.rd-tab .material-symbols-outlined { font-size: 15px !important; }
+.rd-tab:hover { color: rgba(255,255,255,0.75); }
+.rd-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Scrollable body */
+.rd-body {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.rd-body::-webkit-scrollbar { width: 4px; }
+.rd-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+.rd-section-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.2px; color: rgba(255,255,255,0.35); margin-bottom: 4px;
+}
+
+/* Hint bar */
+.rd-hint {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(114,169,143,0.12);
+  border: 1px solid rgba(114,169,143,0.35);
+  font-size: 12px; color: rgba(255,255,255,0.75);
+  animation: rd-pulse 1.6s ease-in-out infinite;
+}
+.rd-hint .material-symbols-outlined { font-size: 16px !important; color: var(--accent); flex-shrink: 0; }
+@keyframes rd-pulse {
+  0%,100% { border-color: rgba(114,169,143,0.35); }
+  50% { border-color: rgba(114,169,143,0.65); }
+}
+
+/* Waypoints */
+.rd-waypoints { display: flex; flex-direction: column; gap: 0; }
+.rd-wp { display: flex; align-items: stretch; gap: 10px; min-height: 56px; }
+.rd-wp-line { display: flex; flex-direction: column; align-items: center; padding-top: 16px; width: 14px; flex-shrink: 0; }
+.rd-wp-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); flex-shrink: 0; }
+.rd-wp-connector { width: 2px; flex: 1; background: rgba(255,255,255,0.1); margin: 3px 0; min-height: 18px; }
+.rd-wp-field {
+  flex: 1; margin: 4px 0;
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; transition: all 0.2s;
+}
+.rd-wp-field.active { border-color: var(--accent); background: rgba(114,169,143,0.1); }
+.rd-wp-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #fff; font-size: 12px; min-width: 0;
+}
+.rd-wp-input::placeholder { color: rgba(255,255,255,0.3); }
+.rd-wp-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.rd-wp-ok { font-size: 13px; color: #4CAF50; font-weight: 700; flex-shrink: 0; }
+.rd-wp-pin-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px; color: rgba(255,255,255,0.4); cursor: pointer;
+  display: flex; align-items: center; padding: 3px; transition: all 0.2s;
+}
+.rd-wp-pin-btn .material-symbols-outlined { font-size: 14px !important; }
+.rd-wp-pin-btn:hover { border-color: var(--accent); color: var(--accent); }
+.rd-wp-pin-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rd-wp-del-btn {
+  background: transparent; border: none; color: rgba(255,255,255,0.2);
+  cursor: pointer; display: flex; align-items: center; transition: color 0.2s;
+}
+.rd-wp-del-btn .material-symbols-outlined { font-size: 16px !important; }
+.rd-wp-del-btn:hover { color: #ff4444; }
+
+/* Add waypoint */
+.rd-add-wp {
+  background: transparent; border: 1px dashed rgba(255,255,255,0.18);
+  border-radius: 10px; color: rgba(255,255,255,0.4);
+  padding: 9px; cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  transition: all 0.2s; margin-top: 4px;
+}
+.rd-add-wp:hover { border-color: var(--accent); color: var(--accent); }
+.rd-add-wp .material-symbols-outlined { font-size: 15px !important; }
+
+/* Transport modes row */
+.rd-modes { display: flex; gap: 6px; }
+.rd-mode-btn {
+  flex: 1; padding: 10px 4px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: rgba(255,255,255,0.5); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; transition: all 0.2s;
+}
+.rd-mode-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.rd-mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 14px rgba(114,169,143,0.35); }
+.rd-mode-btn .material-symbols-outlined { font-size: 18px !important; }
+.rd-mode-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Calculate button */
+.rd-calc-btn {
+  width: 100%; padding: 13px; background: var(--accent);
+  border: none; border-radius: 12px; color: #fff;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all 0.2s; box-shadow: 0 4px 16px rgba(114,169,143,0.35);
+  margin-top: 6px;
+}
+.rd-calc-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.rd-calc-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; filter: none; }
+.rd-calc-btn .material-symbols-outlined { font-size: 18px !important; }
+
+/* Result card */
+.rd-result {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.rd-result-hero { display: flex; align-items: center; gap: 0; }
+.rd-res-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.rd-res-item .material-symbols-outlined { font-size: 16px !important; color: var(--accent); }
+.rd-res-val { font-size: 16px; font-weight: 800; color: #fff; }
+.rd-res-val.accent { color: var(--accent); }
+.rd-res-lbl { font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; }
+.rd-res-sep { width: 1px; align-self: stretch; background: rgba(255,255,255,0.08); margin: 0 6px; }
+.rd-breakdown { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 8px; }
+.rd-bk-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.65); }
+.rd-bk-row .material-symbols-outlined { font-size: 14px !important; flex-shrink: 0; }
+.rd-book-shortcut {
+  width: 100%; padding: 10px; background: transparent;
+  border: 1px solid rgba(114,169,143,0.4); border-radius: 10px;
+  color: var(--accent); font-weight: 600; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all 0.2s;
+}
+.rd-book-shortcut:hover { background: rgba(114,169,143,0.12); }
+.rd-book-shortcut .material-symbols-outlined { font-size: 15px !important; }
+
+/* Transport tab */
+.rd-transport-list { display: flex; flex-direction: column; gap: 8px; }
+.rd-transport-card {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; cursor: pointer; transition: all 0.2s;
+}
+.rd-transport-card:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.15); }
+.rd-transport-card.selected { border-color: var(--accent); background: rgba(114,169,143,0.1); }
+.rd-tc-icon { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rd-tc-icon .material-symbols-outlined { font-size: 20px !important; color: var(--accent); }
+.rd-tc-info { flex: 1; }
+.rd-tc-name { font-size: 13px; font-weight: 600; color: #fff; }
+.rd-tc-desc { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.rd-tc-price { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+.rd-tc-free { color: #4CAF50; }
+.rd-transport-hint {
+  font-size: 12px; color: rgba(255,255,255,0.35); text-align: center;
+  padding: 20px 10px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px;
+}
+
+/* Ticket tab */
+.rd-ticket-summary {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 7px;
+}
+.rd-ts-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.7); }
+.rd-ts-row .material-symbols-outlined { font-size: 14px !important; color: var(--accent); }
+.rd-ts-row.accent { color: var(--accent); font-weight: 700; }
+.rd-form { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.rd-form-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.4); margin-top: 6px; }
+.rd-form-input {
+  width: 100%; padding: 10px 12px; box-sizing: border-box;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px; color: #fff; font-size: 13px; outline: none;
+  transition: border-color 0.2s; font-family: inherit;
+}
+.rd-form-input:focus { border-color: var(--accent); background: rgba(114,169,143,0.08); }
+.rd-form-input::placeholder { color: rgba(255,255,255,0.25); }
+.rd-form-input option { background: #16161e; }
+.rd-book-btn {
+  width: 100%; padding: 13px; background: var(--accent);
+  border: none; border-radius: 12px; color: #fff;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all 0.2s; box-shadow: 0 4px 16px rgba(114,169,143,0.35);
+  margin-top: 8px;
+}
+.rd-book-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.rd-book-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; filter: none; }
+.rd-book-btn .material-symbols-outlined { font-size: 18px !important; }
+
+/* Booked confirmation */
+.rd-booked {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 24px 10px; text-align: center;
+}
+.rd-booked-icon .material-symbols-outlined { font-size: 56px !important; color: #4CAF50; }
+.rd-booked-title { font-size: 18px; font-weight: 800; color: #fff; }
+.rd-booked-sub { font-size: 13px; color: rgba(255,255,255,0.6); }
+.rd-booked-ref {
+  font-size: 22px; font-weight: 800; letter-spacing: 3px; color: var(--accent);
+  background: rgba(114,169,143,0.1); border: 1px solid rgba(114,169,143,0.3);
+  border-radius: 10px; padding: 8px 18px;
 }
 </style>

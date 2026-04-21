@@ -75,17 +75,22 @@
               <div class="mcp-label">Layers</div>
               <label class="mcp-row">
                 <span class="material-symbols-outlined mcp-icon">holiday_village</span>
-                <span>Villages & Towns</span>
+                <span>სოფლები / ქალაქები</span>
                 <input type="checkbox" v-model="showAdminLabels" @change="toggleLayer('labels')" class="mcp-check">
               </label>
               <label class="mcp-row">
+                <span class="material-symbols-outlined mcp-icon">route</span>
+                <span>გზები</span>
+                <input type="checkbox" v-model="showAdminRoads" @change="toggleLayer('roads')" class="mcp-check">
+              </label>
+              <label class="mcp-row">
                 <span class="material-symbols-outlined mcp-icon">domain</span>
-                <span>3D Buildings</span>
+                <span>3D შენობები</span>
                 <input type="checkbox" v-model="showAdminBuildings" @change="toggleLayer('buildings')" class="mcp-check">
               </label>
               <label class="mcp-row">
                 <span class="material-symbols-outlined mcp-icon">landscape</span>
-                <span>Terrain Shadow</span>
+                <span>რელიეფის ჩრდილი</span>
                 <input type="checkbox" v-model="showAdminHillshade" @change="toggleLayer('hillshade')" class="mcp-check">
               </label>
             </div>
@@ -188,6 +193,7 @@
                 <label>Category</label>
                 <select v-model="locCategory">
                   <option value="landmark">🏔️ Landmark</option>
+                  <option value="waterfall">🌊 Waterfall</option>
                   <option value="hotel">🏨 Hotel</option>
                   <option value="restaurant">🍽️ Restaurant</option>
                 </select>
@@ -208,6 +214,24 @@
             <button class="action-btn" @click="addLocation">
               <span class="material-symbols-outlined">save</span> Save Location
             </button>
+
+            <!-- Existing Pins List -->
+            <div v-if="existingPins.length" class="pins-list">
+              <div class="pins-list-header">
+                <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">pin_drop</span>
+                დამატებული ლოკაციები ({{ existingPins.length }})
+              </div>
+              <div v-for="pin in existingPins" :key="pin.id" class="pin-list-item">
+                <div class="pin-cat-dot" :style="{ background: PIN_CAT_COLORS[pin.category] || '#72A98F' }"></div>
+                <div class="pin-list-info">
+                  <div class="pin-list-name">{{ pin.nameGeo || pin.name }}</div>
+                  <div class="pin-list-cat">{{ pin.category || 'landmark' }}</div>
+                </div>
+                <button class="pin-del-btn" @click="deletePin(pin.id)" title="წაშლა">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </transition>
@@ -451,9 +475,18 @@ async function addLocation() {
   }
 
   try {
-    await api.addLocation(formData)
-    alert('Location Added!')
-    window.location.reload()
+    const newLoc = await api.addLocation(formData)
+    alert('ლოკაცია დამატებულია!')
+    locName.value = ''; locCoords.value = ''; locDesc.value = ''
+    if (marker) marker.remove()
+    await loadPins()
+    // Render new marker on map
+    if (newLoc && map) {
+      const el = createAdminPin()
+      const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat([newLoc.longitude, newLoc.latitude]).addTo(map)
+      adminMarkers.push({ mk, el, type: 'poi', locId: newLoc.id })
+    }
   } catch (e) {
     alert(e.message)
   }
@@ -536,9 +569,35 @@ async function resolveRequest(id, status) {
     } catch(e) { alert(e.message) }
 }
 
+// ── PIN LIST ──
+const existingPins = ref([])
+const PIN_CAT_COLORS = {
+  landmark: '#72A98F', waterfall: '#6699cc',
+  hotel: '#FF9F0A', restaurant: '#FF453A'
+}
+
+async function loadPins() {
+  try {
+    const locs = await api.getLocations()
+    existingPins.value = locs || []
+  } catch(e) { console.error(e) }
+}
+
+async function deletePin(id) {
+  if (!confirm('ლოკაცია წაიშლება. გააგრძელოთ?')) return
+  try {
+    await api.deleteLocation(id)
+    existingPins.value = existingPins.value.filter(p => p.id !== id)
+    // Remove marker from map if exists
+    const idx = adminMarkers.findIndex(m => m.locId === id)
+    if (idx !== -1) { adminMarkers[idx].mk.remove(); adminMarkers.splice(idx, 1) }
+  } catch(e) { alert(e.message) }
+}
+
 // ── LAYER CONTROLS (Main Page Parity) ──
 const adminIs3D = ref(true)
 const showAdminLabels = ref(false)
+const showAdminRoads = ref(false)
 const showAdminBuildings = ref(false)
 const showAdminHillshade = ref(false)
 
@@ -559,11 +618,21 @@ function toggleLayer(type) {
             map.setLayoutProperty('terrain-hillshade', 'visibility', showAdminHillshade.value ? 'visible' : 'none')
     }
     if (type === 'labels') {
-        const labelLayers = ['road-label', 'place-label', 'settlement-label', 'country-label', 'state-label']
+        const labelLayers = ['place-label', 'settlement-label', 'poi-label']
         labelLayers.forEach(id => {
             if (map.getLayer(id))
                 map.setLayoutProperty(id, 'visibility', showAdminLabels.value ? 'visible' : 'none')
         })
+    }
+    if (type === 'roads') {
+        const style = map.getStyle()
+        if (style?.layers) {
+          style.layers.forEach(l => {
+            if (l.id.includes('road') || l.id.includes('bridge') || l.id.includes('tunnel')) {
+              try { map.setLayoutProperty(l.id, 'visibility', showAdminRoads.value ? 'visible' : 'none') } catch(e) {}
+            }
+          })
+        }
     }
 }
 
@@ -769,47 +838,47 @@ onMounted(async () => {
       if (map.getLayer('focus-region-border')) map.moveLayer('focus-region-border')
     }
 
-    // Fetch ADM1 Data & Apply Mask
+    // Fetch ADM2 Data & Apply Mask — same as main page (Ambrolauri + Oni union)
     ;(async () => {
       try {
-        const GEO_ADM1_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM1/geoBoundaries-GEO-ADM1_simplified.geojson'
-        const res = await fetch(GEO_ADM1_URL)
+        const GEO_ADM2_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson'
+        const res = await fetch(GEO_ADM2_URL)
         const json = await res.json()
-        
-        // Auto-select Racha
-        const racha = json.features.find(f => (f.properties.shapeName||'').includes('Racha'))
-        if (racha) {
-          // Small delay to ensure styles loaded
-          setTimeout(() => selectRegion(racha), 500)
+
+        const rachaFeatures = json.features.filter(f =>
+          ['Ambrolauri', 'Oni'].includes(f.properties.shapeName)
+        )
+        if (rachaFeatures.length > 0) {
+          const combinedRacha = rachaFeatures.reduce((acc, feat) => window.turf.union(acc, feat))
+          combinedRacha.properties = { shapeName: 'Racha' }
+          setTimeout(() => selectRegion(combinedRacha), 500)
         }
       } catch (err) {
-        console.warn('ADM1 fetch failed:', err)
+        console.warn('ADM2 fetch failed:', err)
       }
     })()
 
   })
 
   // Fetch & Render Existing Pins
+  await loadPins()
   try {
-    const locs = await api.getLocations()
-    if (locs) {
-      locs.forEach(l => {
-        const el = createAdminPin()
-        // Optional: Custom tooltip or click event
-        el.addEventListener('click', (e) => {
-          e.stopPropagation() // Prevent map click (which moves the edit marker)
-          // Populate form with this pin's data? 
-          // For now, just a visual confirmation or focus
-          map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60 })
-        })
-        
-        const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
-          .setLngLat([l.longitude, l.latitude])
-          .addTo(map)
-        addAdminMarker(mk, el, 'poi')
+    existingPins.value.forEach(l => {
+      const el = createAdminPin()
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        locName.value = l.nameGeo || l.name || ''
+        locCategory.value = l.category || 'landmark'
+        locDesc.value = l.description || ''
+        map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60,
+          duration: 1500, easing: t => { const ts = t-1; return ts*ts*ts+1 } })
       })
-    }
-  } catch (e) { console.error('Failed to load pins', e) }
+      const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat([l.longitude, l.latitude])
+        .addTo(map)
+      adminMarkers.push({ mk, el, type: 'poi', locId: l.id })
+    })
+  } catch (e) { console.error('Failed to render pins', e) }
 
   // Create Custom Admin Marker (for adding new)
   const pinEl = createAdminPin()
@@ -1215,6 +1284,38 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   0% { transform: translateY(-100px) scale(0); opacity: 0; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
+
+/* ── Pin List ── */
+.pins-list {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 240px; overflow-y: auto;
+}
+.pins-list-header {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  opacity: 0.5; font-weight: 700; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.pin-list-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px; transition: background 0.2s;
+}
+.pin-list-item:hover { background: rgba(255,255,255,0.08); }
+.pin-cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pin-list-info { flex: 1; min-width: 0; }
+.pin-list-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-list-cat { font-size: 10px; opacity: 0.5; text-transform: capitalize; }
+.pin-del-btn {
+  background: transparent; border: none;
+  color: rgba(255,68,68,0.5); cursor: pointer;
+  display: flex; align-items: center; font-size: 16px;
+  transition: color 0.2s;
+}
+.pin-del-btn:hover { color: #ff4444; }
 
 /* ── Animated Sky Background ── */
 .sky-background {
