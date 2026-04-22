@@ -654,31 +654,59 @@ function toggleLayerGroup(keyword, isVisible) {
 function updateLayers() {
   if (!map || !ready || !map.getStyle()) return
   const all = showAllLayers.value
-  // Villages/Towns
-  toggleLayerGroup('settlement', showLabels.value || all)
-  toggleLayerGroup('place',      showLabels.value || all)
-  toggleLayerGroup('poi',        showLabels.value || all)
-  
-  // Localized Illumination (Emissive Halo) for matching labels
-  const labelLayers = ['settlement-label', 'place-label', 'poi-label']
-  labelLayers.forEach(id => {
-    if (map.getLayer(id)) {
-      map.setPaintProperty(id, 'text-halo-color', '#72A98F')
-      map.setPaintProperty(id, 'text-halo-width', 2)
-      map.setPaintProperty(id, 'text-color', '#ffffff')
-    }
-  })
-  
-  // Roads: road-label, road-line, etc.
-  toggleLayerGroup('road',       showRoads.value || all)
-  toggleLayerGroup('bridge',     showRoads.value || all)
-  toggleLayerGroup('tunnel',     showRoads.value || all)
+  const showLbl = showLabels.value || all
+  const showRd  = showRoads.value  || all
 
-  // 3D Buildings
-  // Target our custom '3d-buildings' layer
+  // Villages/Towns
+  toggleLayerGroup('settlement', showLbl)
+  toggleLayerGroup('place',      showLbl)
+  toggleLayerGroup('poi',        showLbl)
+
+  // Style labels white + lift above dark mask
+  if (showLbl) {
+    const style = map.getStyle()
+    style.layers.forEach(layer => {
+      if (layer.type !== 'symbol') return
+      const id = layer.id
+      if (!id.includes('settlement') && !id.includes('place') && !id.includes('poi')) return
+      try {
+        map.setPaintProperty(id, 'text-color', '#ffffff')
+        map.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.75)')
+        map.setPaintProperty(id, 'text-halo-width', 1.5)
+        map.moveLayer(id) // place above mask layer
+      } catch(e) {}
+    })
+  }
+
+  // Roads
+  toggleLayerGroup('road',   showRd)
+  toggleLayerGroup('bridge', showRd)
+  toggleLayerGroup('tunnel', showRd)
+
+  // Restyle roads: thin semi-transparent white lines, hide road labels
+  if (showRd) {
+    const style = map.getStyle()
+    style.layers.forEach(layer => {
+      const id = layer.id
+      if (!id.includes('road') && !id.includes('bridge') && !id.includes('tunnel')) return
+      if (layer.type === 'line') {
+        try {
+          map.setPaintProperty(id, 'line-color', 'rgba(255,255,255,0.38)')
+          map.setPaintProperty(id, 'line-width', 0.85)
+          map.setPaintProperty(id, 'line-opacity', 0.55)
+        } catch(e) {}
+      }
+      if (layer.type === 'symbol') {
+        try { map.setLayoutProperty(id, 'visibility', 'none') } catch(e) {}
+      }
+    })
+  }
+
+  // 3D Buildings (custom layer)
   if (map.getLayer('3d-buildings')) {
-     const shouldShow = (showBuildings.value || all) && is3D.value
-     map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none')
+    const shouldShow = (showBuildings.value || all)
+    map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none')
+    if (shouldShow) try { map.moveLayer('3d-buildings') } catch(e) {}
   }
 }
 
@@ -717,10 +745,10 @@ let adm1HoveredId = null
 // ─── CATEGORY CONFIG ──────────────────────────────────────────────────────────
 const CAT_CFG = {
   waterfall:  { color: '#6699cc', label: '🌊 Waterfall',  icon: 'water'      },
-  landmark:   { color: '#72A98F', label: '🏔️ Landmark',   icon: 'landscape'  },
-  hotel:      { color: '#FF9F0A', label: '🏨 Hotel',       icon: 'hotel'      },
-  restaurant: { color: '#FF453A', label: '🍽️ Restaurant', icon: 'restaurant' },
-  default:    { color: '#72A98F', label: '📍 Place',       icon: 'place'      }
+  landmark:   { color: '#4CAF50', label: '🏔️ Landmark',   icon: 'landscape'  },
+  hotel:      { color: '#F44336', label: '🏨 Hotel',       icon: 'hotel'      },
+  restaurant: { color: '#FFD700', label: '🍽️ Restaurant', icon: 'restaurant' },
+  default:    { color: '#4CAF50', label: '📍 Place',       icon: 'place'      }
 }
 
 const FALLBACK = []
@@ -959,6 +987,13 @@ onMounted(async () => {
         map.moveLayer('focus-region-border')
         map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
     }
+
+    // D. Pin layers above mask (all category layers)
+    ;['landmark','waterfall','hotel','restaurant'].forEach(c => {
+      ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
+        if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+      })
+    })
   }
 
   async function initMapLayers() {
@@ -999,7 +1034,8 @@ onMounted(async () => {
       try {
         map.addLayer({
           'id': '3d-buildings', 'source': 'composite', 'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 14,
+          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 12,
+          layout: { visibility: 'none' },
           'paint': {
             'fill-extrusion-color': '#72A98F',
             'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
@@ -1109,37 +1145,114 @@ onMounted(async () => {
       } catch(e) {}
     }
 
-    // ── Ads & Pins (Once) ──
-    if (markers.length === 0) {
+    // ── Ads (HTML markers) ──
+    try {
+      const ads = await api.getAds()
+      ads?.forEach(ad => {
+        const el = document.createElement('div')
+        el.className = `ad-marker ${ad.status.toLowerCase()}`
+        el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
+        el.addEventListener('click', (e) => { e.stopPropagation(); selectedAd.value = ad; showAdModal.value = true })
+        new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
+      })
+    } catch(e) {}
+
+    // ── Location Pins — per-category clustering (each colour groups separately) ──
+    if (!map.getSource('pins-landmark')) {
       try {
-        const ads = await api.getAds()
-        ads?.forEach(ad => {
-          const el = document.createElement('div')
-          el.className = `ad-marker ${ad.status.toLowerCase()}`
-          el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
-          el.addEventListener('click', (e) => { e.stopPropagation(); selectedAd.value = ad; showAdModal.value = true })
-          new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
-        })
-
         const locs = await api.getLocations()
-        const pts = locs?.length ? locs.map((l,i) => ({
-          id:i, lng:l.longitude, lat:l.latitude, name: l.nameGeo||l.name,
-          description: l.typeGeo||l.description, category: (l.category||'landmark').toLowerCase(),
-        })) : FALLBACK
+        const allFeatures = (locs?.length ? locs : []).map(l => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [parseFloat(l.longitude), parseFloat(l.latitude)] },
+          properties: {
+            id: l.id,
+            name: l.nameGeo || l.name || '',
+            description: l.typeGeo || l.description || '',
+            category: (l.category || 'landmark').toLowerCase()
+          }
+        }))
 
-        pts.forEach(pt => {
-          const el = makePin(pt)
-          el.addEventListener('click', ev => {
-            ev.stopPropagation()
-            const cfg = CAT_CFG[pt.category] || CAT_CFG.default
-            popup.setLngLat([pt.lng, pt.lat]).setHTML(`<div class="popup-inner"><div class="popup-cat" style="color:${cfg.color}">${cfg.label}</div><h3 class="popup-title">${pt.name}</h3><p class="popup-desc">${pt.description}</p></div>`).addTo(map)
-            markers.forEach(m => m.el.classList.remove('selected'))
-            el.classList.add('selected')
+        const CAT_DEFS = [
+          { key: 'landmark',   color: '#4CAF50' },
+          { key: 'waterfall',  color: '#6699cc' },
+          { key: 'hotel',      color: '#F44336' },
+          { key: 'restaurant', color: '#FFD700' },
+        ]
+
+        for (const cat of CAT_DEFS) {
+          const catFeatures = allFeatures.filter(f => f.properties.category === cat.key)
+          const srcId = `pins-${cat.key}`
+
+          map.addSource(srcId, {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: catFeatures },
+            cluster: true, clusterMaxZoom: 13, clusterRadius: 55
           })
-          const mk = new mapboxgl.Marker({ element:el, anchor:'bottom', pitchAlignment:'viewport', rotationAlignment:'viewport' }).setLngLat([pt.lng, pt.lat]).addTo(map)
-          markers.push({ mk, cat:pt.category, el })
-        })
-      } catch(e) {}
+
+          // Cluster bubble — category colour
+          map.addLayer({
+            id: `${srcId}-clusters`, type: 'circle', source: srcId,
+            filter: ['has', 'point_count'],
+            paint: {
+              'circle-color': cat.color,
+              'circle-radius': ['step', ['get', 'point_count'], 18, 5, 24, 15, 30],
+              'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.92
+            }
+          })
+
+          // Cluster count
+          map.addLayer({
+            id: `${srcId}-count`, type: 'symbol', source: srcId,
+            filter: ['has', 'point_count'],
+            layout: {
+              'text-field': '{point_count_abbreviated}',
+              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+              'text-size': 13, 'text-allow-overlap': true
+            },
+            paint: { 'text-color': '#ffffff' }
+          })
+
+          // Individual dot
+          map.addLayer({
+            id: `${srcId}-points`, type: 'circle', source: srcId,
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+              'circle-color': cat.color,
+              'circle-radius': 8,
+              'circle-stroke-width': 2, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
+            }
+          })
+
+          // Click → popup
+          map.on('click', `${srcId}-points`, (e) => {
+            e.originalEvent.stopPropagation()
+            const props = e.features[0].properties
+            const coords = e.features[0].geometry.coordinates.slice()
+            const cfg = CAT_CFG[props.category] || CAT_CFG.default
+            popup.setLngLat(coords).setHTML(`
+              <div class="popup-inner">
+                <div class="popup-cat" style="color:${cfg.color}">${cfg.label}</div>
+                <h3 class="popup-title">${props.name}</h3>
+                <p class="popup-desc">${props.description}</p>
+              </div>`).addTo(map)
+          })
+
+          // Click cluster → zoom in
+          map.on('click', `${srcId}-clusters`, (e) => {
+            const feat = map.queryRenderedFeatures(e.point, { layers: [`${srcId}-clusters`] })[0]
+            if (!feat) return
+            map.getSource(srcId).getClusterExpansionZoom(feat.properties.cluster_id, (err, zoom) => {
+              if (!err) map.easeTo({ center: feat.geometry.coordinates, zoom: zoom + 1, duration: 500 })
+            })
+          })
+
+          // Cursors
+          ;[`${srcId}-clusters`, `${srcId}-points`].forEach(lyr => {
+            map.on('mouseenter', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = 'pointer' })
+            map.on('mouseleave', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = '' })
+          })
+        }
+      } catch(e) { console.error('Pin layer error', e) }
     }
     updateWeather()
     maskingReady.value = true
@@ -1239,11 +1352,15 @@ function resetRegion() {
 // ─── FILTER ───────────────────────────────────────────────────────────────────
 function filterCat(cat) {
   activeCat.value = cat
-  markers.forEach(({ cat:c, el }) => {
-    const show = cat==='all' || c===cat
-    el.style.opacity       = show ? '1' : '0'
-    el.style.pointerEvents = show ? 'auto' : 'none'
-    el.style.transform     = show ? 'scale(1)' : 'scale(0.3)'
+  if (!map) return
+  const ALL_CATS = ['landmark', 'waterfall', 'hotel', 'restaurant']
+  ALL_CATS.forEach(c => {
+    const visible = (cat === 'all' || cat === c)
+    ;[`pins-${c}-clusters`, `pins-${c}-count`, `pins-${c}-points`].forEach(id => {
+      if (map.getLayer(id)) {
+        try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none') } catch(e) {}
+      }
+    })
   })
 }
 

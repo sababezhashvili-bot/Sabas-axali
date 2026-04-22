@@ -482,8 +482,8 @@ async function addLocation() {
     await loadPins()
     // Render new marker on map
     if (newLoc && map) {
-      const el = createAdminPin()
-      const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      const el = createAdminPin(newLoc.category || locCategory.value)
+      const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([newLoc.longitude, newLoc.latitude]).addTo(map)
       adminMarkers.push({ mk, el, type: 'poi', locId: newLoc.id })
     }
@@ -492,17 +492,22 @@ async function addLocation() {
   }
 }
 
-// --- 3D Glass Pin (Admin Version) ---
-function createAdminPin() {
+// --- Admin Pin: small green dot with black outline ---
+function createAdminPin(category = 'landmark') {
+  const colors = { landmark: '#4CAF50', waterfall: '#6699cc', hotel: '#F44336', restaurant: '#FFD700' }
+  const color = colors[category] || '#4CAF50'
   const el = document.createElement('div')
-  el.className = 'admin-pin-wrapper'
-  el.innerHTML = `
-    <div class="pin-glass-head">
-      <span class="material-symbols-outlined pin-icon">home</span>
-    </div>
-    <div class="pin-glass-stem"></div>
-    <div class="pin-glass-base"></div>
+  el.className = 'admin-dot-pin'
+  el.style.cssText = `
+    width: 14px; height: 14px; border-radius: 50%;
+    background: ${color};
+    border: 2px solid #111;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.55);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
   `
+  el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.35)'; el.style.boxShadow = `0 0 0 3px ${color}55, 0 4px 12px rgba(0,0,0,0.6)` })
+  el.addEventListener('mouseleave', () => { el.style.transform = ''; el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.55)' })
   return el
 }
 
@@ -645,105 +650,64 @@ onMounted(async () => {
   }
   currentUser.value = user
 
-  // Init Admin Map
+  // Init Admin Map — identical setup to main page MapView.vue
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
   map = new mapboxgl.Map({
     container: adminMapContainer.value,
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
-    center: [43.1481, 42.5176],
-    zoom: 10,
-    pitch: 45, // Slight pitch for 3D feel
-    bearing: -10,
-    transparent: true // CRITICAL for Sky Background
+    bounds: [[42.4, 42.2], [44.2, 43.2]], // same RACHA_BOUNDS as main page
+    fitBoundsOptions: { padding: 0, animate: false },
+    pitch: 60,
+    bearing: -8,
+    antialias: true,
+    transparent: true,
+    projection: 'mercator',
+    dragPan: { inertia: true, damping: 0.05 },
   })
 
-  // Add Navigation Control
-  map.addControl(new mapboxgl.NavigationControl(), 'bottom-right')
-
   map.on('load', () => {
-    // ════════════════════════════════════════════════════════════════════════
-    //  MAP PARITY: The following blocks are EXACT REPLICAS of MapView.vue logic
-    //  DO NOT MODIFY without syncing changes to the Main Page map.
-    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Clean start: hide all global label/road/poi/building layers ──
+    const style = map.getStyle()
+    if (style?.layers) {
+      style.layers.forEach(l => {
+        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi') || l.id.includes('building')) {
+          try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+        }
+      })
+    }
 
     // 1. Terrain & DEM
     try {
-      map.addSource('dem', {
-        type: 'raster-dem',
-        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-        tileSize: 512,
-        maxzoom: 14,
-      })
-      map.setTerrain({ source:'dem', exaggeration: 1.5 })
+      map.addSource('dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 })
+      map.setTerrain({ source: 'dem', exaggeration: 1.5 })
     } catch(e) {}
 
-    // 2. Cinematic Lighting
+    // 2. Cinematic Lighting (matches main page)
     try {
-      map.setLight({
-        anchor: 'viewport',
-        color: '#ffffff',
-        intensity: 0.6,
-        position: [1.15, 210, 30],
-        'ambient': {
-          'color': '#ffffff',
-          'intensity': 0.4
-        }
-      })
+      map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.6, position: [1.15, 210, 30] })
     } catch(e) {}
 
-    // 3. Sky / Fog (Crystal Clear)
+    // 3. Fog off (light mode default, same as main page)
     try { map.setFog(null) } catch(e) {}
-    try { map.setConfigProperty('basemap', 'showAtmosphere', false) } catch(e) {}
 
-    // 4. Satellite Raster Boost
-    try {
-      const boostLayer = (id) => {
-        if (!map.getLayer(id)) return
-        map.setPaintProperty(id, 'raster-saturation', -0.2)
-        map.setPaintProperty(id, 'raster-contrast', 0.2)
-        map.setPaintProperty(id, 'raster-brightness-min', 0)
-        map.setPaintProperty(id, 'raster-resampling', 'linear')
-      }
-      boostLayer('satellite')
-    } catch(e) {}
-
-    // 5. 3D Buildings
+    // 4. 3D Buildings (same paint as main page)
     if (!map.getLayer('3d-buildings')) {
       try {
         map.addLayer({
-          'id': '3d-buildings',
-          'source': 'composite',
-          'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'],
-          'type': 'fill-extrusion',
-          'minzoom': 13,
+          'id': '3d-buildings', 'source': 'composite', 'source-layer': 'building',
+          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 12,
+          layout: { visibility: 'none' },
           'paint': {
-            'fill-extrusion-color': '#ccc',
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'min_height'],
-            'fill-extrusion-opacity': 0.8
+            'fill-extrusion-color': '#72A98F',
+            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
+            'fill-extrusion-base':   ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
+            'fill-extrusion-opacity': 0.85
           }
         })
       } catch(e) {}
     }
-
-    // 6. Hillshade
-    try {
-      map.addLayer({
-        id: 'terrain-hillshade',
-        type: 'hillshade',
-        source: 'dem',
-        paint: {
-          'hillshade-exaggeration': 0.45,
-          'hillshade-shadow-color': '#2d2218',
-          'hillshade-highlight-color': '#fff8f0',
-          'hillshade-illumination-direction': 315,
-          'hillshade-illumination-anchor': 'map',
-        }
-      })
-    } catch(e) {}
-
 
     // ─── MASKING & REGION FOCUS (Replicated from Main Page) ───
     
@@ -751,27 +715,20 @@ onMounted(async () => {
     map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
     map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
 
-    // 1. Black Overlay (80% Opacity)
+    // 1. Black Overlay (80% Opacity) — same as main page
     map.addLayer({
-      id: 'dim-mask-layer',
-      type: 'fill',
-      source: 'dim-mask-source',
-      paint: { 
-        'fill-color': '#000000', 
-        'fill-opacity': 0.8 // 80% Black Overlay (Matches Main Page)
-      }
+      id: 'dim-mask-layer', type: 'fill', source: 'dim-mask-source',
+      paint: { 'fill-color': '#000000', 'fill-opacity': 0.8 }
     })
 
-    // 2. Region Highlight Border (White, 2px)
+    // 2. Glow border + sharp border — same as main page
     map.addLayer({
-      id: 'focus-region-border',
-      type: 'line',
-      source: 'focus-region',
-      paint: {
-        'line-color': '#ffffff',
-        'line-width': 2,
-        'line-opacity': 1
-      }
+      id: 'focus-region-glow', type: 'line', source: 'focus-region',
+      paint: { 'line-color': '#ffffff', 'line-width': 12, 'line-blur': 15, 'line-opacity': 0 }
+    })
+    map.addLayer({
+      id: 'focus-region-border', type: 'line', source: 'focus-region',
+      paint: { 'line-color': '#ffffff', 'line-width': 1.5, 'line-opacity': 0, 'line-blur': 0.5 }
     })
 
     // Masking Function (Uses Turf.js)
@@ -833,9 +790,16 @@ onMounted(async () => {
         }
       })
 
-      // Force mask and border to top
+      // Force mask → glow → border to top (same order as main page)
       if (map.getLayer('dim-mask-layer')) map.moveLayer('dim-mask-layer')
-      if (map.getLayer('focus-region-border')) map.moveLayer('focus-region-border')
+      if (map.getLayer('focus-region-glow')) {
+        map.moveLayer('focus-region-glow')
+        map.setPaintProperty('focus-region-glow', 'line-opacity', 0.6)
+      }
+      if (map.getLayer('focus-region-border')) {
+        map.moveLayer('focus-region-border')
+        map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
+      }
     }
 
     // Fetch ADM2 Data & Apply Mask — same as main page (Ambrolauri + Oni union)
@@ -864,7 +828,7 @@ onMounted(async () => {
   await loadPins()
   try {
     existingPins.value.forEach(l => {
-      const el = createAdminPin()
+      const el = createAdminPin(l.category || 'landmark')
       el.addEventListener('click', (e) => {
         e.stopPropagation()
         locName.value = l.nameGeo || l.name || ''
@@ -873,18 +837,17 @@ onMounted(async () => {
         map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60,
           duration: 1500, easing: t => { const ts = t-1; return ts*ts*ts+1 } })
       })
-      const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([l.longitude, l.latitude])
         .addTo(map)
       adminMarkers.push({ mk, el, type: 'poi', locId: l.id })
     })
   } catch (e) { console.error('Failed to render pins', e) }
 
-  // Create Custom Admin Marker (for adding new)
-  const pinEl = createAdminPin()
-  pinEl.classList.add('new-pin-marker') // Distinguished style if needed
-  marker = new mapboxgl.Marker({ element: pinEl, anchor: 'bottom' })
-    .setLngLat([43.1481, 42.5176]) 
+  // Cursor marker for placing new pin (updated dynamically when category changes)
+  const pinEl = createAdminPin('landmark')
+  marker = new mapboxgl.Marker({ element: pinEl, anchor: 'center' })
+    .setLngLat([43.1481, 42.5176])
 
   map.on('click', (e) => {
     const lat = e.lngLat.lat
@@ -893,17 +856,11 @@ onMounted(async () => {
     // Normal Pin Mode
     if (activeTab.value === 'map') {
         locCoords.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-        marker.setLngLat(e.lngLat).addTo(map)
-        
-        // Ensure this marker is also tracked for clipping
-        if (!adminMarkers.some(m => m.mk === marker)) {
-            addAdminMarker(marker, pinEl, 'new-poi')
-        }
-        
-        // Animate pin drop
-        pinEl.classList.remove('drop-anim')
-        void pinEl.offsetWidth 
-        pinEl.classList.add('drop-anim')
+        // Update placement marker color to match selected category
+        const newEl = createAdminPin(locCategory.value)
+        marker.remove()
+        marker = new mapboxgl.Marker({ element: newEl, anchor: 'center' })
+          .setLngLat(e.lngLat).addTo(map)
     }
     
     // Add Ad Mode
