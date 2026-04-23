@@ -302,18 +302,31 @@
               </div>
 
               <div class="pm-field">
-                <label class="pm-label">ფოტო</label>
+                <label class="pm-label">Cover ფოტო (მთავარი)</label>
                 <!-- Current image preview when editing -->
                 <div v-if="editingPin?.imageUrl" class="pm-img-preview">
                   <img :src="editingPin.imageUrl" alt="current" class="pm-img-thumb" />
-                  <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:4px">არსებული ფოტო</span>
+                  <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:4px">არსებული cover ფოტო</span>
                 </div>
                 <label class="pm-upload-label" :class="{ disabled: savingPin }">
                   <input type="file" ref="locFileInput" accept="image/*" class="pm-file-hidden"
                     :disabled="savingPin" @change="onFileChange">
-                  <span class="material-symbols-outlined" style="font-size:16px">upload</span>
-                  <span>{{ locFileName || 'ფოტოს ატვირთვა...' }}</span>
+                  <span class="material-symbols-outlined" style="font-size:16px">image</span>
+                  <span>{{ locFileName || 'Cover ფოტოს ატვირთვა...' }}</span>
                 </label>
+              </div>
+
+              <div class="pm-field">
+                <label class="pm-label">გალერეა (ფოტო / ვიდეო)</label>
+                <label class="pm-upload-label" :class="{ disabled: savingPin }">
+                  <input type="file" ref="galleryFileInput" accept="image/*,video/*" multiple class="pm-file-hidden"
+                    :disabled="savingPin" @change="onGalleryChange">
+                  <span class="material-symbols-outlined" style="font-size:16px">photo_library</span>
+                  <span>{{ galleryFileNames || 'ფოტო/ვიდეო დამატება (მრავალი)...' }}</span>
+                </label>
+                <div v-if="galleryPreviewUrls.length" class="pm-gallery-preview">
+                  <img v-for="(url, i) in galleryPreviewUrls" :key="i" :src="url" class="pm-gallery-thumb" />
+                </div>
               </div>
 
               <div v-if="isPlacingPin" class="pm-hint">
@@ -563,6 +576,9 @@ async function doAdminLogin() {
 // Template refs
 const adminMapContainer = ref(null)
 const locFileInput = ref(null)
+const galleryFileInput = ref(null)
+const galleryFileNames = ref('')
+const galleryPreviewUrls = ref([])
 
 // Tab state
 const activeTab = ref('map')
@@ -579,6 +595,17 @@ const locFileName = ref('')
 function onFileChange(e) {
   const file = e.target.files[0]
   locFileName.value = file ? file.name : ''
+}
+
+function onGalleryChange(e) {
+  const files = Array.from(e.target.files)
+  galleryFileNames.value = files.length > 0 ? `${files.length} ფაილი არჩეულია` : ''
+  galleryPreviewUrls.value = []
+  files.forEach(f => {
+    if (f.type.startsWith('image/')) {
+      galleryPreviewUrls.value.push(URL.createObjectURL(f))
+    }
+  })
 }
 
 // Pin edit / filter / place
@@ -872,6 +899,9 @@ function cancelEdit() {
   isPlacingPin.value = false
   if (marker) { marker.remove(); marker = null }
   if (locFileInput.value) locFileInput.value.value = ''
+  if (galleryFileInput.value) galleryFileInput.value.value = ''
+  galleryFileNames.value = ''
+  galleryPreviewUrls.value = []
   refreshAdminGLPins()
 }
 
@@ -890,6 +920,9 @@ async function savePin() {
   formData.append('Longitude',    c[1].trim())
   formData.append('Description',  locDesc.value)
   if (locFileInput.value?.files[0]) formData.append('Image', locFileInput.value.files[0])
+  if (galleryFileInput.value?.files.length) {
+    Array.from(galleryFileInput.value.files).forEach(f => formData.append('GalleryFiles', f))
+  }
 
   try {
     if (editingPin.value) {
@@ -1919,6 +1952,15 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .pm-img-thumb {
   width: 100%; max-height: 100px; object-fit: cover;
   border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Gallery preview thumbnails */
+.pm-gallery-preview {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.pm-gallery-thumb {
+  width: 60px; height: 60px; object-fit: cover;
+  border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);
 }
 
 .pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

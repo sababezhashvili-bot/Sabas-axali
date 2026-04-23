@@ -81,6 +81,20 @@
           </div>
         </div>
 
+        <!-- Gallery Card -->
+        <div class="loc-card" v-if="galleryUrls.length > 0">
+          <div class="loc-card-header">
+            <span class="material-symbols-outlined" style="font-size:18px;color:var(--accent)">photo_library</span>
+            გალერეა
+          </div>
+          <div class="loc-gallery">
+            <template v-for="(url, i) in galleryUrls" :key="i">
+              <video v-if="isVideo(url)" :src="url" controls class="loc-gallery-media" />
+              <img v-else :src="url" class="loc-gallery-media" loading="lazy" />
+            </template>
+          </div>
+        </div>
+
         <!-- Mini Map Card -->
         <div class="loc-card">
           <div class="loc-card-header">
@@ -135,6 +149,15 @@ const catCfg   = computed(() => CAT_MAP[(location.value?.category || '').toLower
 const catLabel = computed(() => catCfg.value.label)
 const catIcon  = computed(() => catCfg.value.icon)
 const catColor = computed(() => catCfg.value.color)
+
+const galleryUrls = computed(() => {
+  const raw = location.value?.galleryUrls
+  if (!raw) return []
+  return raw.split(',').map(u => u.trim()).filter(Boolean)
+})
+function isVideo(url) {
+  return /\.(mp4|mov|webm|avi|mkv)/i.test(url)
+}
 
 onMounted(async () => {
   try {
@@ -229,11 +252,14 @@ function initMiniMap() {
 
 .loc-page {
   --accent: #4CAF50;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #0a0a12;
   color: #fff;
   font-family: 'Inter', sans-serif;
   position: relative;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Back Button ── */
@@ -388,6 +414,23 @@ function initMiniMap() {
 }
 .loc-gmaps-link:hover { opacity: 0.75; }
 
+/* ── Gallery ── */
+.loc-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.loc-gallery-media {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.loc-gallery-media:hover { transform: scale(1.03); opacity: 0.9; }
+video.loc-gallery-media { cursor: default; height: 180px; background: #000; }
+
 /* ── Buttons ── */
 .loc-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -404,5 +447,28 @@ function initMiniMap() {
   width: 100%;
   padding: 16px;
   font-size: 15px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .loc-hero { height: 240px; }
+  .loc-hero-content { padding: 0 20px 24px; }
+  .loc-title { font-size: 26px; }
+  .loc-body { padding: 20px 14px 60px; }
+  .loc-info-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .loc-mini-map { height: 200px; }
+  .loc-gallery { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .loc-gallery-media { height: 130px; }
+  .loc-back { top: 14px; left: 14px; padding: 8px 14px; font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .loc-hero { height: 200px; }
+  .loc-title { font-size: 22px; }
+  .loc-body { padding: 16px 12px 50px; }
+  .loc-info-grid { grid-template-columns: 1fr; }
+  .loc-gallery { grid-template-columns: 1fr 1fr; }
+  .loc-gallery-media { height: 110px; }
+  .loc-card { padding: 18px 16px; border-radius: 16px; }
 }
 </style>

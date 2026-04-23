@@ -1693,6 +1693,12 @@ function setPinCatVisibility(cat) {
 }
 
 function filterCat(cat) {
+  // Toggle off if same category clicked again
+  if (activeCat.value === cat) {
+    activeCat.value = 'all'
+    setPinCatVisibility('all')
+    return
+  }
   activeCat.value = cat
   // Hide ad spaces — selecting any location category deactivates ads
   setAdVisibility(false)
@@ -3340,4 +3346,57 @@ body.dark-theme .clouds {
 }
 .adm-rent-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none !important; filter: none !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE — Mobile & Tablet
+═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Top bar — full width, scrollable */
+  .top-bar {
+    top: 10px;
+    left: 10px; right: 10px;
+    transform: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border-radius: 50px;
+    padding: 5px 8px;
+    gap: 4px;
+    justify-content: flex-start;
+  }
+  .top-bar::-webkit-scrollbar { display: none; }
+  .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
+  .icon-pill .material-symbols-outlined { font-size: 17px !important; }
+  .icon-pill::after { display: none; } /* hide tooltips on mobile */
+
+  /* Controls — smaller, closer to edge */
+  .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
+
+  /* Geocoder — below top bar, full width */
+  .geocoder-center {
+    top: 62px;
+    left: 10px; right: 10px;
+    transform: none;
+    width: auto;
+  }
+
+  /* Layer/weather panels — wider on mobile */
+  .lc-panel { width: calc(100vw - 20px) !important; max-width: 340px; }
+
+  /* Route drawer — full screen on mobile */
+  .route-drawer { width: 100vw !important; }
+
+  /* Bottom counter */
+  .bottom-label { font-size: 10px; padding: 6px 12px; }
+
+  /* Hide tooltip text on small screens */
+  .icon-pill-nav::after { display: none; }
+}
+
+@media (max-width: 480px) {
+  .top-bar { top: 8px; left: 8px; right: 8px; }
+  .ctrl-panel { top: 60px; left: 8px; }
+  .geocoder-center { top: 56px; left: 8px; right: 8px; }
+}
 </style>

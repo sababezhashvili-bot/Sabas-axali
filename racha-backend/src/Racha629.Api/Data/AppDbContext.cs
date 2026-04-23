@@ -95,6 +95,7 @@ namespace Racha629.Api.Data
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public string? ImageUrl { get; set; }
+        public string? GalleryUrls { get; set; } // comma-separated Cloudinary URLs
         public string? Description { get; set; }
 
         public int? UserId { get; set; }

@@ -30,7 +30,7 @@ namespace Racha629.Api.Controllers
             {
                 l.Id, l.NameGeo, l.NameEng, l.TypeGeo, l.TypeEng,
                 l.Category, l.InfoGeo, l.InfoEng, l.Latitude, l.Longitude,
-                l.ImageUrl, l.Description,
+                l.ImageUrl, l.GalleryUrls, l.Description,
                 AddedBy = l.User?.Username ?? "System"
             });
             return Ok(result);
@@ -46,7 +46,7 @@ namespace Racha629.Api.Controllers
             {
                 location.Id, location.NameGeo, location.NameEng, location.TypeGeo, location.TypeEng,
                 location.Category, location.InfoGeo, location.InfoEng,
-                location.Latitude, location.Longitude, location.ImageUrl, location.Description,
+                location.Latitude, location.Longitude, location.ImageUrl, location.GalleryUrls, location.Description,
                 AddedBy = location.User?.Username ?? "System"
             });
         }
@@ -62,6 +62,15 @@ namespace Racha629.Api.Controllers
 
             string? mediaUrl = await UploadToCloudinary(request.Image);
 
+            // Upload gallery files
+            var galleryList = new List<string>();
+            if (request.GalleryFiles != null)
+                foreach (var f in request.GalleryFiles)
+                {
+                    var url = await UploadToCloudinary(f);
+                    if (url != null) galleryList.Add(url);
+                }
+
             var location = new Location
             {
                 NameGeo = request.NameGeo,
@@ -75,6 +84,7 @@ namespace Racha629.Api.Controllers
                 Latitude = request.Latitude,
                 Longitude = request.Longitude,
                 ImageUrl = mediaUrl,
+                GalleryUrls = galleryList.Count > 0 ? string.Join(",", galleryList) : null,
                 UserId = userId
             };
 
@@ -109,6 +119,22 @@ namespace Racha629.Api.Controllers
 
             if (request.Image != null)
                 location.ImageUrl = await UploadToCloudinary(request.Image);
+
+            // Append new gallery files (keep existing)
+            if (request.GalleryFiles != null && request.GalleryFiles.Count > 0)
+            {
+                var newUrls = new List<string>();
+                foreach (var f in request.GalleryFiles)
+                {
+                    var url = await UploadToCloudinary(f);
+                    if (url != null) newUrls.Add(url);
+                }
+                var existing = string.IsNullOrEmpty(location.GalleryUrls)
+                    ? new List<string>()
+                    : location.GalleryUrls.Split(',').ToList();
+                existing.AddRange(newUrls);
+                location.GalleryUrls = string.Join(",", existing);
+            }
 
             await _context.SaveChangesAsync();
             return Ok(location);
@@ -178,5 +204,6 @@ namespace Racha629.Api.Controllers
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public IFormFile? Image { get; set; }
+        public IFormFileCollection? GalleryFiles { get; set; }
     }
 }
