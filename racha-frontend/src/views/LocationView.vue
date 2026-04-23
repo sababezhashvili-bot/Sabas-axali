@@ -90,10 +90,42 @@
           <div class="loc-gallery">
             <template v-for="(url, i) in galleryUrls" :key="i">
               <video v-if="isVideo(url)" :src="url" controls class="loc-gallery-media" />
-              <img v-else :src="url" class="loc-gallery-media" loading="lazy" />
+              <img v-else :src="url" class="loc-gallery-media" loading="lazy" @click="openLightbox(i)" />
             </template>
           </div>
         </div>
+
+        <!-- Lightbox Overlay -->
+        <teleport to="body">
+          <div v-if="lightboxOpen" class="lb-overlay" @click.self="closeLightbox" @keydown.esc="closeLightbox">
+            <!-- Close -->
+            <button class="lb-btn lb-close" @click="closeLightbox">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+            <!-- Prev -->
+            <button class="lb-btn lb-prev" @click.stop="lightboxStep(-1)" v-if="galleryImageUrls.length > 1">
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <!-- Media -->
+            <div class="lb-media-wrap" @click.stop>
+              <transition name="lb-fade" mode="out-in">
+                <img
+                  v-if="!isVideo(galleryImageUrls[lightboxIdx])"
+                  :key="lightboxIdx"
+                  :src="galleryImageUrls[lightboxIdx]"
+                  class="lb-img"
+                />
+              </transition>
+              <div class="lb-counter" v-if="galleryImageUrls.length > 1">
+                {{ lightboxIdx + 1 }} / {{ galleryImageUrls.length }}
+              </div>
+            </div>
+            <!-- Next -->
+            <button class="lb-btn lb-next" @click.stop="lightboxStep(1)" v-if="galleryImageUrls.length > 1">
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+          </div>
+        </teleport>
 
         <!-- Mini Map Card -->
         <div class="loc-card">
@@ -102,11 +134,17 @@
             რუკაზე
           </div>
           <div ref="miniMapEl" class="loc-mini-map"></div>
-          <a :href="`https://www.google.com/maps?q=${location.latitude},${location.longitude}`"
-             target="_blank" rel="noopener" class="loc-gmaps-link">
-            <span class="material-symbols-outlined" style="font-size:15px">open_in_new</span>
-            Google Maps-ში გახსნა
-          </a>
+          <div class="loc-map-actions">
+            <button class="loc-route-btn" @click="addToRoute">
+              <span class="material-symbols-outlined" style="font-size:16px">add_location</span>
+              მარშრუტში დამატება
+            </button>
+            <a :href="`https://www.google.com/maps?q=${location.latitude},${location.longitude}`"
+               target="_blank" rel="noopener" class="loc-gmaps-link">
+              <span class="material-symbols-outlined" style="font-size:15px">open_in_new</span>
+              Google Maps
+            </a>
+          </div>
         </div>
 
         <!-- Navigate to main map -->
@@ -136,6 +174,50 @@ const loading   = ref(true)
 const error     = ref('')
 const miniMapEl = ref(null)
 let miniMap     = null
+
+// ── Lightbox ──────────────────────────────────────────────────────
+const lightboxOpen = ref(false)
+const lightboxIdx  = ref(0)
+
+// Only image URLs (skip videos) for the slideshow
+const galleryImageUrls = computed(() =>
+  galleryUrls.value.filter(u => !isVideo(u))
+)
+
+function openLightbox(gridIdx) {
+  // gridIdx is index in galleryUrls (all); find matching position in images-only array
+  const url = galleryUrls.value[gridIdx]
+  const imgIdx = galleryImageUrls.value.indexOf(url)
+  if (imgIdx < 0) return
+  lightboxIdx.value = imgIdx
+  lightboxOpen.value = true
+  document.addEventListener('keydown', onLbKey)
+}
+
+function closeLightbox() {
+  lightboxOpen.value = false
+  document.removeEventListener('keydown', onLbKey)
+}
+
+function lightboxStep(dir) {
+  const total = galleryImageUrls.value.length
+  lightboxIdx.value = (lightboxIdx.value + dir + total) % total
+}
+
+function onLbKey(e) {
+  if (e.key === 'ArrowRight') lightboxStep(1)
+  else if (e.key === 'ArrowLeft') lightboxStep(-1)
+  else if (e.key === 'Escape') closeLightbox()
+}
+
+// ── Add to Route ──────────────────────────────────────────────────
+function addToRoute() {
+  if (!location.value) return
+  const name = encodeURIComponent(location.value.nameGeo || location.value.name || '')
+  const lat  = location.value.latitude
+  const lng  = location.value.longitude
+  router.push(`/?addRoute=${lat},${lng},${name}`)
+}
 
 const CAT_MAP = {
   landmark:   { label: 'ღირსშესანიშნაობა', icon: 'landscape',   color: '#4CAF50' },
@@ -187,6 +269,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (miniMap) miniMap.remove()
+  document.removeEventListener('keydown', onLbKey)
 })
 
 function initMiniMap() {
@@ -430,6 +513,84 @@ function initMiniMap() {
 }
 .loc-gallery-media:hover { transform: scale(1.03); opacity: 0.9; }
 video.loc-gallery-media { cursor: default; height: 180px; background: #000; }
+
+/* ── Map actions row ── */
+.loc-map-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.loc-route-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 18px;
+  background: var(--accent);
+  border: none; border-radius: 999px;
+  color: #fff; font-family: inherit;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+.loc-route-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+/* ── Lightbox ── */
+.lb-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.94);
+  display: flex; align-items: center; justify-content: center;
+  touch-action: pan-y;
+}
+.lb-media-wrap {
+  position: relative;
+  max-width: calc(100vw - 120px);
+  max-height: 92vh;
+  display: flex; flex-direction: column; align-items: center;
+}
+.lb-img {
+  max-width: 100%;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 8px 60px rgba(0,0,0,0.6);
+  user-select: none;
+}
+.lb-counter {
+  margin-top: 12px;
+  font-size: 12px; font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 1px;
+}
+.lb-btn {
+  position: absolute;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 50%;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s, transform 0.15s;
+  z-index: 10;
+}
+.lb-btn:hover { background: rgba(255,255,255,0.22); transform: scale(1.1); }
+.lb-close { top: 20px; right: 20px; }
+.lb-prev  { left: 20px; top: 50%; transform: translateY(-50%); }
+.lb-prev:hover  { transform: translateY(-50%) scale(1.1); }
+.lb-next  { right: 20px; top: 50%; transform: translateY(-50%); }
+.lb-next:hover  { transform: translateY(-50%) scale(1.1); }
+/* Transition */
+.lb-fade-enter-active, .lb-fade-leave-active { transition: opacity 0.18s, transform 0.18s; }
+.lb-fade-enter-from { opacity: 0; transform: scale(0.96); }
+.lb-fade-leave-to   { opacity: 0; transform: scale(1.04); }
+
+@media (max-width: 600px) {
+  .lb-media-wrap { max-width: 100vw; }
+  .lb-prev { left: 8px; }
+  .lb-next { right: 8px; }
+  .lb-close { top: 12px; right: 12px; width: 40px; height: 40px; }
+  .lb-btn { width: 40px; height: 40px; }
+}
 
 /* ── Buttons ── */
 .loc-btn {

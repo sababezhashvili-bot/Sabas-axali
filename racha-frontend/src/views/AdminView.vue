@@ -2147,4 +2147,60 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .badge.admin      { background: rgba(102,153,204,0.2); color: #6699cc; }
 .badge.user       { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
 
+/* ══════════════════════════════════════════
+   MOBILE RESPONSIVE — Admin Panel
+══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Sidebar → horizontal bottom bar */
+  .glass-sidebar {
+    top: auto;
+    left: 0; right: 0; bottom: 0;
+    width: 100%;
+    height: 58px;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 0 8px;
+    border-radius: 0;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    border-left: none; border-right: none; border-bottom: none;
+  }
+  .nav-brand { display: none; }
+  .nav-group { flex-direction: row; width: auto; gap: 0; }
+  .nav-group.bottom { margin-top: 0; }
+  .nav-btn { margin-bottom: 0; width: 40px; height: 40px; }
+
+  /* Header — full width from top */
+  .glass-header {
+    left: 8px; right: 8px;
+    top: 8px;
+  }
+  .search-bar { width: 100%; }
+
+  /* Widgets layer — use full width, account for bottom nav */
+  .widgets-layer {
+    top: 72px;
+    left: 0; right: 0;
+    bottom: 58px;
+  }
+
+  /* Pin/Ad manager — full width, scrollable panel */
+  .pin-manager,
+  .ad-manager {
+    position: absolute;
+    left: 0; right: 0;
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 20px 20px 0 0;
+    bottom: 0;
+    top: auto;
+  }
+
+  /* Widget body — compact padding */
+  .widget-body { padding: 12px; }
+  .widget-header { padding: 12px 16px; }
+
+  /* Form rows — single column */
+  .pm-row { grid-template-columns: 1fr; }
+  .pm-form { gap: 8px; }
+}
 </style>

@@ -369,6 +369,25 @@
               </div>
             </div>
 
+            <!-- Transport time comparison -->
+            <div v-if="routeAllTimes" class="rd-time-compare">
+              <div class="rd-tc-row">
+                <span class="material-symbols-outlined" style="color:#72A98F">directions_car</span>
+                <span class="rd-tc-mode">ავტომობილი</span>
+                <span class="rd-tc-time" :class="{ active: routeMode==='driving' }">{{ routeAllTimes.driving }}</span>
+              </div>
+              <div class="rd-tc-row">
+                <span class="material-symbols-outlined" style="color:#FFD700">directions_bike</span>
+                <span class="rd-tc-mode">ველოსიპედი</span>
+                <span class="rd-tc-time" :class="{ active: routeMode==='cycling' }">{{ routeAllTimes.cycling }}</span>
+              </div>
+              <div class="rd-tc-row">
+                <span class="material-symbols-outlined" style="color:#6699cc">directions_walk</span>
+                <span class="rd-tc-mode">ფეხით</span>
+                <span class="rd-tc-time" :class="{ active: routeMode==='walking' }">{{ routeAllTimes.walking }}</span>
+              </div>
+            </div>
+
             <button class="rd-book-shortcut" @click="routeTab = 'ticket'">
               <span class="material-symbols-outlined">confirmation_number</span>
               ტაქსის დაჯავშნა →
@@ -615,6 +634,18 @@ const ROUTE_MODES = [
   { val: 'walking', icon: 'directions_walk', label: 'ფეხით'  },
   { val: 'cycling', icon: 'directions_bike', label: 'ველო'   },
 ]
+
+// Estimated times for all modes based on raw distance
+const routeAllTimes = computed(() => {
+  if (!routeResult.value) return null
+  const km = routeResult.value.rawDist
+  const fmt = (min) => min >= 60 ? `${Math.floor(min/60)}სთ ${min%60}წთ` : `${Math.round(min)} წთ`
+  return {
+    driving: routeMode.value === 'driving' ? routeResult.value.duration : fmt(km * 1.4),
+    cycling: routeMode.value === 'cycling' ? routeResult.value.duration : fmt(km * 3.5),
+    walking: routeMode.value === 'walking' ? routeResult.value.duration : fmt(km * 12),
+  }
+})
 
 // Suggested quick routes for Racha region
 const SUGGESTED_ROUTES = [
@@ -1615,6 +1646,28 @@ onMounted(async () => {
   } catch(e) {}
 
   try { const u = await api.getMe(); if(u) isLoggedIn.value = true } catch(e) {}
+
+  // ── Handle ?addRoute=lat,lng,name — open route panel with location as destination ──
+  const addRouteParam = new URLSearchParams(window.location.search).get('addRoute')
+  if (addRouteParam) {
+    const parts = addRouteParam.split(',')
+    if (parts.length >= 2) {
+      const lat  = parseFloat(parts[0])
+      const lng  = parseFloat(parts[1])
+      const name = parts.slice(2).join(',') ? decodeURIComponent(parts.slice(2).join(',')) : 'დანიშნულება'
+      if (!isNaN(lat) && !isNaN(lng)) {
+        // Set last waypoint as the destination
+        routeWaypoints.value[routeWaypoints.value.length - 1] = { name, lat, lng }
+        showRoutePanel.value = true
+        // Fly to location
+        if (map) {
+          map.flyTo({ center: [lng, lat], zoom: 13, duration: 1800, essential: true })
+        }
+      }
+    }
+    // Clean the URL without reload
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 })
 
 onUnmounted(() => {
@@ -3170,6 +3223,26 @@ body.dark-theme .clouds {
 .rd-breakdown { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 8px; }
 .rd-bk-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.65); }
 .rd-bk-row .material-symbols-outlined { font-size: 14px !important; flex-shrink: 0; }
+/* Time comparison table */
+.rd-time-compare {
+  margin: 12px 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rd-tc-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 13px;
+}
+.rd-tc-row:last-child { border-bottom: none; }
+.rd-tc-row .material-symbols-outlined { font-size: 16px !important; flex-shrink: 0; }
+.rd-tc-mode { flex: 1; color: rgba(255,255,255,0.6); }
+.rd-tc-time { font-weight: 600; color: rgba(255,255,255,0.55); }
+.rd-tc-time.active { color: #72A98F; }
+
 .rd-book-shortcut {
   width: 100%; padding: 10px; background: transparent;
   border: 1px solid rgba(114,169,143,0.4); border-radius: 10px;
@@ -3404,9 +3477,16 @@ body.dark-theme .clouds {
 }
 
 @media (max-width: 480px) {
-  .top-bar { top: 8px; left: 8px; right: 62px; }
-  .user-auth-wrap { top: 8px; right: 8px; }
+  .top-bar { top: 8px; left: 8px; right: 8px; transform: none; }
+  /* Login button moves to left panel area on phones */
+  .user-auth-wrap {
+    top: auto;
+    bottom: 120px;
+    right: auto;
+    left: 8px;
+  }
+  .user-auth-wrap .pill-btn { width: 42px; height: 42px; }
   .ctrl-panel { top: 64px; left: 8px; }
-  .geocoder-center { top: 62px; left: 8px; right: 8px; }
+  .geocoder-center { top: 58px; left: 8px; right: 8px; }
 }
 </style>
