@@ -1,6 +1,30 @@
 <template>
   <div class="admin-page">
-    
+
+    <!-- ── Inline Login Screen (shown when not authenticated) ── -->
+    <div v-if="!isAuthenticated" class="admin-login-screen">
+      <div class="admin-login-card">
+        <div class="alc-icon">
+          <span class="material-symbols-outlined" style="font-size:32px;color:#4CAF50">admin_panel_settings</span>
+        </div>
+        <div class="alc-title">ადმინ პანელი</div>
+        <div class="alc-sub">შეიყვანეთ სერთიფიკატები</div>
+        <div v-if="loginError" class="alc-error">{{ loginError }}</div>
+        <input type="text" v-model="adminLoginUser" class="alc-input" placeholder="მომხმარებელი"
+          @keydown.enter="doAdminLogin" :disabled="loginLoading" />
+        <input type="password" v-model="adminLoginPass" class="alc-input" placeholder="პაროლი"
+          @keydown.enter="doAdminLogin" :disabled="loginLoading" />
+        <button class="alc-btn" @click="doAdminLogin" :disabled="loginLoading">
+          <span v-if="loginLoading" class="material-symbols-outlined" style="font-size:18px;animation:spin 1s linear infinite">progress_activity</span>
+          <span v-else class="material-symbols-outlined" style="font-size:18px">login</span>
+          {{ loginLoading ? 'შედის...' : 'შესვლა' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Main Admin UI (shown after authentication) ── -->
+    <template v-if="isAuthenticated">
+
     <!-- 1. Full Screen Interactive Map -->
     <div id="admin-map" ref="adminMapContainer"></div>
 
@@ -111,13 +135,13 @@
 
       <div class="search-bar">
         <span class="material-symbols-outlined search-icon">search</span>
-        <input type="text" placeholder="Search regions, pins, or users..." />
+        <input type="text" v-model="adminSearch" placeholder="ძებნა..." />
       </div>
       <div class="header-profile">
-        <div class="profile-avatar">A</div>
+        <div class="profile-avatar">{{ (currentUser.username || 'A').charAt(0).toUpperCase() }}</div>
         <div class="profile-info">
-          <span class="p-name">Administrator</span>
-          <span class="p-role">SuperAdmin</span>
+          <span class="p-name">{{ currentUser.username || 'ადმინი' }}</span>
+          <span class="p-role">{{ currentUser.role || 'Admin' }}</span>
         </div>
       </div>
     </header>
@@ -133,45 +157,86 @@
             <h3><span class="material-symbols-outlined">campaign</span> Ad Manager</h3>
           </div>
           <div class="widget-body">
-             <div class="form-group" v-if="isAddingAd">
-                <input v-model="newAd.name" placeholder="Name (e.g. Billboard 1)" class="glass-input">
-                <input v-model="newAd.price" type="number" placeholder="Price ($/mo)" class="glass-input">
-                <select v-model="newAd.type" class="glass-input">
-                    <option>Billboard</option><option>Banner</option><option>Digital</option>
-                </select>
-                <div class="coord-display" v-if="newAd.lat">{{ newAd.lat.toFixed(4) }}, {{ newAd.lng.toFixed(4) }}</div>
-                <div class="coord-display" v-else>Click Map to Set Location</div>
-                <button class="action-btn" @click="saveAd" :disabled="!newAd.lat">Save Ad</button>
-                <button class="text-btn" @click="isAddingAd=false">Cancel</button>
-             </div>
-             <button v-else class="action-btn" @click="startAddAd">
-                <span class="material-symbols-outlined">add_location_alt</span> Add New Space
-             </button>
-             
-             <!-- Rent Requests -->
-             <div v-if="rentRequests.length" class="requests-section">
-                <h4>Pending Requests</h4>
-                <div v-for="req in rentRequests" :key="req.id" class="request-item">
-                    <img :src="req.imageUrl" class="req-thumb">
-                    <div class="req-info">
-                        <div style="font-weight:bold">${{ req.adSpace?.priceMonthly || '?' }}/mo</div>
-                        <div style="font-size:11px">{{ req.durationMonths }} months</div>
-                    </div>
-                    <div class="req-actions">
-                        <button class="icon-btn approve" @click="resolveRequest(req.id, 'approve')">check</button>
-                        <button class="icon-btn reject" @click="resolveRequest(req.id, 'reject')">close</button>
-                    </div>
-                </div>
-             </div>
 
-             <!-- List of Ads -->
-             <div class="ad-list">
-                <h4>All Spaces</h4>
-                <div v-for="ad in ads" :key="ad.id" class="ad-item">
-                    <span>{{ ad.name }}</span>
-                    <span class="badge" :class="ad.status.toLowerCase()">{{ ad.status }}</span>
+            <!-- Add Form -->
+            <div v-if="isAddingAd" class="pm-form">
+              <div class="pm-field">
+                <label class="pm-label">სახელი</label>
+                <input v-model="newAd.name" class="pm-input" placeholder="მაგ. Billboard 1">
+              </div>
+              <div class="pm-row">
+                <div class="pm-field">
+                  <label class="pm-label">ტიპი</label>
+                  <select v-model="newAd.type" class="pm-input pm-select">
+                    <option>Billboard</option><option>Banner</option><option>Digital</option>
+                  </select>
                 </div>
-             </div>
+                <div class="pm-field">
+                  <label class="pm-label">ფასი ($/თვე)</label>
+                  <input v-model="newAd.price" type="number" class="pm-input" placeholder="0">
+                </div>
+              </div>
+              <div class="pm-hint" :style="newAd.lat ? { color:'#4CAF50', borderColor:'#4CAF5044' } : {}">
+                <span class="material-symbols-outlined" style="font-size:13px">{{ newAd.lat ? 'location_on' : 'my_location' }}</span>
+                {{ newAd.lat ? `${newAd.lat.toFixed(4)}, ${newAd.lng.toFixed(4)}` : 'რუკაზე დააჭირეთ ლოკაციის დასაყენებლად' }}
+              </div>
+              <div class="pm-actions">
+                <button class="pm-save-btn" @click="saveAd" :disabled="!newAd.lat || !newAd.name">
+                  <span class="material-symbols-outlined">save</span> შენახვა
+                </button>
+                <button class="pm-cancel-btn" @click="isAddingAd = false">
+                  <span class="material-symbols-outlined">close</span> გაუქმება
+                </button>
+              </div>
+            </div>
+            <button v-else class="pm-save-btn" style="width:100%;margin-bottom:14px" @click="startAddAd">
+              <span class="material-symbols-outlined">add_location_alt</span> სარეკლამო ადგილის დამატება
+            </button>
+
+            <!-- Rent Requests -->
+            <div v-if="rentRequests.length" class="pins-list" style="margin-bottom:12px">
+              <div class="pins-list-header">
+                <span class="material-symbols-outlined" style="font-size:14px;color:#FF9800">pending</span>
+                მოთხოვნები ({{ rentRequests.length }})
+              </div>
+              <div v-for="req in rentRequests" :key="req.id" class="pin-list-item">
+                <div class="pin-list-info" style="flex:1;min-width:0">
+                  <div class="pin-list-name">${{ req.adSpace?.priceMonthly || '?' }}/თვე</div>
+                  <div class="pin-list-cat">{{ req.durationMonths }} თვე</div>
+                </div>
+                <button class="icon-btn approve" @click="resolveRequest(req.id, 'approve')" title="დამტკიცება">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+                <button class="icon-btn reject" @click="resolveRequest(req.id, 'reject')" title="უარყოფა">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- All Ad Spaces -->
+            <div class="pins-list">
+              <div class="pins-list-header">
+                <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">campaign</span>
+                სარეკლამო ადგილები ({{ ads.length }})
+              </div>
+              <div class="pins-scroll">
+                <div v-if="ads.length === 0" class="pins-empty">სარეკლამო ადგილი არ არის</div>
+                <div v-for="ad in ads" :key="ad.id" class="pin-list-item">
+                  <div class="pin-cat-dot" :style="{
+                    background: ad.status === 'Available' ? '#4CAF50' : ad.status === 'Rented' ? '#F44336' : '#FF9800'
+                  }"></div>
+                  <div class="pin-list-info" style="flex:1;min-width:0">
+                    <div class="pin-list-name">{{ ad.name }}</div>
+                    <div class="pin-list-cat">{{ ad.type }} · ${{ ad.priceMonthly }}/თვე</div>
+                  </div>
+                  <span class="badge" :class="(ad.status || '').toLowerCase()">{{ ad.status }}</span>
+                  <button class="pin-del-btn" style="margin-left:6px" @click="deleteAd(ad.id)" title="წაშლა">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </transition>
@@ -180,58 +245,125 @@
       <transition name="fade-slide">
         <div v-if="activeTab === 'map'" class="glass-widget pin-manager">
           <div class="widget-header">
-            <h3><span class="material-symbols-outlined">add_location</span> Pin Manager</h3>
+            <h3>
+              <span class="material-symbols-outlined">{{ editingPin ? 'edit_location_alt' : 'add_location' }}</span>
+              {{ editingPin ? 'პინის რედაქტირება' : 'ლოკაციის დამატება' }}
+            </h3>
+            <button v-if="editingPin" class="icon-btn sm" @click="cancelEdit" title="გაუქმება">
+              <span class="material-symbols-outlined">close</span>
+            </button>
           </div>
           <div class="widget-body">
-            <!-- Add/Edit Form -->
-             <div class="form-group">
-              <label>Location Name</label>
-              <input type="text" v-model="locName" placeholder="e.g. Shaori Lake">
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Category</label>
-                <select v-model="locCategory">
-                  <option value="landmark">🏔️ Landmark</option>
-                  <option value="waterfall">🌊 Waterfall</option>
-                  <option value="hotel">🏨 Hotel</option>
-                  <option value="restaurant">🍽️ Restaurant</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Coordinates</label>
-                <input type="text" v-model="locCoords" readonly placeholder="Click map...">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Description</label>
-              <textarea v-model="locDesc" rows="2" placeholder="Brief details..."></textarea>
-            </div>
-            <div class="form-group">
-              <label>Cover Image</label>
-              <input type="file" ref="locFileInput" accept="image/*" class="file-input">
-            </div>
-            <button class="action-btn" @click="addLocation">
-              <span class="material-symbols-outlined">save</span> Save Location
-            </button>
 
-            <!-- Existing Pins List -->
-            <div v-if="existingPins.length" class="pins-list">
-              <div class="pins-list-header">
-                <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">pin_drop</span>
-                დამატებული ლოკაციები ({{ existingPins.length }})
+            <!-- ── Category Filter Bar ── -->
+            <div class="pin-filter-bar">
+              <button v-for="fc in PIN_FILTERS" :key="fc.key"
+                :class="['pf-btn', { active: pinFilter === fc.key }]"
+                @click="setPinFilter(fc.key)"
+                :style="(pinFilter === fc.key && fc.color) ? { borderColor: fc.color, color: fc.color } : {}"
+              >{{ fc.label }}</button>
+            </div>
+
+            <!-- ── Add / Edit Form ── -->
+            <div class="pm-form">
+              <div class="pm-field">
+                <label class="pm-label">სახელი (ქართ.)</label>
+                <input type="text" v-model="locName" class="pm-input" placeholder="მაგ. შაორის ტბა" :disabled="savingPin">
               </div>
-              <div v-for="pin in existingPins" :key="pin.id" class="pin-list-item">
-                <div class="pin-cat-dot" :style="{ background: PIN_CAT_COLORS[pin.category] || '#72A98F' }"></div>
-                <div class="pin-list-info">
-                  <div class="pin-list-name">{{ pin.nameGeo || pin.name }}</div>
-                  <div class="pin-list-cat">{{ pin.category || 'landmark' }}</div>
+
+              <div class="pm-row">
+                <div class="pm-field">
+                  <label class="pm-label">კატეგორია</label>
+                  <select v-model="locCategory" class="pm-input pm-select" :disabled="savingPin">
+                    <option value="landmark">🏔️ ღირსშ.</option>
+                    <option value="waterfall">🌊 ჩანჩქ.</option>
+                    <option value="hotel">🏨 სასტ.</option>
+                    <option value="restaurant">🍽️ კვება</option>
+                  </select>
                 </div>
-                <button class="pin-del-btn" @click="deletePin(pin.id)" title="წაშლა">
-                  <span class="material-symbols-outlined">delete</span>
+                <div class="pm-field">
+                  <label class="pm-label">კოორდინატები</label>
+                  <div class="pm-coord-wrap">
+                    <input type="text" v-model="locCoords" class="pm-input" readonly
+                      :placeholder="isPlacingPin ? 'რუკაზე დააჭირეთ...' : 'არჩეული არ არის'"
+                      :style="isPlacingPin ? { borderColor: 'var(--accent)', color: '#4CAF50' } : {}">
+                    <button class="pm-place-btn" :class="{ active: isPlacingPin }"
+                      @click="isPlacingPin = !isPlacingPin" :title="isPlacingPin ? 'გაუქმება' : 'ლოკაციის დაყენება'">
+                      <span class="material-symbols-outlined">{{ isPlacingPin ? 'location_on' : 'add_location_alt' }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pm-field">
+                <label class="pm-label">აღწერა</label>
+                <textarea v-model="locDesc" rows="2" class="pm-input pm-textarea"
+                  placeholder="მოკლე აღწერა..." :disabled="savingPin"></textarea>
+              </div>
+
+              <div class="pm-field">
+                <label class="pm-label">ფოტო</label>
+                <!-- Current image preview when editing -->
+                <div v-if="editingPin?.imageUrl" class="pm-img-preview">
+                  <img :src="editingPin.imageUrl" alt="current" class="pm-img-thumb" />
+                  <span style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:4px">არსებული ფოტო</span>
+                </div>
+                <label class="pm-upload-label" :class="{ disabled: savingPin }">
+                  <input type="file" ref="locFileInput" accept="image/*" class="pm-file-hidden"
+                    :disabled="savingPin" @change="onFileChange">
+                  <span class="material-symbols-outlined" style="font-size:16px">upload</span>
+                  <span>{{ locFileName || 'ფოტოს ატვირთვა...' }}</span>
+                </label>
+              </div>
+
+              <div v-if="isPlacingPin" class="pm-hint">
+                <span class="material-symbols-outlined" style="font-size:13px">my_location</span>
+                რუკაზე დააჭირეთ ლოკაციის დასაყენებლად
+              </div>
+
+              <div class="pm-actions">
+                <button class="pm-save-btn" @click="savePin"
+                  :disabled="savingPin || !locName || !locCoords">
+                  <span class="material-symbols-outlined" :class="{ 'spin-icon': savingPin }">
+                    {{ savingPin ? 'progress_activity' : (editingPin ? 'save' : 'add_location_alt') }}
+                  </span>
+                  {{ savingPin ? 'ინახება...' : (editingPin ? 'განახლება' : 'დამატება') }}
+                </button>
+                <button v-if="editingPin" class="pm-cancel-btn" @click="cancelEdit" :disabled="savingPin">
+                  <span class="material-symbols-outlined">close</span>
+                  გაუქმება
                 </button>
               </div>
             </div>
+
+            <!-- ── Existing Pins List ── -->
+            <div class="pins-list">
+              <div class="pins-list-header">
+                <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">pin_drop</span>
+                ლოკაციები ({{ filteredPins.length }})
+                <span v-if="pinFilter !== 'all'" style="opacity:.45;font-size:10px;margin-left:auto">
+                  {{ existingPins.length }} სულ
+                </span>
+              </div>
+              <div class="pins-scroll">
+                <div v-if="filteredPins.length === 0" class="pins-empty">ლოკაცია ვერ მოიძებნა</div>
+                <div v-for="pin in filteredPins" :key="pin.id"
+                  class="pin-list-item" :class="{ 'pin-list-item--editing': editingPin?.id === pin.id }">
+                  <div class="pin-cat-dot" :style="{ background: PIN_CAT_COLORS[pin.category] || '#72A98F' }"></div>
+                  <div class="pin-list-info" @click="startEditPin(pin)" style="cursor:pointer;flex:1;min-width:0">
+                    <div class="pin-list-name">{{ pin.nameGeo || pin.name }}</div>
+                    <div class="pin-list-cat">{{ catLabelMap[pin.category] || pin.category }}</div>
+                  </div>
+                  <button class="pin-edit-btn" @click="startEditPin(pin)" title="რედაქტირება">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="pin-del-btn" @click="deletePin(pin.id)" title="წაშლა">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </transition>
@@ -240,39 +372,55 @@
       <transition name="fade-slide">
         <div v-if="activeTab === 'users'" class="glass-panel users-panel">
           <div class="panel-header">
-            <h2>User Management</h2>
+            <h2>
+              <span class="material-symbols-outlined" style="font-size:20px;color:var(--accent)">group</span>
+              მომხმარებლები
+            </h2>
             <div class="filter-group">
-              <button :class="{active:currentFilter==='all'}" @click="setFilter('all')">All Humans</button>
-              <button :class="{active:currentFilter==='recent'}" @click="setFilter('recent')">Recent</button>
+              <button :class="{active:currentFilter==='all'}" @click="setFilter('all')">ყველა</button>
+              <button :class="{active:currentFilter==='recent'}" @click="setFilter('recent')">ახალი</button>
             </div>
           </div>
           <div class="panel-body scrollable">
-             <table>
+            <table>
               <thead>
                 <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Joined</th>
-                  <th>Actions</th>
+                  <th>მომხმარებელი</th>
+                  <th>როლი</th>
+                  <th>გაწევრება</th>
+                  <th>მოქმედებები</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="u in displayedUsers" :key="u.id">
+                <tr v-for="u in filteredUsersList" :key="u.id">
                   <td>
                     <div class="u-cell">
-                      <div class="u-avatar">{{ u.username.charAt(0).toUpperCase() }}</div>
+                      <div class="u-avatar" :style="{ background: u.role === 'SuperAdmin' ? '#4CAF50' : u.role === 'Admin' ? '#6699cc' : 'rgba(255,255,255,0.15)' }">
+                        {{ u.username.charAt(0).toUpperCase() }}
+                      </div>
                       <div>
                         <div class="u-name">{{ u.username }}</div>
-                        <div class="u-email">{{ u.email || 'No Email' }}</div>
+                        <div class="u-email">{{ u.email || '—' }}</div>
                       </div>
                     </div>
                   </td>
-                  <td><span :class="['badge', u.role]">{{ u.role }}</span></td>
-                  <td>{{ new Date(u.createdAt).toLocaleDateString() }}</td>
                   <td>
-                    <button v-if="u.role!=='SuperAdmin'" class="icon-btn" @click="promote(u.id)" title="Promote">
-                      <span class="material-symbols-outlined">verified_user</span>
-                    </button>
+                    <span :class="['badge', (u.role || 'user').toLowerCase()]">{{ u.role || 'User' }}</span>
+                  </td>
+                  <td style="font-size:11px;opacity:0.55">{{ new Date(u.createdAt).toLocaleDateString('ka-GE') }}</td>
+                  <td>
+                    <div style="display:flex;gap:5px;align-items:center">
+                      <!-- Promote to Admin (only for non-admins) -->
+                      <button v-if="u.role !== 'Admin' && u.role !== 'SuperAdmin'"
+                        class="icon-btn promote" @click="promote(u.id)" title="ადმინად დაწინაურება">
+                        <span class="material-symbols-outlined">verified_user</span>
+                      </button>
+                      <!-- Demote Admin back to User -->
+                      <button v-if="u.role === 'Admin'"
+                        class="icon-btn demote" @click="demote(u.id)" title="მომხმარებლად დაბრუნება">
+                        <span class="material-symbols-outlined">person</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -308,31 +456,74 @@
         </div>
       </transition>
 
+      <!-- WIDGET: Settings -->
+      <transition name="fade-slide">
+        <div v-if="activeTab === 'settings'" class="glass-widget settings-widget">
+          <div class="widget-header">
+            <h3><span class="material-symbols-outlined">settings</span> პარამეტრები</h3>
+          </div>
+          <div class="widget-body">
+            <div class="settings-section">
+              <div class="settings-label">ანგარიში</div>
+              <div class="settings-row">
+                <span class="settings-key">მომხმარებელი</span>
+                <span class="settings-val">{{ currentUser.username }}</span>
+              </div>
+              <div class="settings-row">
+                <span class="settings-key">ელ-ფოსტა</span>
+                <span class="settings-val">{{ currentUser.email || '—' }}</span>
+              </div>
+              <div class="settings-row">
+                <span class="settings-key">როლი</span>
+                <span class="settings-val" style="color:var(--accent)">{{ currentUser.role }}</span>
+              </div>
+            </div>
+            <div class="settings-section" style="margin-top:16px">
+              <div class="settings-label">სისტემა</div>
+              <div class="settings-row">
+                <span class="settings-key">ვერსია</span>
+                <span class="settings-val">SARO v1.0</span>
+              </div>
+              <div class="settings-row">
+                <span class="settings-key">API</span>
+                <span class="settings-val" style="color:#4CAF50">● Online</span>
+              </div>
+            </div>
+            <button class="pm-save-btn" style="width:100%;margin-top:18px" @click="logout">
+              <span class="material-symbols-outlined">logout</span>
+              გასვლა
+            </button>
+          </div>
+        </div>
+      </transition>
+
       <!-- WIDGET: Stats (Bottom Left - Always Visible) -->
       <div class="glass-widget stats-widget">
         <div class="stat-item">
           <span class="stat-val">{{ allCount }}</span>
-          <span class="stat-lbl">Users</span>
+          <span class="stat-lbl">მომხ.</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
-          <span class="stat-val active-val">12</span>
-          <span class="stat-lbl">Active Pins</span>
+          <span class="stat-val active-val">{{ existingPins.length }}</span>
+          <span class="stat-lbl">პინი</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
-          <span class="stat-val warn-val">98%</span>
-          <span class="stat-lbl">Sys Load</span>
+          <span class="stat-val" style="color:#FF9800">{{ ads.length }}</span>
+          <span class="stat-lbl">რეკლ.</span>
         </div>
       </div>
 
     </main>
 
+    </template><!-- end v-if="isAuthenticated" -->
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import mapboxgl from 'mapbox-gl'
 import { api } from '../services/api.js'
@@ -340,6 +531,34 @@ import { api } from '../services/api.js'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 const router = useRouter()
+
+// ── Auth state ──
+const isAuthenticated = ref(false)
+const adminLoginUser  = ref('')
+const adminLoginPass  = ref('')
+const loginError      = ref('')
+const loginLoading    = ref(false)
+
+async function doAdminLogin() {
+  if (!adminLoginUser.value || !adminLoginPass.value) { loginError.value = 'შეავსეთ ველები'; return }
+  loginLoading.value = true; loginError.value = ''
+  try {
+    const u = await api.login(adminLoginUser.value, adminLoginPass.value)
+    if (u.role !== 'Admin' && u.role !== 'SuperAdmin') {
+      loginError.value = 'წვდომა უარყოფილია. საჭიროა ადმინი.'; api.logout(); return
+    }
+    currentUser.value = u
+    isAuthenticated.value = true
+    // Give Vue a tick to mount the map container, then init the map
+    await nextTick()
+    await nextTick()
+    initAdminMap()
+  } catch(e) {
+    loginError.value = 'პაროლი ან მომხმარებელი არასწორია'
+  } finally {
+    loginLoading.value = false
+  }
+}
 
 // Template refs
 const adminMapContainer = ref(null)
@@ -351,10 +570,38 @@ const currentUser = ref({ username: 'Admin', role: 'Admin', email: '' })
 const showMapCtrl = ref(false)
 
 // Location form state
-const locName = ref('')
+const locName     = ref('')
 const locCategory = ref('landmark')
-const locCoords = ref('')
-const locDesc = ref('')
+const locCoords   = ref('')
+const locDesc     = ref('')
+const locFileName = ref('')
+
+function onFileChange(e) {
+  const file = e.target.files[0]
+  locFileName.value = file ? file.name : ''
+}
+
+// Pin edit / filter / place
+const editingPin   = ref(null)   // pin object being edited, or null
+const pinFilter    = ref('all')  // 'all' | 'landmark' | 'waterfall' | 'hotel' | 'restaurant'
+const isPlacingPin = ref(false)  // when true, map click sets coords
+const savingPin    = ref(false)
+
+const PIN_FILTERS = [
+  { key: 'all',        label: 'ყველა' },
+  { key: 'landmark',   label: '🏔️ ღირსშ.',  color: '#4CAF50' },
+  { key: 'waterfall',  label: '🌊 ჩანჩქ.',  color: '#6699cc' },
+  { key: 'hotel',      label: '🏨 სასტ.',   color: '#F44336' },
+  { key: 'restaurant', label: '🍽️ კვება',   color: '#FFD700' },
+]
+
+const catLabelMap = {
+  landmark: 'ღირსშესანიშნაობა', waterfall: 'ჩანჩქერი',
+  hotel: 'სასტუმრო', restaurant: 'რესტორანი'
+}
+
+// Search state
+const adminSearch = ref('')
 
 // User management state
 const allUsers = ref([])
@@ -367,14 +614,32 @@ const logsLoading = ref(false)
 const logsError = ref('')
 
 // Map instances (non-reactive)
-let map = null
-let marker = null
+let map    = null
+let marker = null  // temporary placement marker only
 
 // --- Computed ---
+const filteredPins = computed(() => {
+  if (pinFilter.value === 'all') return existingPins.value
+  return existingPins.value.filter(p => (p.category || 'landmark') === pinFilter.value)
+})
+
 const displayedUsers = computed(() => {
   if (currentFilter.value === 'all') return allUsers.value
   const oneDay = 24 * 60 * 60 * 1000
   return allUsers.value.filter(u => (new Date() - new Date(u.createdAt)) < oneDay)
+})
+
+const filteredUsersList = computed(() => {
+  let list = displayedUsers.value
+  if (adminSearch.value.trim()) {
+    const q = adminSearch.value.toLowerCase()
+    list = list.filter(u =>
+      (u.username || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q) ||
+      (u.role || '').toLowerCase().includes(q)
+    )
+  }
+  return list
 })
 
 const allCount = computed(() => allUsers.value.length)
@@ -386,10 +651,6 @@ const recentCount = computed(() => {
 
 // --- Tab Switching ---
 function switchTab(tab) {
-  if (tab === 'settings') {
-    alert('Settings Module Coming Soon')
-    return
-  }
   activeTab.value = tab
   if (tab === 'map') {
     nextTick(() => { if (map) map.resize() })
@@ -436,10 +697,19 @@ function stopPolling() {
 }
 
 async function promote(id) {
-  if (!confirm('Promote this user to Admin?')) return
+  if (!confirm('მომხმარებელი ადმინად დავაწინაუროთ?')) return
   try {
     await api.promoteUser(id, 'Admin', { CanViewUsers: true, CanEditServices: true, CanDeleteData: false })
-    alert('User Promoted!')
+    loadUsers()
+  } catch (e) {
+    alert(e.message)
+  }
+}
+
+async function demote(id) {
+  if (!confirm('ადმინი მომხმარებლად დავაბრუნოთ?')) return
+  try {
+    await api.demoteUser(id)
     loadUsers()
   } catch (e) {
     alert(e.message)
@@ -459,56 +729,181 @@ async function loadLogs() {
   }
 }
 
-// --- Add Location ---
-async function addLocation() {
-  const formData = new FormData()
-  formData.append('NameGeo', locName.value)
-  formData.append('Category', locCategory.value)
-  const c = locCoords.value.split(',')
-  if (c.length < 2) return alert('Select location on map')
-  formData.append('Latitude', c[0].trim())
-  formData.append('Longitude', c[1].trim())
-  formData.append('Description', locDesc.value)
-
-  if (locFileInput.value && locFileInput.value.files[0]) {
-    formData.append('Image', locFileInput.value.files[0])
-  }
-
-  try {
-    const newLoc = await api.addLocation(formData)
-    alert('ლოკაცია დამატებულია!')
-    locName.value = ''; locCoords.value = ''; locDesc.value = ''
-    if (marker) marker.remove()
-    await loadPins()
-    // Render new marker on map
-    if (newLoc && map) {
-      const el = createAdminPin(newLoc.category || locCategory.value)
-      const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([newLoc.longitude, newLoc.latitude]).addTo(map)
-      adminMarkers.push({ mk, el, type: 'poi', locId: newLoc.id })
-    }
-  } catch (e) {
-    alert(e.message)
-  }
-}
-
-// --- Admin Pin: small green dot with black outline ---
+// --- Pin: placement marker element (HTML marker used only for coord-picking cursor) ---
 function createAdminPin(category = 'landmark') {
   const colors = { landmark: '#4CAF50', waterfall: '#6699cc', hotel: '#F44336', restaurant: '#FFD700' }
   const color = colors[category] || '#4CAF50'
   const el = document.createElement('div')
-  el.className = 'admin-dot-pin'
   el.style.cssText = `
     width: 14px; height: 14px; border-radius: 50%;
-    background: ${color};
-    border: 2px solid #111;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.55);
-    cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s;
+    background: ${color}; border: 2px solid #fff;
+    box-shadow: 0 0 0 3px ${color}55, 0 3px 10px rgba(0,0,0,0.6);
+    pointer-events: none;
   `
-  el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.35)'; el.style.boxShadow = `0 0 0 3px ${color}55, 0 4px 12px rgba(0,0,0,0.6)` })
-  el.addEventListener('mouseleave', () => { el.style.transform = ''; el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.55)' })
   return el
+}
+
+// ── GL Pin Layers (static, WebGL-rendered, no jitter) ──
+const PIN_CAT_COLOR_EXPR = ['match', ['get', 'category'],
+  'landmark',   '#4CAF50',
+  'waterfall',  '#6699cc',
+  'hotel',      '#F44336',
+  'restaurant', '#FFD700',
+  '#4CAF50'
+]
+
+function renderAdminGLPins() {
+  if (!map || !map.isStyleLoaded()) return
+  // Clear old layers / source
+  ;['admin-pins-circle'].forEach(id => { if (map.getLayer(id)) map.removeLayer(id) })
+  if (map.getSource('admin-pins')) map.removeSource('admin-pins')
+
+  const features = existingPins.value.map(p => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [parseFloat(p.longitude), parseFloat(p.latitude)] },
+    properties: {
+      id: p.id,
+      name: p.nameGeo || p.name || '',
+      category: (p.category || 'landmark').toLowerCase(),
+      selected: editingPin.value?.id === p.id ? 1 : 0
+    }
+  }))
+
+  map.addSource('admin-pins', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features }
+  })
+
+  const catFilter = pinFilter.value === 'all'
+    ? ['boolean', true]
+    : ['==', ['get', 'category'], pinFilter.value]
+
+  map.addLayer({
+    id: 'admin-pins-circle',
+    type: 'circle',
+    source: 'admin-pins',
+    filter: catFilter,
+    paint: {
+      'circle-color': PIN_CAT_COLOR_EXPR,
+      'circle-radius': ['case', ['==', ['get', 'selected'], 1], 13, 9],
+      'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 3, 2],
+      'circle-stroke-color': ['case', ['==', ['get', 'selected'], 1], '#ffffff', '#111111'],
+      'circle-opacity': 0.95
+    }
+  })
+
+  // Move above mask so pins are always visible
+  try { map.moveLayer('admin-pins-circle') } catch(e) {}
+
+  // Click to edit
+  map.on('click', 'admin-pins-circle', (e) => {
+    e.originalEvent.stopPropagation()
+    const id = e.features[0].properties.id
+    const pin = existingPins.value.find(p => p.id === id)
+    if (pin) startEditPin(pin)
+  })
+  map.on('mouseenter', 'admin-pins-circle', () => {
+    map.getCanvas().style.cursor = 'pointer'
+  })
+  map.on('mouseleave', 'admin-pins-circle', () => {
+    map.getCanvas().style.cursor = isPlacingPin.value ? 'crosshair' : ''
+  })
+}
+
+function refreshAdminGLPins() {
+  if (!map || !map.isStyleLoaded() || !map.getSource('admin-pins')) {
+    renderAdminGLPins(); return
+  }
+  const features = existingPins.value.map(p => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [parseFloat(p.longitude), parseFloat(p.latitude)] },
+    properties: {
+      id: p.id,
+      name: p.nameGeo || p.name || '',
+      category: (p.category || 'landmark').toLowerCase(),
+      selected: editingPin.value?.id === p.id ? 1 : 0
+    }
+  }))
+  map.getSource('admin-pins').setData({ type: 'FeatureCollection', features })
+
+  const catFilter = pinFilter.value === 'all'
+    ? ['boolean', true]
+    : ['==', ['get', 'category'], pinFilter.value]
+
+  if (map.getLayer('admin-pins-circle')) {
+    map.setFilter('admin-pins-circle', catFilter)
+    map.setPaintProperty('admin-pins-circle', 'circle-radius',
+      ['case', ['==', ['get', 'selected'], 1], 13, 9])
+    map.setPaintProperty('admin-pins-circle', 'circle-stroke-width',
+      ['case', ['==', ['get', 'selected'], 1], 3, 2])
+    map.setPaintProperty('admin-pins-circle', 'circle-stroke-color',
+      ['case', ['==', ['get', 'selected'], 1], '#ffffff', '#111111'])
+  }
+}
+
+// Pin filter
+function setPinFilter(cat) {
+  pinFilter.value = cat
+  refreshAdminGLPins()
+}
+
+// Start editing a pin
+function startEditPin(pin) {
+  editingPin.value = pin
+  locName.value     = pin.nameGeo || pin.name || ''
+  locCategory.value = pin.category || 'landmark'
+  locDesc.value     = pin.description || ''
+  locCoords.value   = `${parseFloat(pin.latitude).toFixed(5)}, ${parseFloat(pin.longitude).toFixed(5)}`
+  isPlacingPin.value = false
+  if (marker) { marker.remove(); marker = null }
+  if (map) map.flyTo({ center: [parseFloat(pin.longitude), parseFloat(pin.latitude)],
+    zoom: 14, pitch: 60, duration: 1200 })
+  refreshAdminGLPins()
+}
+
+// Cancel edit / reset form
+function cancelEdit() {
+  editingPin.value   = null
+  locName.value      = ''
+  locCategory.value  = 'landmark'
+  locDesc.value      = ''
+  locCoords.value    = ''
+  locFileName.value  = ''
+  isPlacingPin.value = false
+  if (marker) { marker.remove(); marker = null }
+  if (locFileInput.value) locFileInput.value.value = ''
+  refreshAdminGLPins()
+}
+
+// Save (add or update)
+async function savePin() {
+  if (!locName.value)   { alert('სახელი შეიყვანეთ'); return }
+  if (!locCoords.value) { alert('ლოკაცია დააჭირეთ რუკაზე'); return }
+  const c = locCoords.value.split(',')
+  if (c.length < 2)     { alert('კოორდინატები არასწორია'); return }
+
+  savingPin.value = true
+  const formData = new FormData()
+  formData.append('NameGeo',      locName.value)
+  formData.append('Category',     locCategory.value)
+  formData.append('Latitude',     c[0].trim())
+  formData.append('Longitude',    c[1].trim())
+  formData.append('Description',  locDesc.value)
+  if (locFileInput.value?.files[0]) formData.append('Image', locFileInput.value.files[0])
+
+  try {
+    if (editingPin.value) {
+      await api.updateLocation(editingPin.value.id, formData)
+    } else {
+      await api.addLocation(formData)
+    }
+    cancelEdit()
+    await loadPins()
+  } catch(e) {
+    alert(e.message)
+  } finally {
+    savingPin.value = false
+  }
 }
 
 
@@ -519,72 +914,105 @@ const isAddingAd = ref(false)
 const newAd = ref({ name:'', price:'', type:'Billboard', lat:null, lng:null })
 let tempAdMarker = null
 
-// Store all markers for spatial clipping
-const adminMarkers = []
-
-function addAdminMarker(mk, el, type = 'poi') {
-    adminMarkers.push({ mk, el, type })
-}
-
 async function loadAdsData() {
-    try {
-        // Clear old markers from map if any (though currently we reload or re-add)
-        // For strictness, let's clear the array
-        adminMarkers.length = 0 
-        
-        ads.value = await api.getAds()
-        rentRequests.value = await api.getRentRequests()
-        
-        // Render Ad Markers on Admin Map
-        ads.value.forEach(ad => {
-             const el = document.createElement('div')
-             el.className = `ad-marker ${ad.status.toLowerCase()}`
-             el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
-             const mk = new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
-             addAdminMarker(mk, el, 'ad')
-        })
-    } catch(e) {}
+  try {
+    ads.value = await api.getAds()
+    rentRequests.value = await api.getRentRequests()
+
+    if (!map || !map.isStyleLoaded()) return
+
+    // ── Render Ad Spaces as GL layer ──
+    ;['admin-ads-circle', 'admin-ads-label'].forEach(id => { if (map.getLayer(id)) map.removeLayer(id) })
+    if (map.getSource('admin-ads')) map.removeSource('admin-ads')
+
+    const adFeatures = ads.value
+      .filter(ad => ad.latitude != null && ad.longitude != null)
+      .map(ad => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [parseFloat(ad.longitude), parseFloat(ad.latitude)] },
+        properties: { id: ad.id, name: ad.name, status: ad.status || 'Available', price: ad.priceMonthly }
+      }))
+
+    if (adFeatures.length > 0) {
+      map.addSource('admin-ads', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: adFeatures }
+      })
+      map.addLayer({
+        id: 'admin-ads-circle',
+        type: 'circle',
+        source: 'admin-ads',
+        paint: {
+          'circle-color': ['match', ['get', 'status'],
+            'Available', '#FF9800', 'Rented', '#F44336', 'Pending', '#9C27B0', '#FF9800'
+          ],
+          'circle-radius': 11,
+          'circle-stroke-width': 2.5,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.9
+        }
+      })
+      try { map.moveLayer('admin-ads-circle') } catch(e) {}
+    }
+  } catch(e) { console.error('Ads load error', e) }
 }
 
 function startAddAd() {
-    isAddingAd.value = true
-    newAd.value = { name:'', price:'', type:'Billboard', lat:null, lng:null }
+  isAddingAd.value = true
+  newAd.value = { name:'', price:'', type:'Billboard', lat:null, lng:null }
+  if (map) map.getCanvas().style.cursor = 'crosshair'
 }
 
 async function saveAd() {
-    if(!newAd.value.lat || !newAd.value.name) return
-    try {
-        await api.createAd({
-            name: newAd.value.name,
-            type: newAd.value.type,
-            priceMonthly: parseFloat(newAd.value.price),
-            latitude: newAd.value.lat,
-            longitude: newAd.value.lng
-        })
-        isAddingAd.value = false
-        if(tempAdMarker) tempAdMarker.remove()
-        loadAdsData() // Refresh
-    } catch(e) { alert(e.message) }
+  if (!newAd.value.lat || !newAd.value.name) return
+  try {
+    await api.createAd({
+      name: newAd.value.name,
+      type: newAd.value.type,
+      priceMonthly: parseFloat(newAd.value.price) || 0,
+      latitude: newAd.value.lat,
+      longitude: newAd.value.lng
+    })
+    isAddingAd.value = false
+    if (tempAdMarker) { tempAdMarker.remove(); tempAdMarker = null }
+    if (map) map.getCanvas().style.cursor = ''
+    await loadAdsData()
+  } catch(e) { alert(e.message) }
 }
 
 async function resolveRequest(id, status) {
-    try {
-        await api.manageRequest(id, status)
-        loadAdsData()
-    } catch(e) { alert(e.message) }
+  try {
+    await api.manageRequest(id, status)
+    loadAdsData()
+  } catch(e) { alert(e.message) }
+}
+
+async function deleteAd(id) {
+  if (!confirm('სარეკლამო ადგილი წაიშლება. გააგრძელოთ?')) return
+  try {
+    await api.deleteAd(id)
+    ads.value = ads.value.filter(a => a.id !== id)
+    // Refresh GL layer
+    loadAdsData()
+  } catch(e) { alert(e.message) }
 }
 
 // ── PIN LIST ──
 const existingPins = ref([])
 const PIN_CAT_COLORS = {
-  landmark: '#72A98F', waterfall: '#6699cc',
-  hotel: '#FF9F0A', restaurant: '#FF453A'
+  landmark: '#4CAF50', waterfall: '#6699cc',
+  hotel: '#F44336', restaurant: '#FFD700'
 }
 
 async function loadPins() {
   try {
     const locs = await api.getLocations()
     existingPins.value = locs || []
+    // Refresh GL pin layer
+    if (map && map.isStyleLoaded()) {
+      if (map.getSource('admin-pins')) refreshAdminGLPins()
+      else renderAdminGLPins()
+    }
   } catch(e) { console.error(e) }
 }
 
@@ -593,9 +1021,8 @@ async function deletePin(id) {
   try {
     await api.deleteLocation(id)
     existingPins.value = existingPins.value.filter(p => p.id !== id)
-    // Remove marker from map if exists
-    const idx = adminMarkers.findIndex(m => m.locId === id)
-    if (idx !== -1) { adminMarkers[idx].mk.remove(); adminMarkers.splice(idx, 1) }
+    if (editingPin.value?.id === id) cancelEdit()
+    else refreshAdminGLPins()
   } catch(e) { alert(e.message) }
 }
 
@@ -643,13 +1070,22 @@ function toggleLayer(type) {
 
 // --- Init ---
 onMounted(async () => {
-  const user = await api.getMe()
-  if (!user || (user.role !== 'Admin' && user.role !== 'SuperAdmin')) {
-    router.push('/')
-    return
-  }
-  currentUser.value = user
+  // Try existing token first (silent auto-login)
+  try {
+    const user = await api.getMe()
+    if (user && (user.role === 'Admin' || user.role === 'SuperAdmin')) {
+      currentUser.value = user
+      isAuthenticated.value = true
+      await nextTick()
+      await nextTick()
+      initAdminMap()
+      return
+    }
+  } catch(e) {}
+  // No valid session — show login screen (isAuthenticated stays false)
+})
 
+async function initAdminMap() {
   // Init Admin Map — identical setup to main page MapView.vue
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -757,14 +1193,6 @@ onMounted(async () => {
         duration: 2000
       })
 
-      // Mask Markers - Check Spatial
-      adminMarkers.forEach(m => {
-        const lngLat = m.mk.getLngLat()
-        const pt = turf.point([lngLat.lng, lngLat.lat])
-        const isInside = turf.booleanPointInPolygon(pt, feature)
-        m.el.style.display = isInside ? 'block' : 'none'
-      })
-
       // Strict Layer Clipping: Apply 'within' filters
       const style = map.getStyle()
       if (style && style.layers) {
@@ -800,6 +1228,9 @@ onMounted(async () => {
         map.moveLayer('focus-region-border')
         map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
       }
+      // Pin and ad GL layers must stay above mask
+      if (map.getLayer('admin-pins-circle')) try { map.moveLayer('admin-pins-circle') } catch(e) {}
+      if (map.getLayer('admin-ads-circle'))  try { map.moveLayer('admin-ads-circle')  } catch(e) {}
     }
 
     // Fetch ADM2 Data & Apply Mask — same as main page (Ambrolauri + Oni union)
@@ -824,55 +1255,49 @@ onMounted(async () => {
 
   })
 
-  // Fetch & Render Existing Pins
+  // Load existing pins → render as GL layer (static, no jitter)
   await loadPins()
-  try {
-    existingPins.value.forEach(l => {
-      const el = createAdminPin(l.category || 'landmark')
-      el.addEventListener('click', (e) => {
-        e.stopPropagation()
-        locName.value = l.nameGeo || l.name || ''
-        locCategory.value = l.category || 'landmark'
-        locDesc.value = l.description || ''
-        map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60,
-          duration: 1500, easing: t => { const ts = t-1; return ts*ts*ts+1 } })
-      })
-      const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([l.longitude, l.latitude])
-        .addTo(map)
-      adminMarkers.push({ mk, el, type: 'poi', locId: l.id })
-    })
-  } catch (e) { console.error('Failed to render pins', e) }
+  // GL pins rendered inside loadPins() after map style is ready
+  // But map.on('load') might not have fired yet — so we also hook into it:
+  map.once('idle', () => {
+    if (!map.getSource('admin-pins')) renderAdminGLPins()
+  })
 
-  // Cursor marker for placing new pin (updated dynamically when category changes)
-  const pinEl = createAdminPin('landmark')
-  marker = new mapboxgl.Marker({ element: pinEl, anchor: 'center' })
-    .setLngLat([43.1481, 42.5176])
+  // isPlacingPin cursor feedback
+  watch(isPlacingPin, (val) => {
+    if (map) map.getCanvas().style.cursor = val ? 'crosshair' : ''
+  })
 
+  // Map click — only captures coord when placing pin or placing ad
   map.on('click', (e) => {
-    const lat = e.lngLat.lat
-    const lng = e.lngLat.lng
-    
-    // Normal Pin Mode
-    if (activeTab.value === 'map') {
-        locCoords.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-        // Update placement marker color to match selected category
-        const newEl = createAdminPin(locCategory.value)
-        marker.remove()
-        marker = new mapboxgl.Marker({ element: newEl, anchor: 'center' })
-          .setLngLat(e.lngLat).addTo(map)
+    // If clicked on a pin GL layer, the layer click handler takes priority
+    const pinFeats = map.queryRenderedFeatures(e.point, { layers: ['admin-pins-circle'] })
+    if (pinFeats.length > 0) return
+
+    // Place new pin coordinate
+    if (activeTab.value === 'map' && isPlacingPin.value) {
+      const lat = e.lngLat.lat
+      const lng = e.lngLat.lng
+      locCoords.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+      // Temporary dot marker so user can see where they clicked
+      if (marker) marker.remove()
+      const el = createAdminPin(locCategory.value)
+      marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat(e.lngLat).addTo(map)
     }
-    
-    // Add Ad Mode
+
+    // Place ad location
     if (activeTab.value === 'ads' && isAddingAd.value) {
-        newAd.value.lat = lat
-        newAd.value.lng = lng
-        
-        tempAdMarker = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map)
-        addAdminMarker(tempAdMarker, el, 'new-ad')
+      newAd.value.lat = e.lngLat.lat
+      newAd.value.lng = e.lngLat.lng
+      if (tempAdMarker) tempAdMarker.remove()
+      const adEl = document.createElement('div')
+      adEl.style.cssText = `width:12px;height:12px;border-radius:50%;background:#FF9800;border:2px solid #fff;pointer-events:none;`
+      tempAdMarker = new mapboxgl.Marker({ element: adEl, anchor: 'center' })
+        .setLngLat([e.lngLat.lng, e.lngLat.lat]).addTo(map)
     }
   })
-})
+} // end initAdminMap
 
 onUnmounted(() => {
   stopPolling()
@@ -1054,6 +1479,14 @@ onUnmounted(() => {
 .pin-manager {
   position: absolute; right: 0; top: 0;
   width: 320px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+.ad-manager {
+  position: absolute; right: 0; top: 0;
+  width: 320px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
 }
 .logs-widget {
   position: absolute; right: 0; bottom: 0;
@@ -1134,12 +1567,10 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .u-name { font-weight: 500; }
 .u-email { font-size: 12px; opacity: 0.5; }
 
-.badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-.badge.SuperAdmin { background: rgba(255, 204, 0, 0.15); color: #ffd60a; border: 1px solid rgba(255, 204, 0, 0.3); }
-.badge.Admin { background: rgba(10, 132, 255, 0.15); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); }
+.badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 
-.icon-btn { width: 32px; height: 32px; border-radius: 8px; border:none; background: rgba(255,255,255,0.1); color:#fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; }
-.icon-btn:hover { background: #fff; color: #000; }
+.icon-btn { width: 32px; height: 32px; border-radius: 8px; border:none; background: rgba(255,255,255,0.08); color:rgba(255,255,255,0.65); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.icon-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
 .icon-btn.sm { width: 24px; height: 24px; }
 
 /* Log List */
@@ -1310,6 +1741,21 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   align-items: flex-start;
   gap: 12px;
 }
+/* Override for header-placed map controls */
+.map-ctrl-wrap.header-ctrl {
+  position: relative;
+  bottom: unset; left: unset;
+  flex-direction: row;
+  align-items: center;
+  pointer-events: auto;
+}
+.header-fab { width: 44px !important; height: 44px !important; }
+.header-ctrl-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 9999;
+}
 
 .map-ctrl-fab {
   width: 52px; height: 52px;
@@ -1413,5 +1859,250 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   opacity: 0;
   transform: translateY(12px) scale(0.95);
 }
+
+/* ── Pin Manager Redesign ── */
+.pin-filter-bar {
+  display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.pf-btn {
+  flex: 1; min-width: 0;
+  padding: 5px 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.55);
+  font-size: 10px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.pf-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.pf-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
+
+.pm-form { display: flex; flex-direction: column; gap: 10px; }
+.pm-field { display: flex; flex-direction: column; gap: 5px; }
+.pm-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.4); }
+.pm-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 11px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: #fff; font-size: 13px; font-family: inherit;
+  outline: none; transition: border-color 0.2s;
+}
+.pm-input:focus { border-color: var(--accent); }
+.pm-input::placeholder { color: rgba(255,255,255,0.22); }
+.pm-input:disabled { opacity: 0.45; }
+.pm-select { cursor: pointer; }
+.pm-textarea { resize: vertical; min-height: 52px; }
+.pm-file { color: rgba(255,255,255,0.5); font-size: 12px; }
+.pm-file-hidden { display: none; }
+.pm-upload-label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; width: 100%; box-sizing: border-box;
+  background: rgba(255,255,255,0.05);
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.5); font-size: 12px;
+  cursor: pointer; transition: all 0.2s;
+}
+.pm-upload-label:hover:not(.disabled) {
+  background: rgba(255,255,255,0.09);
+  border-color: var(--accent);
+  color: #fff;
+}
+.pm-upload-label.disabled { opacity: 0.45; cursor: not-allowed; }
+.pm-img-preview {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 8px;
+}
+.pm-img-thumb {
+  width: 100%; max-height: 100px; object-fit: cover;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+}
+
+.pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.pm-coord-wrap { display: flex; gap: 5px; align-items: center; }
+.pm-coord-wrap .pm-input { flex: 1; }
+.pm-place-btn {
+  flex-shrink: 0; width: 36px; height: 36px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.pm-place-btn:hover { background: rgba(255,255,255,0.13); color: #fff; }
+.pm-place-btn.active { background: rgba(76,175,80,0.2); border-color: #4CAF50; color: #4CAF50; }
+
+.pm-hint {
+  font-size: 11px; color: rgba(255,255,255,0.4);
+  background: rgba(76,175,80,0.08);
+  border: 1px solid rgba(76,175,80,0.2);
+  border-radius: 8px; padding: 7px 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.pm-actions { display: flex; gap: 7px; margin-top: 4px; }
+.pm-save-btn {
+  flex: 1; padding: 10px 14px;
+  background: var(--accent); border: none; border-radius: 10px;
+  color: #fff; font-family: inherit; font-size: 12px; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: filter 0.2s;
+}
+.pm-save-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.pm-save-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.pm-cancel-btn {
+  padding: 10px 12px;
+  background: rgba(244,67,54,0.12);
+  border: 1px solid rgba(244,67,54,0.25);
+  border-radius: 10px;
+  color: #F44336; font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  transition: background 0.2s;
+}
+.pm-cancel-btn:hover { background: rgba(244,67,54,0.22); }
+
+.pins-scroll {
+  max-height: 200px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.pins-empty { font-size: 11px; color: rgba(255,255,255,0.3); text-align: center; padding: 12px 0; }
+
+.pin-list-item--editing {
+  background: rgba(76,175,80,0.12) !important;
+  border: 1px solid rgba(76,175,80,0.25) !important;
+}
+.pin-edit-btn {
+  background: transparent; border: none;
+  color: rgba(255,255,255,0.35); cursor: pointer;
+  display: flex; align-items: center; font-size: 16px;
+  transition: color 0.2s; padding: 2px;
+}
+.pin-edit-btn:hover { color: var(--accent); }
+
+.spin-icon { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Badge styles for ads */
+.badge.available { background: rgba(76,175,80,0.2); color: #4CAF50; }
+.badge.rented    { background: rgba(244,67,54,0.2); color: #F44336; }
+.badge.pending   { background: rgba(255,152,0,0.2); color: #FF9800; }
+.badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px;
+  border-radius: 999px; white-space: nowrap; text-transform: uppercase;
+  letter-spacing: 0.6px; flex-shrink: 0;
+}
+
+/* ── Admin Inline Login Screen ── */
+.admin-login-screen {
+  position: fixed; inset: 0; z-index: 99999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.admin-login-card {
+  background: rgba(15,15,25,0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 24px;
+  padding: 40px 36px;
+  width: 340px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+}
+.alc-icon {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: rgba(76,175,80,0.12);
+  border: 1px solid rgba(76,175,80,0.25);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 4px;
+}
+.alc-title {
+  font-size: 20px; font-weight: 700; color: #fff;
+  letter-spacing: 0.3px;
+}
+.alc-sub {
+  font-size: 12px; color: rgba(255,255,255,0.4);
+  margin-top: -6px;
+}
+.alc-error {
+  font-size: 12px; color: #F44336;
+  background: rgba(244,67,54,0.1);
+  border: 1px solid rgba(244,67,54,0.3);
+  border-radius: 8px; padding: 8px 12px;
+  width: 100%; text-align: center; box-sizing: border-box;
+}
+.alc-input {
+  width: 100%; padding: 12px 14px; box-sizing: border-box;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  color: #fff; font-size: 14px; outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+.alc-input:focus { border-color: #4CAF50; }
+.alc-input::placeholder { color: rgba(255,255,255,0.25); }
+.alc-input:disabled { opacity: 0.5; }
+.alc-btn {
+  width: 100%; padding: 13px;
+  background: #4CAF50; border: none; border-radius: 12px;
+  color: #fff; font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: filter 0.2s, transform 0.15s;
+  margin-top: 4px;
+}
+.alc-btn:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
+.alc-btn:active:not(:disabled) { transform: translateY(0); }
+.alc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Action icon buttons ── */
+.icon-btn.promote { color: #4CAF50; }
+.icon-btn.promote:hover { background: rgba(76,175,80,0.15); color: #4CAF50; }
+.icon-btn.demote  { color: #FF9800; }
+.icon-btn.demote:hover  { background: rgba(255,152,0,0.15);  color: #FF9800; }
+.icon-btn.approve { color: #4CAF50; }
+.icon-btn.approve:hover { background: rgba(76,175,80,0.15); color: #4CAF50; }
+.icon-btn.reject  { color: #F44336; }
+.icon-btn.reject:hover  { background: rgba(244,67,54,0.15);  color: #F44336; }
+
+/* ── Settings Widget ── */
+.settings-widget {
+  position: absolute;
+  top: 100px; right: 20px;
+  width: 280px;
+  z-index: 30;
+}
+.settings-section { display: flex; flex-direction: column; gap: 6px; }
+.settings-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.2px; color: rgba(255,255,255,0.3); margin-bottom: 4px;
+}
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+}
+.settings-key { font-size: 12px; color: rgba(255,255,255,0.5); }
+.settings-val { font-size: 12px; font-weight: 600; color: #fff; }
+
+/* ── Panel header with icon ── */
+.panel-header h2 {
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── User table badge variants ── */
+.badge.superadmin { background: rgba(76,175,80,0.2); color: #4CAF50; }
+.badge.admin      { background: rgba(102,153,204,0.2); color: #6699cc; }
+.badge.user       { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
 
 </style>
