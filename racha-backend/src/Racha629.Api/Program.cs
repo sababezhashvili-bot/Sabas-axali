@@ -65,6 +65,17 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+{
+    var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    ctx.Response.StatusCode = 500;
+    ctx.Response.ContentType = "application/json";
+    var msg = ex?.Message ?? "Unknown error";
+    var detail = ex?.ToString() ?? "";
+    Console.WriteLine($"❌ Unhandled exception: {detail}");
+    await ctx.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = msg, detail }));
+}));
+
 app.UseCors("AllowFrontend");
 app.UseStaticFiles();
 app.UseAuthentication();
