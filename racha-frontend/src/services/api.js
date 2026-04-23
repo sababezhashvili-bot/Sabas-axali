@@ -1,6 +1,6 @@
 class ApiClient {
   constructor() {
-    this.baseUrl = '/api'
+    this.baseUrl = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api'
     this.token = localStorage.getItem('authToken')
     this.user = null
   }
