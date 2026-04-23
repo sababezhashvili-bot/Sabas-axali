@@ -38,24 +38,84 @@
       </div>
     </div>
 
-    <!-- Ad Renting Modal -->
-    <div v-if="showAdModal" class="modal-overlay" @click.self="showAdModal = false">
-      <div class="glass-modal">
-        <span class="material-symbols-outlined close-modal" @click="showAdModal = false">close</span>
-        <h2 style="margin-top:0">{{ selectedAd.name }}</h2>
-        <div class="ad-status-badge" :class="selectedAd.status.toLowerCase()">{{ selectedAd.status }}</div>
-        
-        <p style="opacity:0.7; font-size:12px; margin-bottom:15px">{{ selectedAd.type }} • ${{ selectedAd.priceMonthly }}/mo</p>
+    <!-- Ad Renting Modal — Glassmorphism -->
+    <div v-if="showAdModal && selectedAd" class="modal-overlay" @click.self="showAdModal = false">
+      <div class="ad-glass-modal">
+        <!-- Close -->
+        <button class="adm-close" @click="showAdModal = false">
+          <span class="material-symbols-outlined" style="font-size:18px">close</span>
+        </button>
 
-        <div v-if="selectedAd.status === 'Available'">
-            <input type="text" v-model="rentImage" class="glass-input" placeholder="Image URL (Creative)">
-            <input type="number" v-model="rentDuration" class="glass-input" placeholder="Duration (Months)">
-            <button class="glass-btn" @click="submitRentRequest">Request for ${{ selectedAd.priceMonthly }}</button>
+        <!-- Hero image -->
+        <div class="adm-hero">
+          <img v-if="selectedAd.imageUrl" :src="selectedAd.imageUrl" :alt="selectedAd.name" />
+          <span v-else class="material-symbols-outlined" style="font-size:56px;opacity:0.15;color:#fff">campaign</span>
         </div>
-        <div v-else>
-            <p v-if="selectedAd.status === 'Pending'" style="color:orange">This space has pending requests.</p>
-            <p v-if="selectedAd.status === 'Rented'" style="color:#ff4444">This space is currently rented.</p>
-            <img v-if="selectedAd.currentImageUrl" :src="selectedAd.currentImageUrl" style="width:100%; border-radius:8px; margin-top:10px">
+
+        <!-- Body -->
+        <div class="adm-body">
+          <!-- Status badge -->
+          <div class="adm-status" :class="(selectedAd.status || '').toLowerCase()">
+            <span class="material-symbols-outlined" style="font-size:11px">
+              {{ selectedAd.status === 'Available' ? 'check_circle' : selectedAd.status === 'Rented' ? 'lock' : 'hourglass_empty' }}
+            </span>
+            {{ selectedAd.status === 'Available' ? 'ხელმისაწვდომი' : selectedAd.status === 'Rented' ? 'გამოყენებული' : 'განხილვაში' }}
+          </div>
+
+          <!-- Name -->
+          <div class="adm-name">{{ selectedAd.name }}</div>
+          <div class="adm-meta">{{ selectedAd.type }} · სარეკლამო სივრცე</div>
+
+          <!-- Price -->
+          <div class="adm-price">${{ selectedAd.priceMonthly }}<span style="font-size:14px;font-weight:400;opacity:0.5">/თვე</span></div>
+          <div class="adm-price-lbl">ყოველთვიური გადასახადი</div>
+
+          <!-- Available: rent form or success state -->
+          <template v-if="selectedAd.status === 'Available'">
+            <div class="adm-divider"></div>
+
+            <!-- Success -->
+            <div v-if="rentSubmitted" class="adm-success">
+              <span class="material-symbols-outlined" style="font-size:40px;color:#4CAF50">check_circle</span>
+              <div style="font-size:14px;font-weight:700;color:#fff;margin-top:6px">განაცხადი გაიგზავნა!</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">ადმინი მალე დაგიკავშირდებათ</div>
+              <button class="adm-rent-btn" style="margin-top:14px" @click="showAdModal = false">
+                <span class="material-symbols-outlined" style="font-size:16px">close</span> დახურვა
+              </button>
+            </div>
+
+            <!-- Form -->
+            <template v-else>
+              <div class="adm-form-label">კრეატივის URL</div>
+              <input type="text" v-model="rentImage" class="adm-input" placeholder="https://... (სარეკლამო სურათი)" :disabled="rentLoading" />
+              <div class="adm-form-label">ხანგრძლივობა (თვე)</div>
+              <input type="number" v-model="rentDuration" class="adm-input" min="1" max="24" placeholder="1" :disabled="rentLoading" />
+              <div v-if="rentError" class="adm-error">
+                <span class="material-symbols-outlined" style="font-size:13px">error</span>
+                {{ rentError }}
+              </div>
+              <button class="adm-rent-btn" @click="submitRentRequest" :disabled="rentLoading">
+                <span class="material-symbols-outlined" style="font-size:16px;animation:spin 1s linear infinite" v-if="rentLoading">progress_activity</span>
+                <span class="material-symbols-outlined" style="font-size:16px" v-else>campaign</span>
+                {{ rentLoading ? 'იგზავნება...' : `განაცხადის გაგზავნა · $${(selectedAd.priceMonthly * (rentDuration || 1)).toFixed(0)}` }}
+              </button>
+            </template>
+          </template>
+
+          <!-- Rented/Pending: info -->
+          <template v-else>
+            <div class="adm-divider"></div>
+            <div v-if="selectedAd.status === 'Pending'" class="adm-info-msg pending">
+              <span class="material-symbols-outlined" style="font-size:16px">hourglass_empty</span>
+              სარეკლამო სივრცეზე განხილვაშია განაცხადი
+            </div>
+            <div v-if="selectedAd.status === 'Rented'" class="adm-info-msg rented">
+              <span class="material-symbols-outlined" style="font-size:16px">lock</span>
+              სარეკლამო სივრცე დაკავებულია
+            </div>
+            <img v-if="selectedAd.currentImageUrl" :src="selectedAd.currentImageUrl"
+              style="width:100%;border-radius:12px;margin-top:4px;max-height:140px;object-fit:cover" />
+          </template>
         </div>
       </div>
     </div>
@@ -116,30 +176,39 @@
       <button class="pill-btn" :class="{ active: isLayerWidgetOpen }" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen; isWeatherOpen = false; showRoutePanel = false" title="ფენები">
         <span class="material-symbols-outlined">layers</span>
       </button>
-      <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
-        <div class="layer-header">
-          <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">layers</span>
-          ფენები
-          <label class="master-switch" title="ყველა">
-            <input type="checkbox" v-model="showAllLayers">
+      <transition name="weather-expand">
+        <div v-if="isLayerWidgetOpen" class="layer-card" @click.stop>
+          <!-- Header -->
+          <div class="lc-header">
+            <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent)">layers</span>
+            <span class="lc-title">ფენები</span>
+            <label class="lc-toggle-wrap" title="ყველა ფენა">
+              <input type="checkbox" v-model="showAllLayers" class="lc-toggle-input">
+              <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
+            </label>
+          </div>
+          <div class="lc-divider"></div>
+          <!-- Rows -->
+          <label class="lc-row">
+            <span class="material-symbols-outlined lc-icon">holiday_village</span>
+            <span class="lc-label">სოფლები / ქალაქები</span>
+            <input type="checkbox" v-model="showLabels" class="lc-toggle-input">
+            <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
+          </label>
+          <label class="lc-row">
+            <span class="material-symbols-outlined lc-icon">route</span>
+            <span class="lc-label">გზები</span>
+            <input type="checkbox" v-model="showRoads" class="lc-toggle-input">
+            <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
+          </label>
+          <label class="lc-row">
+            <span class="material-symbols-outlined lc-icon">domain</span>
+            <span class="lc-label">3D შენობები</span>
+            <input type="checkbox" v-model="showBuildings" class="lc-toggle-input">
+            <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
           </label>
         </div>
-        <label class="layer-row">
-          <span class="material-symbols-outlined layer-row-icon">holiday_village</span>
-          <span>სოფლები / ქალაქები</span>
-          <input type="checkbox" v-model="showLabels" class="layer-check">
-        </label>
-        <label class="layer-row">
-          <span class="material-symbols-outlined layer-row-icon">route</span>
-          <span>გზები</span>
-          <input type="checkbox" v-model="showRoads" class="layer-check">
-        </label>
-        <label class="layer-row">
-          <span class="material-symbols-outlined layer-row-icon">domain</span>
-          <span>3D შენობები</span>
-          <input type="checkbox" v-model="showBuildings" class="layer-check">
-        </label>
-      </div>
+      </transition>
 
       <!-- 3D Toggle -->
       <button class="pill-btn" :class="{ active: is3D }" @click="toggle3D" title="2D/3D Toggle">
@@ -197,11 +266,21 @@
           <!-- Hint when selecting -->
           <div v-if="selectingWaypointIdx >= 0" class="rd-hint">
             <span class="material-symbols-outlined">touch_app</span>
-            რუკაზე დააწკაპეთ წ. {{ selectingWaypointIdx + 1 }}-ის დასამატებლად
+            რუკაზე დააჭირეთ წ. {{ selectingWaypointIdx + 1 }}-ის დასამატებლად
+          </div>
+
+          <!-- Quick suggested routes -->
+          <div class="rd-section-label">🚀 სწრაფი მარშრუტები</div>
+          <div class="rd-suggestions">
+            <button v-for="sr in SUGGESTED_ROUTES" :key="sr.label"
+              class="rd-suggestion-btn" @click="applySuggestedRoute(sr)">
+              <span class="material-symbols-outlined" style="font-size:14px">route</span>
+              {{ sr.label }}
+            </button>
           </div>
 
           <!-- Waypoints -->
-          <div class="rd-section-label">წერტილები</div>
+          <div class="rd-section-label" style="margin-top:12px">📍 წერტილები</div>
           <div class="rd-waypoints">
             <div v-for="(wp, i) in routeWaypoints" :key="i" class="rd-wp">
               <div class="rd-wp-line">
@@ -380,17 +459,26 @@
       </div>
     </transition>
 
-    <!-- Top Bar -->
+    <!-- Top Bar — round icon-only buttons -->
     <div class="top-bar">
-      <div class="top-bar-brand">
-        <img src="@/assets/logo.svg" alt="Brand Logo" style="height: 32px; width: auto;" />
-      </div>
-      <div ref="geocoderEl"></div>
-      <div class="cat-row">
-        <button v-for="c in CATS" :key="c.v"
-          :class="['cat-pill', { active: activeCat===c.v }]"
-          @click="filterCat(c.v)">{{ c.l }}</button>
-      </div>
+      <button v-for="c in CATS" :key="c.v"
+        :class="['icon-pill', { active: activeCat===c.v }]"
+        :title="c.l"
+        @click="filterCat(c.v)">
+        <span class="material-symbols-outlined">{{ c.i }}</span>
+      </button>
+      <div class="icon-pill-divider"></div>
+      <button :class="['icon-pill', 'icon-pill-nav', { active: showAdSpaces }]"
+        title="სარეკლამო ადგილები"
+        @click="toggleAdSpaces">
+        <span class="material-symbols-outlined">campaign</span>
+      </button>
+      <button class="icon-pill icon-pill-nav" title="კონტაქტი" @click="showContactModal = true">
+        <span class="material-symbols-outlined">contact_support</span>
+      </button>
+      <button class="icon-pill icon-pill-nav" title="ჩვენს შესახებ" @click="showAboutModal = true">
+        <span class="material-symbols-outlined">info</span>
+      </button>
     </div>
 
     <!-- User Profile Relocated to Top Right -->
@@ -400,39 +488,71 @@
       </button>
     </div>
 
-    <!-- Active region chip (Enhanced Wide-Pill) -->
-    <div v-if="activeRegion" class="region-selector-wrap panoramic" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
-      <div class="region-chip wide-pill">
-        <div class="region-chip-main">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent)!important">location_on</span>
+    <!-- Floating search bar centered at top -->
+    <div ref="geocoderEl" class="geocoder-center"></div>
+
+    <!-- Bottom cluster: Logo + Region selector + Population -->
+    <div class="bottom-cluster">
+      <!-- Logo -->
+      <img :src="logoSrc" class="bl-logo" alt="SARO Logo" />
+
+      <!-- Unified region + population chip -->
+      <div v-if="activeRegion" class="region-bottom-wrap" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
+        <transition name="dropdown-fade">
+          <div v-if="isRegionDropdownOpen" class="region-dropdown-up" @click.stop>
+            <div v-for="(pop, r) in SUB_REGIONS" :key="r"
+                 class="dropdown-item"
+                 :class="{ active: activeRegion === r }"
+                 @click="selectSubRegion(r)">
+              <span class="item-name">{{ r }}</span>
+              <span class="item-pop">{{ pop.toLocaleString() }}</span>
+            </div>
+          </div>
+        </transition>
+        <div class="region-chip-bottom">
+          <span class="material-symbols-outlined" style="font-size:11px;color:var(--accent);flex-shrink:0">location_on</span>
           <span class="region-title">{{ activeRegion }}</span>
+          <span class="rchip-sep"></span>
+          <span class="material-symbols-outlined" style="font-size:10px;opacity:0.5;flex-shrink:0">groups</span>
+          <span class="rchip-pop">{{ populationCount }}</span>
           <span class="material-symbols-outlined dropdown-chevron" :class="{ open: isRegionDropdownOpen }">expand_more</span>
         </div>
-        <div class="region-chip-stats">
-          <span class="material-symbols-outlined" style="font-size:14px">groups</span>
-          <span class="stats-label">Population:</span>
-          <span class="stats-value">{{ populationCount }}</span>
-        </div>
       </div>
-
-      <!-- Premium Glassmorphism Dropdown -->
-      <transition name="dropdown-fade">
-        <div v-if="isRegionDropdownOpen" class="region-dropdown-list" @click.stop>
-          <div v-for="(pop, r) in SUB_REGIONS" :key="r" 
-               class="dropdown-item" 
-               :class="{ active: activeRegion === r }"
-               @click="selectSubRegion(r)">
-            <span class="item-name">{{ r }}</span>
-            <span class="item-pop">{{ pop.toLocaleString() }}</span>
-          </div>
-        </div>
-      </transition>
     </div>
 
-    <!-- Bottom label -->
-    <div class="bottom-label">
-      <span class="bl-main">საქართველო</span>
-      <span class="bl-sub">Georgia · Interactive 3D Map</span>
+    <!-- Contact Modal -->
+    <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
+      <div class="glass-modal info-modal">
+        <span class="material-symbols-outlined close-modal" @click="showContactModal = false">close</span>
+        <span class="material-symbols-outlined" style="font-size:40px;color:var(--accent);margin-bottom:12px">contact_support</span>
+        <h2 style="margin:0 0 8px">კონტაქტი</h2>
+        <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0 0 16px">
+          დაგვიკავშირდით ნებისმიერ კითხვასთან ან წინადადებასთან დაკავშირებით.
+        </p>
+        <div class="info-modal-row">
+          <span class="material-symbols-outlined" style="color:var(--accent)">mail</span>
+          <span>info@racha629.ge</span>
+        </div>
+        <div class="info-modal-row">
+          <span class="material-symbols-outlined" style="color:var(--accent)">phone</span>
+          <span>+995 32 2 00 00 00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- About Modal -->
+    <div v-if="showAboutModal" class="modal-overlay" @click.self="showAboutModal = false">
+      <div class="glass-modal info-modal">
+        <span class="material-symbols-outlined close-modal" @click="showAboutModal = false">close</span>
+        <img :src="logoSrc" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px" alt="Logo" />
+        <h2 style="margin:0 0 8px">ჩვენს შესახებ</h2>
+        <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0">
+          რაჭა 629 — ინტერაქტიული 3D რუკა, რომელიც წარმოაჩენს რაჭის
+          რეგიონის ღირსშესანიშნაობებს, სასტუმროებს, რესტორნებსა და
+          ბუნებრივ ობიექტებს. პროექტი შექმნილია რაჭის ტურიზმის
+          განვითარების მიზნით.
+        </p>
+      </div>
     </div>
 
   </div>
@@ -444,6 +564,7 @@ import { useRouter } from 'vue-router'
 import mapboxgl from 'mapbox-gl'
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
 import { api } from '../services/api.js'
+import logoSrc from '../assets/1.png'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
@@ -476,7 +597,7 @@ const weatherCondition = ref('Clear')
 
 // Route Panel
 const showRoutePanel      = ref(false)
-const routeWaypoints      = ref([{ name: 'Start', lng: null, lat: null }, { name: 'End', lng: null, lat: null }])
+const routeWaypoints      = ref([{ name: '', lng: null, lat: null }, { name: '', lng: null, lat: null }])
 const routeMode           = ref('driving')
 const routeResult         = ref(null)
 const selectingWaypointIdx = ref(-1)
@@ -494,6 +615,22 @@ const ROUTE_MODES = [
   { val: 'walking', icon: 'directions_walk', label: 'ფეხით'  },
   { val: 'cycling', icon: 'directions_bike', label: 'ველო'   },
 ]
+
+// Suggested quick routes for Racha region
+const SUGGESTED_ROUTES = [
+  { label: 'ამბროლაური → ონი', from: { name: 'ამბროლაური', lat: 42.5115, lng: 43.1579 }, to: { name: 'ონი', lat: 42.5861, lng: 43.4453 } },
+  { label: 'ამბ. → ნიკორწმინდა', from: { name: 'ამბროლაური', lat: 42.5115, lng: 43.1579 }, to: { name: 'ნიკორწმინდა', lat: 42.4773, lng: 43.1268 } },
+  { label: 'შაორის ტბა', from: { name: 'ამბროლაური', lat: 42.5115, lng: 43.1579 }, to: { name: 'შაორის ტბა', lat: 42.4308, lng: 43.0714 } },
+  { label: 'ამბ. → უწერა', from: { name: 'ამბროლაური', lat: 42.5115, lng: 43.1579 }, to: { name: 'უწერა', lat: 42.7156, lng: 43.0583 } },
+  { label: 'ამბ. → ბაღდათი', from: { name: 'ამბროლაური', lat: 42.5115, lng: 43.1579 }, to: { name: 'ბაღდათი', lat: 42.0854, lng: 42.8340 } },
+]
+
+function applySuggestedRoute(sr) {
+  if (routeWaypoints.value.length < 2) return
+  routeWaypoints.value[0] = { name: sr.from.name, lat: sr.from.lat, lng: sr.from.lng }
+  routeWaypoints.value[routeWaypoints.value.length - 1] = { name: sr.to.name, lat: sr.to.lat, lng: sr.to.lng }
+  clearRouteLayer()
+}
 
 const TRANSPORT_OPTIONS = [
   { type: 'taxi',    icon: 'local_taxi',      name: 'ტაქსი',         desc: 'სტანდარტი, 24/7',      basePrice: '~3 ₾/კმ', costFn: d => `~${(3 + d * 1.5).toFixed(0)} ₾` },
@@ -602,24 +739,41 @@ function selectSubRegion(r) {
 }
 
 // ── Ad Platform ──
-const adSpaces = ref([])
-const showAdModal = ref(false)
-const selectedAd = ref(null)
-const rentImage = ref('')
-const rentDuration = ref(1)
+const adSpaces      = ref([])
+const showAdModal   = ref(false)
+const selectedAd    = ref(null)
+const rentImage     = ref('')
+const rentDuration  = ref(1)
+const rentError     = ref('')
+const rentSubmitted = ref(false)
+const rentLoading   = ref(false)
+
 async function submitRentRequest() {
-    if(!rentImage.value) return alert('Enter image URL')
-    try {
-        await api.rentAd(selectedAd.value.id, { 
-            userId: 1, // Mock user ID for now, or use isLoggedIn
-            imageUrl: rentImage.value, 
-            durationMonths: parseInt(rentDuration.value) 
-        })
-        alert('Request Submitted!')
-        showAdModal.value = false
-        // Optimistic update
-        selectedAd.value.status = 'Pending' 
-    } catch(e) { alert(e.message) }
+  if (!rentImage.value.trim()) { rentError.value = 'გთხოვთ შეიყვანოთ კრეატივის URL'; return }
+  rentError.value = ''; rentLoading.value = true
+  try {
+    await api.rentAd(selectedAd.value.id, {
+      userId: 1,
+      imageUrl: rentImage.value,
+      durationMonths: parseInt(rentDuration.value) || 1
+    })
+    rentSubmitted.value = true
+    if (selectedAd.value) selectedAd.value.status = 'Pending'
+  } catch(e) {
+    rentError.value = e.message || 'შეცდომა, სცადეთ მოგვიანებით'
+  } finally {
+    rentLoading.value = false
+  }
+}
+
+function openAdModal(adProps) {
+  selectedAd.value = adProps
+  rentImage.value = ''
+  rentDuration.value = 1
+  rentError.value = ''
+  rentSubmitted.value = false
+  rentLoading.value = false
+  showAdModal.value = true
 }
 
 // ── Layer Visibility Logic ──
@@ -657,56 +811,93 @@ function updateLayers() {
   const showLbl = showLabels.value || all
   const showRd  = showRoads.value  || all
 
-  // Villages/Towns
-  toggleLayerGroup('settlement', showLbl)
-  toggleLayerGroup('place',      showLbl)
-  toggleLayerGroup('poi',        showLbl)
+  // ── Villages / Towns — settlement + place labels only (NO poi) ──
+  const style = map.getStyle()
+  if (!style || !style.layers) return
 
-  // Style labels white + lift above dark mask
-  if (showLbl) {
-    const style = map.getStyle()
-    style.layers.forEach(layer => {
-      if (layer.type !== 'symbol') return
-      const id = layer.id
-      if (!id.includes('settlement') && !id.includes('place') && !id.includes('poi')) return
-      try {
-        map.setPaintProperty(id, 'text-color', '#ffffff')
-        map.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.75)')
-        map.setPaintProperty(id, 'text-halo-width', 1.5)
-        map.moveLayer(id) // place above mask layer
-      } catch(e) {}
-    })
-  }
+  style.layers.forEach(layer => {
+    const id = layer.id
+    const isSettlement = id.includes('settlement') || id.includes('place')
+    const isPoi        = id.includes('poi')
+    const isRoad       = id.includes('road') || id.includes('bridge') || id.includes('tunnel')
 
-  // Roads
-  toggleLayerGroup('road',   showRd)
-  toggleLayerGroup('bridge', showRd)
-  toggleLayerGroup('tunnel', showRd)
-
-  // Restyle roads: thin semi-transparent white lines, hide road labels
-  if (showRd) {
-    const style = map.getStyle()
-    style.layers.forEach(layer => {
-      const id = layer.id
-      if (!id.includes('road') && !id.includes('bridge') && !id.includes('tunnel')) return
-      if (layer.type === 'line') {
+    // Settlements: show/hide + apply region filter
+    if (isSettlement && !isPoi) {
+      try { map.setLayoutProperty(id, 'visibility', showLbl ? 'visible' : 'none') } catch(e) {}
+      if (showLbl && activeFeature.value) {
+        try { map.setFilter(id, ['within', activeFeature.value]) } catch(e) {}
+      }
+      if (showLbl && layer.type === 'symbol') {
         try {
-          map.setPaintProperty(id, 'line-color', 'rgba(255,255,255,0.38)')
-          map.setPaintProperty(id, 'line-width', 0.85)
-          map.setPaintProperty(id, 'line-opacity', 0.55)
+          map.setPaintProperty(id, 'text-color', '#ffffff')
+          map.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.85)')
+          map.setPaintProperty(id, 'text-halo-width', 1.8)
+          map.moveLayer(id)
         } catch(e) {}
       }
-      if (layer.type === 'symbol') {
-        try { map.setLayoutProperty(id, 'visibility', 'none') } catch(e) {}
-      }
-    })
-  }
+    }
 
-  // 3D Buildings (custom layer)
+    // POI: always hidden
+    if (isPoi) {
+      try { map.setLayoutProperty(id, 'visibility', 'none') } catch(e) {}
+    }
+
+    // Roads
+    if (isRoad) {
+      // Casing layers (road border/outline) — always hidden, they create the "many stripes" effect
+      const isCasing = id.includes('case') || id.includes('-casing') || id.includes('outline')
+      if (isCasing) {
+        try { map.setLayoutProperty(id, 'visibility', 'none') } catch(e) {}
+        return
+      }
+
+      try { map.setLayoutProperty(id, 'visibility', showRd ? 'visible' : 'none') } catch(e) {}
+      if (showRd && activeFeature.value) {
+        try { map.setFilter(id, ['within', activeFeature.value]) } catch(e) {}
+      }
+      if (showRd) {
+        if (layer.type === 'line') {
+          try {
+            // Distinctive teal accent — matches the app's brand color
+            map.setPaintProperty(id, 'line-color', 'rgba(114,200,165,0.72)')
+            map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'], 7,0.5, 11,1.1, 14,1.8, 17,3.0])
+            map.setPaintProperty(id, 'line-opacity', 0.72)
+            map.setPaintProperty(id, 'line-blur', 0.5)
+          } catch(e) {}
+        }
+        if (layer.type === 'symbol') {
+          try {
+            // Hide road shield icon (white rectangle background)
+            map.setPaintProperty(id, 'icon-opacity', 0)
+            // Road name text — white with dark shadow halo, no white background
+            map.setPaintProperty(id, 'text-color', 'rgba(114,200,165,0.95)')
+            map.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.92)')
+            map.setPaintProperty(id, 'text-halo-width', 1.5)
+            map.moveLayer(id)
+          } catch(e) {}
+        }
+      }
+    }
+  })
+
+  // ── 3D Buildings ──
   if (map.getLayer('3d-buildings')) {
     const shouldShow = (showBuildings.value || all)
-    map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none')
-    if (shouldShow) try { map.moveLayer('3d-buildings') } catch(e) {}
+    try { map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none') } catch(e) {}
+    if (shouldShow) {
+      // Move above mask but keep boundary layers on top
+      try { map.moveLayer('3d-buildings') } catch(e) {}
+      // Re-raise boundary + mask layers so they stay on top
+      ;['dim-mask-layer', 'focus-region-glow', 'focus-region-border'].forEach(id => {
+        if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+      })
+      // Re-raise pin layers
+      ;['landmark','waterfall','hotel','restaurant'].forEach(c => {
+        ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(lid => {
+          if (map.getLayer(lid)) try { map.moveLayer(lid) } catch(e) {}
+        })
+      })
+    }
   }
 }
 
@@ -714,23 +905,39 @@ watch(showAllLayers, (v) => {
   if(v) { showLabels.value=true; showRoads.value=true; showBuildings.value=true }
   else  { showLabels.value=false; showRoads.value=false; showBuildings.value=false }
 })
-watch([showLabels, showRoads, showBuildings, is3D], updateLayers)
+watch([showLabels, showRoads, is3D], updateLayers)
+
+// Dedicated watcher for buildings — direct setLayoutProperty, no style.layers dependency
+watch(showBuildings, (v) => {
+  if (!map || !ready) return
+  const set = () => {
+    try { map.setLayoutProperty('3d-buildings', 'visibility', v ? 'visible' : 'none') } catch(e) {}
+  }
+  set()
+  // Retry once after a short delay in case the layer was just being added
+  setTimeout(set, 400)
+})
 
 // Filter
-const activeCat = ref('all')
+const activeCat     = ref('all')
+const showAdSpaces  = ref(false)
+const showContactModal = ref(false)
+const showAboutModal   = ref(false)
+const existingPins  = ref([])
+
 const CATS = [
-  { l:'All',         v:'all'        },
-  { l:'Waterfalls',  v:'waterfall'  },
-  { l:'Landmarks',   v:'landmark'   },
-  { l:'Hotels',      v:'hotel'      },
-  { l:'Restaurants', v:'restaurant' },
+  { l:'ყველა',             v:'all',        i:'location_on'  },
+  { l:'ჩანჩქერები',        v:'waterfall',  i:'water'        },
+  { l:'ღირსშ.',            v:'landmark',   i:'landscape'    },
+  { l:'სასტუმრო',         v:'hotel',      i:'hotel'        },
+  { l:'რესტორანი',        v:'restaurant', i:'restaurant'   },
 ]
 
 watch(activeCat, (newCat) => {
   markers.forEach(m => {
-    // Spatial constraint (cached) + Category constraint
-    const isInside = m.isInside === true 
-    const catMatch = (newCat === 'all' || m.cat === newCat)
+    const isInside = m.isInside === true
+    // '' = ads-only mode → hide all location markers
+    const catMatch = newCat !== '' && (newCat === 'all' || m.cat === newCat)
     m.el.style.display = (isInside && catMatch) ? 'block' : 'none'
   })
 })
@@ -840,6 +1047,9 @@ class AdminToggleControl {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  // Register global navigation helper for popup buttons (popup HTML can't use Vue router)
+  window.__rachaNavToLocation = (id) => router.push(`/location/${id}`)
+
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
   // Approx Racha Bounds for instant camera
@@ -889,7 +1099,7 @@ onMounted(async () => {
 
   map.on('load', async () => {
     ready = true
-    
+
     // CLEAN START: Hide all global data layers initially
     const style = map.getStyle()
     if (style && style.layers) {
@@ -900,7 +1110,25 @@ onMounted(async () => {
       })
     }
 
-    updateLayers() 
+    // ── 3D Buildings — added here (synchronously, before updateLayers) so getLayer always finds it ──
+    if (!map.getLayer('3d-buildings')) {
+      try {
+        map.addLayer({
+          id: '3d-buildings', source: 'composite', 'source-layer': 'building',
+          type: 'fill-extrusion', minzoom: 10,
+          layout: { visibility: 'none' },
+          paint: {
+            // coalesce: if 'height' is null (most rural buildings), use 8m as fallback
+            'fill-extrusion-color': '#72A98F',
+            'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height'], null], 8],
+            'fill-extrusion-base':   ['coalesce', ['to-number', ['get', 'min_height'], null], 0],
+            'fill-extrusion-opacity': 0.82
+          }
+        })
+      } catch(e) { console.warn('3d-buildings addLayer failed:', e) }
+    }
+
+    updateLayers()
     initMapLayers()
   })
 
@@ -994,6 +1222,14 @@ onMounted(async () => {
         if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
       })
     })
+    // E. Ad GL layers above mask
+    ;['ads-clusters','ads-cluster-count','ads-points','ads-points-icon'].forEach(id => {
+      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+    })
+    // F. Route layers above mask (if active)
+    ;['route-line','route-wp-outer','route-wp-inner'].forEach(id => {
+      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+    })
   }
 
   async function initMapLayers() {
@@ -1028,23 +1264,6 @@ onMounted(async () => {
       if (isLightMode.value) map.setFog(null)
       else map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
     } catch(e) {}
-
-    // ── 3D Buildings ──
-    if (!map.getLayer('3d-buildings')) {
-      try {
-        map.addLayer({
-          'id': '3d-buildings', 'source': 'composite', 'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 12,
-          layout: { visibility: 'none' },
-          'paint': {
-            'fill-extrusion-color': '#72A98F',
-            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
-            'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
-            'fill-extrusion-opacity': 0.85
-          }
-        })
-      } catch(e) {}
-    }
 
       // ── Admin Regions & Masking (ADM2 for Municipality Isolation) ──
       try {
@@ -1145,22 +1364,102 @@ onMounted(async () => {
       } catch(e) {}
     }
 
-    // ── Ads (HTML markers) ──
+    // ── Ads — GL layers with clustering (static, no jitter) ──
     try {
-      const ads = await api.getAds()
-      ads?.forEach(ad => {
-        const el = document.createElement('div')
-        el.className = `ad-marker ${ad.status.toLowerCase()}`
-        el.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">campaign</span>`
-        el.addEventListener('click', (e) => { e.stopPropagation(); selectedAd.value = ad; showAdModal.value = true })
-        new mapboxgl.Marker({ element: el }).setLngLat([ad.longitude, ad.latitude]).addTo(map)
-      })
-    } catch(e) {}
+      const adsData = await api.getAds()
+      if (adsData?.length && !map.getSource('ads')) {
+        const adFeatures = adsData
+          .filter(ad => ad.latitude != null && ad.longitude != null)
+          .map(ad => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [parseFloat(ad.longitude), parseFloat(ad.latitude)] },
+            properties: {
+              id: ad.id, name: ad.name || 'Ad Space',
+              status: ad.status || 'Available',
+              adType: ad.type || 'Billboard',
+              price: ad.priceMonthly || 0,
+              imageUrl: ad.currentImageUrl || ad.imageUrl || ''
+            }
+          }))
+
+        if (adFeatures.length) {
+          map.addSource('ads', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: adFeatures },
+            cluster: true, clusterMaxZoom: 13, clusterRadius: 50
+          })
+          map.addLayer({
+            id: 'ads-clusters', type: 'circle', source: 'ads',
+            filter: ['has', 'point_count'],
+            layout: { visibility: 'none' },
+            paint: {
+              'circle-color': '#FF9800',
+              'circle-radius': ['step', ['get', 'point_count'], 18, 3, 22, 8, 26],
+              'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.92
+            }
+          })
+          map.addLayer({
+            id: 'ads-cluster-count', type: 'symbol', source: 'ads',
+            filter: ['has', 'point_count'],
+            layout: { visibility: 'none', 'text-field': '{point_count_abbreviated}', 'text-size': 12, 'text-allow-overlap': true, 'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'] },
+            paint: { 'text-color': '#ffffff' }
+          })
+          map.addLayer({
+            id: 'ads-points', type: 'circle', source: 'ads',
+            filter: ['!', ['has', 'point_count']],
+            layout: { visibility: 'none' },
+            paint: {
+              'circle-color': ['match', ['get', 'status'],
+                'Available', '#FF9800', 'Rented', '#F44336', 'Pending', '#9C27B0', '#FF9800'
+              ],
+              'circle-radius': 11,
+              'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.95
+            }
+          })
+          // Inner icon dot
+          map.addLayer({
+            id: 'ads-points-icon', type: 'circle', source: 'ads',
+            filter: ['!', ['has', 'point_count']],
+            layout: { visibility: 'none' },
+            paint: { 'circle-color': '#ffffff', 'circle-radius': 4, 'circle-opacity': 0.9 }
+          })
+
+          // Move above mask
+          ;['ads-clusters', 'ads-cluster-count', 'ads-points', 'ads-points-icon'].forEach(id => {
+            try { map.moveLayer(id) } catch(e) {}
+          })
+
+          // Click individual ad → show glass detail panel
+          map.on('click', 'ads-points', (e) => {
+            e.originalEvent.stopPropagation()
+            const props = e.features[0].properties
+            openAdModal({
+              id: props.id, name: props.name, status: props.status,
+              type: props.adType, priceMonthly: props.price,
+              currentImageUrl: props.imageUrl, imageUrl: props.imageUrl
+            })
+          })
+          // Click cluster → zoom in
+          map.on('click', 'ads-clusters', (e) => {
+            const feat = map.queryRenderedFeatures(e.point, { layers: ['ads-clusters'] })[0]
+            if (!feat) return
+            map.getSource('ads').getClusterExpansionZoom(feat.properties.cluster_id, (err, zoom) => {
+              if (!err) map.easeTo({ center: feat.geometry.coordinates, zoom: zoom + 1, duration: 500 })
+            })
+          })
+          ;['ads-clusters', 'ads-points'].forEach(lyr => {
+            map.on('mouseenter', lyr, () => { map.getCanvas().style.cursor = 'pointer' })
+            map.on('mouseleave', lyr, () => { map.getCanvas().style.cursor = '' })
+          })
+        }
+      }
+    } catch(e) { console.error('Ads GL error', e) }
 
     // ── Location Pins — per-category clustering (each colour groups separately) ──
     if (!map.getSource('pins-landmark')) {
       try {
         const locs = await api.getLocations()
+        existingPins.value = locs || []
         const allFeatures = (locs?.length ? locs : []).map(l => ({
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [parseFloat(l.longitude), parseFloat(l.latitude)] },
@@ -1223,17 +1522,23 @@ onMounted(async () => {
             }
           })
 
-          // Click → popup
+          // Click → popup with detail link
           map.on('click', `${srcId}-points`, (e) => {
             e.originalEvent.stopPropagation()
             const props = e.features[0].properties
             const coords = e.features[0].geometry.coordinates.slice()
             const cfg = CAT_CFG[props.category] || CAT_CFG.default
+            const locId = props.id
             popup.setLngLat(coords).setHTML(`
               <div class="popup-inner">
+                <div class="popup-accent-bar" style="background:${cfg.color}"></div>
                 <div class="popup-cat" style="color:${cfg.color}">${cfg.label}</div>
                 <h3 class="popup-title">${props.name}</h3>
-                <p class="popup-desc">${props.description}</p>
+                ${props.description ? `<p class="popup-desc">${props.description}</p>` : ''}
+                <button class="popup-detail-btn" style="border-color:${cfg.color}33;color:${cfg.color}" onclick="window.__rachaNavToLocation(${locId})">
+                  <span style="font-size:13px;vertical-align:middle">სრულად ნახვა</span>
+                  <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span>
+                </button>
               </div>`).addTo(map)
           })
 
@@ -1268,7 +1573,7 @@ onMounted(async () => {
       if (wp) {
         wp.lng = parseFloat(e.lngLat.lng.toFixed(6))
         wp.lat = parseFloat(e.lngLat.lat.toFixed(6))
-        wp.name = idx === 0 ? 'Start' : idx === routeWaypoints.value.length - 1 ? 'End' : `Point ${idx+1}`
+        wp.name = idx === 0 ? 'საწყისი' : idx === routeWaypoints.value.length - 1 ? 'დანიშნულება' : `წ. ${idx+1}`
       }
       selectingWaypointIdx.value = -1
     }
@@ -1280,12 +1585,28 @@ onMounted(async () => {
       mapboxgl,
       placeholder: 'ძებნა...',
       marker: false,
-      flyTo: false
+      flyTo: false,
+      localGeocoder: (query) => {
+        const q = query.toLowerCase().trim()
+        if (!q) return []
+        return (existingPins.value || [])
+          .filter(l => (l.nameGeo || l.name || '').toLowerCase().includes(q))
+          .slice(0, 5)
+          .map(l => ({
+            type: 'Feature',
+            place_name: l.nameGeo || l.name || '',
+            place_type: ['poi'],
+            text: l.nameGeo || l.name || '',
+            geometry: { type: 'Point', coordinates: [parseFloat(l.longitude), parseFloat(l.latitude)] },
+            properties: { category: l.category, id: l.id }
+          }))
+      },
+      localGeocoderOnly: false
     })
     gc.on('result', (e) => {
       const [lng, lat] = e.result.geometry.coordinates
       map.flyTo({
-        center: [lng, lat], zoom: 13, duration: 2500,
+        center: [lng, lat], zoom: 14, duration: 2500,
         easing: t => { const ts = t-1; return ts*ts*ts+1 },
         essential: true
       })
@@ -1350,18 +1671,49 @@ function resetRegion() {
 }
 
 // ─── FILTER ───────────────────────────────────────────────────────────────────
-function filterCat(cat) {
-  activeCat.value = cat
+const AD_LAYERS = ['ads-clusters', 'ads-cluster-count', 'ads-points', 'ads-points-icon']
+const ALL_PIN_CATS = ['landmark', 'waterfall', 'hotel', 'restaurant']
+
+function setAdVisibility(visible) {
+  showAdSpaces.value = visible
   if (!map) return
-  const ALL_CATS = ['landmark', 'waterfall', 'hotel', 'restaurant']
-  ALL_CATS.forEach(c => {
+  AD_LAYERS.forEach(id => {
+    if (map.getLayer(id)) try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none') } catch(e) {}
+  })
+}
+
+function setPinCatVisibility(cat) {
+  if (!map) return
+  ALL_PIN_CATS.forEach(c => {
     const visible = (cat === 'all' || cat === c)
     ;[`pins-${c}-clusters`, `pins-${c}-count`, `pins-${c}-points`].forEach(id => {
-      if (map.getLayer(id)) {
-        try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none') } catch(e) {}
-      }
+      if (map.getLayer(id)) try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none') } catch(e) {}
     })
   })
+}
+
+function filterCat(cat) {
+  activeCat.value = cat
+  // Hide ad spaces — selecting any location category deactivates ads
+  setAdVisibility(false)
+  // Show only selected category (or all if 'all')
+  setPinCatVisibility(cat)
+}
+
+// ─── AD SPACES TOGGLE ─────────────────────────────────────────────────────────
+function toggleAdSpaces() {
+  const turning_on = !showAdSpaces.value
+  if (turning_on) {
+    // Deselect all location categories, show only ads
+    activeCat.value = ''
+    setPinCatVisibility('none') // hide every pin category
+    setAdVisibility(true)
+  } else {
+    // Turn off ads, restore "all" location categories
+    setAdVisibility(false)
+    activeCat.value = 'all'
+    setPinCatVisibility('all')
+  }
 }
 
 // ─── WEATHER ──────────────────────────────────────────────────────────────────
@@ -1420,48 +1772,18 @@ function toggleTheme() {
   isLightMode.value = !isLightMode.value
   const isDark = !isLightMode.value
   themeIcon.value = isDark ? 'light_mode' : 'dark_mode'
-  
+
   if (isDark) {
     document.body.classList.add('dark-theme')
-    document.documentElement.style.setProperty('--glass-bg', 'rgba(10, 10, 20, 0.6)')
-    document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.1)')
+    document.body.classList.remove('light-theme')
   } else {
+    document.body.classList.add('light-theme')
     document.body.classList.remove('dark-theme')
-    document.documentElement.style.setProperty('--glass-bg', 'rgba(255, 255, 255, 0.15)')
-    document.documentElement.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.3)')
   }
-
-  if (!map) return
-
-  try {
-    // Swap Mapbox Style
-    const newStyle = isDark ? 'mapbox://styles/mapbox/satellite-v9' : 'mapbox://styles/mapbox/light-v11'
-    map.setStyle(newStyle)
-    
-    // Logic moved to initMapLayers which is called on style.load
-
-    if (!isDark) {
-      map.setLight({ anchor:'viewport', color:'#ffffff', intensity:0.6, position:[1.15, 210, 30] })
-      map.setFog(null)
-    } else {
-      map.setLight({ anchor:'viewport', color:'#ccddee', intensity:0.1, position:[1.15, 210, 30] })
-      map.setFog({
-        range: [0.5, 12],
-        color: '#0d1520',
-        'high-color': '#000000',
-        'space-color': '#000000',
-        'star-intensity': 0.6, 
-      })
-    }
-  } catch(e) { console.warn('Theme toggle error', e) }
+  // Map is not touched — only UI design changes
 }
-function toggleForest() {
-  if (!map || !ready) return
-  showForest.value = !showForest.value
-  try {
-    map.setLayoutProperty('forest', 'visibility', showForest.value ? 'visible' : 'none')
-  } catch(e) {}
-}
+// toggleForest is no longer needed — showForest watcher inside watch([...showForest], updateLayers) handles it
+function toggleForest() {}
 
 // ─── ROUTE ────────────────────────────────────────────────────────────────────
 let routeMarkers = []
@@ -1520,8 +1842,12 @@ function removeRouteWaypoint(i) {
 function clearRouteLayer() {
   routeResult.value = null
   if (!map) return
-  try { if (map.getLayer('route-line')) map.removeLayer('route-line') } catch(e) {}
-  try { if (map.getSource('route-source')) map.removeSource('route-source') } catch(e) {}
+  try { if (map.getLayer('route-line'))        map.removeLayer('route-line') } catch(e) {}
+  try { if (map.getSource('route-source'))     map.removeSource('route-source') } catch(e) {}
+  try { if (map.getLayer('route-wp-outer'))    map.removeLayer('route-wp-outer') } catch(e) {}
+  try { if (map.getLayer('route-wp-inner'))    map.removeLayer('route-wp-inner') } catch(e) {}
+  try { if (map.getLayer('route-wp-labels'))   map.removeLayer('route-wp-labels') } catch(e) {}
+  try { if (map.getSource('route-wp-src'))     map.removeSource('route-wp-src') } catch(e) {}
   routeMarkers.forEach(m => m.remove()); routeMarkers = []
 }
 
@@ -1545,20 +1871,61 @@ async function calculateRoute() {
     routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost: gelCost, rawDist: parseFloat(distKm) }
 
     clearRouteLayer()
+
+    // ── Route line ──
     map.addSource('route-source', { type: 'geojson', data: route.geometry })
-    const beforeLayer = map.getLayer('dim-mask-layer') ? 'dim-mask-layer' : undefined
     map.addLayer({
       id: 'route-line', type: 'line', source: 'route-source',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#72A98F', 'line-width': 5, 'line-opacity': 0.9,
-               'line-dasharray': routeMode.value === 'walking' ? [1.5, 2] : [1] }
-    }, beforeLayer)
+      paint: {
+        'line-color': routeMode.value === 'walking' ? '#6699cc' : routeMode.value === 'cycling' ? '#FFD700' : '#72A98F',
+        'line-width': 5, 'line-opacity': 0.92,
+        'line-dasharray': routeMode.value === 'walking' ? [1.5, 2] : [1]
+      }
+    })
+    try { map.moveLayer('route-line') } catch(e) {}
 
+    // ── Waypoint GL markers (Task 5) ──
+    const wpFeatures = valid.map((wp, i) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [wp.lng, wp.lat] },
+      properties: {
+        idx: i, name: wp.name || (i === 0 ? 'საწყისი' : i === valid.length-1 ? 'დანიშნულება' : `წ.${i+1}`),
+        color: i === 0 ? '#4CAF50' : i === valid.length-1 ? '#F44336' : '#72A98F',
+        isEnd: i === valid.length - 1 ? 1 : 0
+      }
+    }))
+    map.addSource('route-wp-src', { type: 'geojson', data: { type: 'FeatureCollection', features: wpFeatures } })
+    map.addLayer({
+      id: 'route-wp-outer', type: 'circle', source: 'route-wp-src',
+      paint: {
+        'circle-color': ['get', 'color'],
+        'circle-radius': 13,
+        'circle-stroke-width': 3,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 1
+      }
+    })
+    map.addLayer({
+      id: 'route-wp-inner', type: 'circle', source: 'route-wp-src',
+      paint: {
+        'circle-color': '#ffffff',
+        'circle-radius': 5,
+        'circle-opacity': ['case', ['==', ['get', 'isEnd'], 1], 0, 1]
+      }
+    })
+    // Move all above mask
+    ;['route-wp-outer', 'route-wp-inner'].forEach(id => { try { map.moveLayer(id) } catch(e) {} })
+
+    // ── fitBounds preserving current pitch (Task 6) ──
     const bounds = new mapboxgl.LngLatBounds()
     route.geometry.coordinates.forEach(c => bounds.extend(c))
     map.fitBounds(bounds, {
-      padding: { top: 100, bottom: 100, left: 100, right: 360 },
-      duration: 2000, easing: t => { const ts = t-1; return ts*ts*ts+1 }
+      padding: { top: 120, bottom: 120, left: 120, right: 380 },
+      pitch: map.getPitch(),
+      bearing: map.getBearing(),
+      duration: 1800,
+      easing: t => { const ts = t-1; return ts*ts*ts+1 }
     })
   } catch(e) { console.error('Route error', e) }
 }
@@ -1623,6 +1990,102 @@ body.dark-mode .glass-effect {
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* ══════════════════════════════════════════════
+   LIGHT THEME — UI only, map unaffected
+══════════════════════════════════════════════ */
+body.light-theme .top-bar,
+body.light-theme .region-chip-bottom,
+body.light-theme .region-dropdown-up,
+body.light-theme .bottom-cluster .bl-pop,
+body.light-theme .geocoder-center .mapboxgl-ctrl-geocoder,
+body.light-theme .layer-card,
+body.light-theme .weather-detail-panel,
+body.light-theme .route-drawer,
+body.light-theme .glass-modal,
+body.light-theme .ad-glass-modal {
+  background: rgba(200, 210, 220, 0.45) !important;
+  border-color: rgba(255,255,255,0.25) !important;
+  color: #fff !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+}
+
+body.light-theme .icon-pill {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.28);
+  color: rgba(255,255,255,0.9);
+}
+body.light-theme .icon-pill:hover {
+  background: rgba(255,255,255,0.32);
+  color: #fff;
+  border-color: rgba(255,255,255,0.45);
+}
+body.light-theme .icon-pill.active {
+  background: rgba(114,169,143,0.45);
+  border-color: rgba(114,169,143,0.7);
+  color: #fff;
+}
+body.light-theme .icon-pill::after {
+  background: rgba(200,210,220,0.92);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+body.light-theme .icon-pill-divider { background: rgba(255,255,255,0.25); }
+
+body.light-theme .region-chip-bottom { color: #fff !important; }
+body.light-theme .region-title { color: rgba(255,255,255,0.95) !important; }
+body.light-theme .rchip-pop { color: #fff !important; }
+body.light-theme .rchip-sep { background: rgba(255,255,255,0.3) !important; }
+body.light-theme .dropdown-chevron { color: rgba(255,255,255,0.55) !important; }
+
+body.light-theme .dropdown-item { border-color: rgba(255,255,255,0.1) !important; }
+body.light-theme .dropdown-item:hover { background: rgba(255,255,255,0.15) !important; }
+body.light-theme .item-name { color: #fff !important; }
+body.light-theme .item-pop { color: rgba(255,255,255,0.6) !important; }
+
+body.light-theme .mapboxgl-ctrl-geocoder--input { color: #fff !important; }
+body.light-theme .mapboxgl-ctrl-geocoder--input::placeholder { color: rgba(255,255,255,0.45) !important; }
+
+body.light-theme .pill-btn {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.85);
+}
+body.light-theme .pill-btn:hover {
+  background: rgba(255,255,255,0.32);
+  color: #fff;
+}
+body.light-theme .user-auth-wrap .pill-btn {
+  background: rgba(200,210,220,0.45);
+  border-color: rgba(255,255,255,0.25);
+}
+
+body.light-theme .layer-card,
+body.light-theme .weather-detail-panel { color: #fff !important; }
+body.light-theme .layer-row { color: rgba(255,255,255,0.85); }
+body.light-theme .layer-row:hover { color: var(--accent); }
+body.light-theme .wdp-loc,
+body.light-theme .wdp-condition,
+body.light-theme .wdp-temp-big { color: #fff !important; }
+body.light-theme .wdp-row { color: rgba(255,255,255,0.75) !important; }
+body.light-theme .wdp-val { color: #fff !important; }
+body.light-theme .wdp-divider { background: rgba(255,255,255,0.12) !important; }
+
+body.light-theme .rd-tab { color: rgba(255,255,255,0.45); }
+body.light-theme .rd-tab.active { color: var(--accent); }
+body.light-theme .rd-wp-field { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+body.light-theme .rd-wp-input { color: #fff; }
+body.light-theme .rd-section-label { color: rgba(255,255,255,0.4); }
+
+body.light-theme .glass-input {
+  background: rgba(255,255,255,0.12) !important;
+  border-color: rgba(255,255,255,0.2) !important;
+  color: #fff !important;
+}
+body.light-theme .glass-input::placeholder { color: rgba(255,255,255,0.4) !important; }
+
+body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(255,255,255,0.2)) !important; opacity: 0.9 !important; }
+
 .map-container {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
@@ -1681,22 +2144,20 @@ body.dark-mode .glass-effect {
   box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 12px rgba(114,169,143,.2);
 }
 
-/* ── Active Region Selector (Integrated Wide-Pill) ── */
+/* ── Region selector wrap (legacy, kept for z-index stacking rules) ── */
 .region-selector-wrap {
-  position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
-  z-index: 10000; display: flex; flex-direction: column; align-items: center;
-  pointer-events: none;
+  display: none; /* Moved to bottom-cluster */
 }
 .region-chip.wide-pill {
-  pointer-events: auto; /* Re-enable for the actual interaction */
-  display: flex; align-items: center; justify-content: space-between;
-  width: 580px; height: 38px; /* Slimmer and wider */
-  background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50px;
-  padding: 0 28px; color: #fff;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px;
+  background: rgba(8,8,18,0.55); backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.11); border-radius: 50px;
+  padding: 0 16px; color: #fff;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+  transition: all 0.25s ease;
   cursor: pointer;
 }
 .region-chip:hover { 
@@ -1711,19 +2172,13 @@ body.dark-mode .glass-effect {
 }
 .dropdown-chevron.open { transform: rotate(180deg); opacity: 1; color: var(--accent); }
 
-.region-chip-main { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; }
-.region-chip-stats { 
-  display: flex; align-items: center; gap: 8px; font-size: 12px;
-  border-left: 1px solid rgba(255,255,255,0.15); padding-left: 20px;
-}
-.stats-label { opacity: 0.6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-.stats-value { font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+.region-title { font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
 
-/* Dropdown Menu - Flush Alignment */
+/* Dropdown Menu */
 .region-dropdown-list {
   pointer-events: auto;
-  margin-top: 4px; /* Snap directly below the title pill */
-  width: 580px; 
+  margin-top: 5px;
+  min-width: 220px;
   background: rgba(10, 10, 18, 0.85); /* Slightly darker for better contrast */
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -1862,30 +2317,47 @@ body.dark-mode .glass-effect {
     transition: fill-extrusion-height 0.5s ease;
 }
 
-/* Layer Control (Drawer Redesign) */
+/* ── Layer Control Card ── */
 .layer-card {
-  position: absolute; left: 60px; top: 0;
-  width: 220px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 18px;
-  padding: 16px;
-  display: flex; flex-direction: column; gap: 12px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-  z-index: 10000; /* Above all map elements and masking */
+  position: absolute; left: 58px; top: 0;
+  width: 230px;
+  background: rgba(8,8,20,0.78);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 20px;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+  z-index: 10000;
   color: #fff;
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.layer-header { 
-  font-size: 10px; text-transform: uppercase; letter-spacing: 1px; 
-  opacity: 0.5; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); 
-  padding-bottom: 6px; margin-bottom: 2px;
+.lc-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 2px 10px;
 }
-.layer-row {
-  display: flex; align-items: center; gap: 10px; font-size: 13px; 
-  cursor: pointer; padding: 4px 0; transition: color 0.2s;
+.lc-title {
+  flex: 1; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.2px;
+  color: rgba(255,255,255,0.55);
+}
+.lc-divider {
+  height: 1px; background: rgba(255,255,255,0.07); margin: 0 0 4px;
+}
+.lc-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 12px;
+  cursor: pointer; transition: background 0.18s;
+  user-select: none;
+}
+.lc-row:hover { background: rgba(255,255,255,0.06); }
+.lc-icon {
+  font-size: 17px !important; color: var(--accent);
+  opacity: 0.8; flex-shrink: 0;
+}
+.lc-label {
+  flex: 1; font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.8);
 }
 
 /* ── Z-Index Fixes (Force UI above dark mask) ── */
@@ -1900,62 +2372,117 @@ body.dark-mode .glass-effect {
   accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; 
 }
 
-/* ── Top Bar (Synced with Admin Header) ── */
+/* ── Top Bar — floating icon-pill row ── */
 .top-bar {
   position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-  z-index: 25; display: flex; align-items: center; gap: 10px;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  padding: 0 16px; border-radius: 100px;
-  width: 95%; max-width: 980px; height: 60px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-}
-.top-bar-brand { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#fff; flex-shrink:0; }
-
-/* ── Category Pills (Synced with Admin Buttons) ── */
-.cat-row { display:flex; gap:5px; }
-.cat-pill {
-  padding: 5px 12px; border-radius: 100px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 10px; font-weight: 700; letter-spacing: .4px;
-  text-transform: uppercase; cursor: pointer; transition: all .25s; white-space: nowrap;
-}
-.cat-pill:hover {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-  transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.1);
-}
-.cat-pill.active {
-  background: var(--accent);
-  border-color: rgba(255,255,255,0.3);
-  color: #fff;
-  box-shadow: var(--neon-glow);
+  z-index: 25; display: flex; align-items: center; gap: 6px;
+  background: rgba(8,8,18,0.58);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.09);
+  padding: 7px 12px; border-radius: 100px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
-/* ── Geocoder ── */
-/* ── Geocoder (Compact & Glassmorphism) ── */
+/* ── Icon Pills (round glassmorphism buttons) ── */
+.icon-pill {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.55);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .2s cubic-bezier(0.2,0.8,0.2,1);
+  flex-shrink: 0; outline: none;
+  position: relative;
+}
+.icon-pill .material-symbols-outlined { font-size: 20px !important; }
+.icon-pill:hover {
+  background: rgba(255,255,255,0.13);
+  border-color: rgba(255,255,255,0.2);
+  color: #fff;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.icon-pill.active {
+  background: rgba(114,169,143,0.28);
+  border-color: rgba(114,169,143,0.55);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(114,169,143,0.4);
+}
+.icon-pill.active .material-symbols-outlined { color: #72A98F; }
+
+/* Nav pills (ads/contact/about) */
+.icon-pill-nav { color: rgba(255,255,255,0.4); }
+.icon-pill-nav:hover { color: #fff; }
+.icon-pill-nav.active {
+  background: rgba(255,152,0,0.22);
+  border-color: rgba(255,152,0,0.5);
+  color: #FF9800;
+  box-shadow: 0 0 16px rgba(255,152,0,0.3);
+}
+.icon-pill-nav.active .material-symbols-outlined { color: #FF9800; }
+
+/* Tooltip on hover */
+.icon-pill::after {
+  content: attr(title);
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: rgba(8,8,18,0.95); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff; font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+  white-space: nowrap; padding: 5px 10px; border-radius: 8px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 9999;
+}
+.icon-pill:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Thin divider between category icons and nav icons */
+.icon-pill-divider {
+  width: 1px; height: 24px;
+  background: rgba(255,255,255,0.11);
+  margin: 0 2px; flex-shrink: 0;
+}
+
+/* ── Centered Geocoder (below top bar) ── */
+.geocoder-center {
+  position: absolute;
+  top: 90px;
+  left: 50%; transform: translateX(-50%);
+  z-index: 10006;
+  pointer-events: auto;
+}
+
+/* ── Geocoder (compact glassmorphism) ── */
 .mapboxgl-ctrl-geocoder {
-  background: rgba(255, 255, 255, 0.08) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
+  background: rgba(8,8,18,0.60) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
   border-radius: 50px !important;
-  width: 220px !important; min-width: 0 !important; height: 36px !important;
+  width: 260px !important; min-width: 0 !important; height: 36px !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+  border: 1px solid rgba(255,255,255,0.11) !important;
   overflow: visible !important;
+  outline: none !important;
 }
 .mapboxgl-ctrl-geocoder--input {
   color: #fff !important;
   font-family: inherit !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
   padding: 0 36px !important;
   text-align: center !important;
   transition: all 0.3s ease;
+  height: 36px !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.mapboxgl-ctrl-geocoder--input:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }
 .mapboxgl-ctrl-geocoder--input:focus {
   color: #72A98F !important;
@@ -2044,25 +2571,149 @@ body.dark-mode .glass-effect {
 .custom-popup .mapboxgl-popup-tip { border-top-color:rgba(255,255,255,.14)!important; }
 .custom-popup .mapboxgl-popup-close-button { color:rgba(255,255,255,.4)!important; font-size:18px!important; padding:8px 12px!important; }
 .popup-inner { padding:16px 18px; }
+.popup-accent-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  border-radius: 18px 18px 0 0; opacity: 0.7;
+}
 .popup-cat   { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:5px; }
 .popup-title { margin:0 0 5px; font-size:15px; font-weight:700; color:#fff; }
-.popup-desc  { margin:0; font-size:11px; color:rgba(255,255,255,.55); line-height:1.55; }
-
-/* ── Bottom Label ── */
-.bottom-label {
-  position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
-  z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none;
+.popup-desc  { margin:0 0 2px; font-size:11px; color:rgba(255,255,255,.55); line-height:1.55; }
+.popup-detail-btn {
+  margin-top: 12px; width: 100%;
+  padding: 9px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background 0.2s, filter 0.2s; box-sizing: border-box;
 }
-.bl-main { font-size: 20px; font-weight: 800; color: rgba(255,255,255,.92); letter-spacing: 2px; text-shadow: 0 2px 20px rgba(0,0,0,.9); }
-.bl-sub  { font-size: 9px; font-weight: 500; color: rgba(255,255,255,.45); letter-spacing: 3px; text-transform: uppercase; }
+.popup-detail-btn:hover { background: rgba(255,255,255,0.12); filter: brightness(1.1); }
 
-/* ── Auth Modal ── */
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); backdrop-filter:blur(6px); z-index:1000; display:flex; align-items:center; justify-content:center; }
-.glass-modal { background:rgba(8,8,18,.92); backdrop-filter:var(--blur); border:0.5px solid var(--border); border-radius:20px; padding:30px; width:320px; text-align:center; color:#fff; box-shadow:0 8px 40px rgba(0,0,0,.6); position:relative; }
-.glass-input { width:100%; padding:12px; margin:8px 0; background:rgba(255,255,255,.05); border:0.5px solid var(--border); border-radius:10px; color:#fff; outline:none; box-sizing:border-box; font-size:13px; }
-.glass-btn { background:var(--accent); color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; width:100%; font-weight:700; margin-top:10px; transition:opacity .25s; }
-.glass-btn:hover { opacity:.85; }
-.close-modal { position:absolute; top:14px; right:14px; cursor:pointer; opacity:.55; }
+/* ── Bottom Cluster — Logo + Region + Population ── */
+.bottom-cluster {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 9999;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+
+.bl-logo {
+  height: 22px; width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
+  opacity: 0.88;
+}
+
+/* Region chip at bottom */
+.region-bottom-wrap {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.region-chip-bottom {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(8,8,18,0.48);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 50px;
+  padding: 3px 11px; color: #fff;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.25);
+  transition: all 0.2s;
+  user-select: none;
+  cursor: pointer;
+}
+.region-chip-bottom:hover {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,255,255,0.15);
+}
+.region-title { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.9); text-transform: uppercase; letter-spacing: 0.5px; }
+.rchip-sep { width: 1px; height: 10px; background: rgba(255,255,255,0.2); margin: 0 2px; flex-shrink: 0; }
+.rchip-pop { font-size: 10px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+.dropdown-chevron { font-size: 13px !important; opacity: 0.45; margin-left: 1px; transition: transform 0.25s; }
+.dropdown-chevron.open { transform: rotate(180deg); opacity: 0.85; }
+
+/* Dropdown opens upward */
+.region-dropdown-up {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  min-width: 220px;
+  background: rgba(8,8,20,0.92);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 -16px 48px rgba(0,0,0,0.5);
+  z-index: 10001;
+  pointer-events: auto;
+}
+
+/* bl-pop merged into region-chip-bottom */
+
+/* ── Info Modal (Contact / About) ── */
+.info-modal {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 40px 32px 32px;
+  min-width: 320px;
+}
+.info-modal h2 { font-size: 18px; font-weight: 700; }
+.info-modal-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 12px;
+  font-size: 13px; color: rgba(255,255,255,0.8);
+  margin-top: 8px;
+}
+
+/* ── Auth / Info Modals ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px) saturate(150%);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10100; display: flex; align-items: center; justify-content: center;
+}
+.glass-modal {
+  background: rgba(8,8,20,0.78);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 24px;
+  padding: 32px 28px 28px;
+  width: 340px; text-align: center; color: #fff;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07);
+  position: relative;
+}
+.glass-input {
+  width: 100%; padding: 12px 14px; margin: 7px 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.11);
+  border-radius: 12px; color: #fff; outline: none;
+  box-sizing: border-box; font-size: 13px; font-family: inherit;
+  transition: border-color 0.2s;
+}
+.glass-input:focus { border-color: rgba(114,169,143,0.5); }
+.glass-btn {
+  background: linear-gradient(135deg, rgba(114,169,143,0.8), rgba(72,140,110,0.9));
+  color: #fff; border: none; padding: 12px; border-radius: 12px;
+  cursor: pointer; width: 100%; font-weight: 700; font-family: inherit;
+  font-size: 14px; margin-top: 10px;
+  transition: filter 0.2s, transform 0.15s;
+  box-shadow: 0 4px 16px rgba(114,169,143,0.3);
+}
+.glass-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.close-modal {
+  position: absolute; top: 14px; right: 14px;
+  cursor: pointer; opacity: 0.45; transition: opacity 0.2s;
+  user-select: none;
+}
+.close-modal:hover { opacity: 0.85; }
 
 /* ── Admin Toggle Control (IControl) ── */
 .admin-toggle-ctrl {
@@ -2151,9 +2802,33 @@ body.dark-theme .clouds {
   opacity: 0.15;
 }
 
-/* ── Layer Row Icons ── */
-.layer-row-icon { font-size: 15px !important; opacity: 0.65; flex-shrink: 0; color: var(--accent); }
-.layer-header .master-switch { margin-left: auto; }
+/* ── Custom Toggle Switch ── */
+.lc-toggle-wrap { display: flex; align-items: center; margin-left: auto; }
+.lc-toggle-input { display: none; }
+.lc-toggle-track {
+  position: relative; display: inline-block;
+  width: 34px; height: 18px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 999px;
+  transition: background 0.22s, border-color 0.22s;
+  flex-shrink: 0; cursor: pointer;
+}
+.lc-toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: rgba(255,255,255,0.45);
+  transition: transform 0.22s, background 0.22s;
+}
+/* Checked state — input hidden, use sibling selector */
+.lc-toggle-input:checked + .lc-toggle-track {
+  background: rgba(114,169,143,0.55);
+  border-color: rgba(114,169,143,0.7);
+}
+.lc-toggle-input:checked + .lc-toggle-track .lc-toggle-thumb {
+  transform: translateX(16px);
+  background: #fff;
+}
 
 /* ── Weather Badge (small temp over round button) ── */
 .weather-temp-badge {
@@ -2564,4 +3239,105 @@ body.dark-theme .clouds {
   background: rgba(114,169,143,0.1); border: 1px solid rgba(114,169,143,0.3);
   border-radius: 10px; padding: 8px 18px;
 }
+
+/* ── Suggested Routes ── */
+.rd-suggestions {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px;
+}
+.rd-suggestion-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 13px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.75);
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  cursor: pointer; text-align: left;
+  transition: all 0.18s;
+}
+.rd-suggestion-btn:hover {
+  background: rgba(114,169,143,0.15);
+  border-color: rgba(114,169,143,0.35);
+  color: #fff;
+}
+
+/* ── Ad Modal — Glassmorphism ── */
+.ad-glass-modal {
+  background: rgba(10,10,20,0.88);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 24px;
+  width: 360px; max-width: 95vw;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  position: relative;
+}
+.adm-close {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15);
+  color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; transition: background 0.2s;
+}
+.adm-close:hover { background: rgba(0,0,0,0.75); }
+.adm-hero {
+  width: 100%; height: 180px;
+  background: linear-gradient(135deg, #0f1a14, #1a2820);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.adm-hero img { width: 100%; height: 100%; object-fit: cover; }
+.adm-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 10px; }
+.adm-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  width: fit-content;
+}
+.adm-status.available { background: rgba(76,175,80,0.15); color: #4CAF50; border: 1px solid rgba(76,175,80,0.3); }
+.adm-status.rented    { background: rgba(244,67,54,0.15);  color: #F44336; border: 1px solid rgba(244,67,54,0.3); }
+.adm-status.pending   { background: rgba(255,152,0,0.15);  color: #FF9800; border: 1px solid rgba(255,152,0,0.3); }
+.adm-name  { font-size: 20px; font-weight: 800; color: #fff; line-height: 1.2; }
+.adm-meta  { font-size: 12px; color: rgba(255,255,255,0.4); }
+.adm-price { font-size: 26px; font-weight: 800; color: #FF9800; }
+.adm-price-lbl { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: -6px; }
+.adm-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 4px 0; }
+.adm-form-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.35); margin-top: 4px; }
+.adm-input {
+  width: 100%; padding: 10px 12px; box-sizing: border-box;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px; color: #fff; font-size: 13px; outline: none;
+  transition: border-color 0.2s; font-family: inherit;
+}
+.adm-input:focus { border-color: #FF9800; background: rgba(255,152,0,0.06); }
+.adm-input::placeholder { color: rgba(255,255,255,0.25); }
+.adm-rent-btn {
+  width: 100%; padding: 13px; margin-top: 4px;
+  background: linear-gradient(135deg, #FF9800, #e65100);
+  border: none; border-radius: 12px; color: #fff;
+  font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  transition: all 0.2s; box-shadow: 0 4px 18px rgba(255,152,0,0.35);
+}
+.adm-rent-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.adm-info-msg {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; border-radius: 12px;
+  font-size: 13px; font-weight: 500;
+}
+.adm-info-msg.pending { background: rgba(255,152,0,0.1); color: #FF9800; border: 1px solid rgba(255,152,0,0.25); }
+.adm-info-msg.rented  { background: rgba(244,67,54,0.1);  color: #F44336; border: 1px solid rgba(244,67,54,0.25); }
+.adm-success {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 10px 0;
+}
+.adm-error {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 10px;
+  background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.25);
+  color: #F44336; font-size: 12px;
+}
+.adm-rent-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none !important; filter: none !important; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

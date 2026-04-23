@@ -7,14 +7,11 @@ const routes = [
   },
   {
     path: '/admin',
-    component: () => import('../views/AdminView.vue'),
-    beforeEnter: (to, from, next) => {
-      if (!localStorage.getItem('authToken')) {
-        next('/')
-      } else {
-        next()
-      }
-    }
+    component: () => import('../views/AdminView.vue')
+  },
+  {
+    path: '/location/:id',
+    component: () => import('../views/LocationView.vue')
   },
   {
     path: '/dashboard',
