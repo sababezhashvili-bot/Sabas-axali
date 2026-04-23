@@ -3351,10 +3351,11 @@ body.dark-theme .clouds {
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Top bar — full width, scrollable */
+  /* Top bar — leave right space for user button */
   .top-bar {
     top: 10px;
-    left: 10px; right: 10px;
+    left: 10px;
+    right: 66px; /* space for user-auth-wrap button */
     transform: none;
     overflow-x: auto;
     overflow-y: hidden;
@@ -3368,14 +3369,23 @@ body.dark-theme .clouds {
   .top-bar::-webkit-scrollbar { display: none; }
   .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
-  .icon-pill::after { display: none; } /* hide tooltips on mobile */
+  .icon-pill::after { display: none; }
+
+  /* User auth button — align with top bar */
+  .user-auth-wrap {
+    top: 10px;
+    right: 10px;
+  }
+  .user-auth-wrap .pill-btn {
+    width: 46px; height: 46px;
+  }
 
   /* Controls — smaller, closer to edge */
   .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
 
   /* Geocoder — below top bar, full width */
   .geocoder-center {
-    top: 62px;
+    top: 66px;
     left: 10px; right: 10px;
     transform: none;
     width: auto;
@@ -3390,13 +3400,13 @@ body.dark-theme .clouds {
   /* Bottom counter */
   .bottom-label { font-size: 10px; padding: 6px 12px; }
 
-  /* Hide tooltip text on small screens */
   .icon-pill-nav::after { display: none; }
 }
 
 @media (max-width: 480px) {
-  .top-bar { top: 8px; left: 8px; right: 8px; }
-  .ctrl-panel { top: 60px; left: 8px; }
-  .geocoder-center { top: 56px; left: 8px; right: 8px; }
+  .top-bar { top: 8px; left: 8px; right: 62px; }
+  .user-auth-wrap { top: 8px; right: 8px; }
+  .ctrl-panel { top: 64px; left: 8px; }
+  .geocoder-center { top: 62px; left: 8px; right: 8px; }
 }
 </style>
