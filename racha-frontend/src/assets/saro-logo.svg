@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 160" fill="none">
+  <!-- Left symbol: 4 corner L-brackets + center arrows -->
+
+  <!-- Top-left corner -->
+  <polyline points="30,90 30,30 90,30" stroke="white" stroke-width="9" stroke-linecap="square" fill="none"/>
+  <!-- Top-right corner -->
+  <polyline points="150,90 150,30 90,30" stroke="white" stroke-width="9" stroke-linecap="square" fill="none"/>
+  <!-- Bottom-left corner -->
+  <polyline points="30,70 30,130 90,130" stroke="white" stroke-width="9" stroke-linecap="square" fill="none"/>
+  <!-- Bottom-right corner -->
+  <polyline points="150,70 150,130 90,130" stroke="white" stroke-width="9" stroke-linecap="square" fill="none"/>
+
+  <!-- Center inward arrows (pointing toward center) -->
+  <!-- Top arrow pointing down -->
+  <polyline points="84,55 90,68 96,55" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Bottom arrow pointing up -->
+  <polyline points="84,105 90,92 96,105" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Left arrow pointing right -->
+  <polyline points="55,84 68,90 55,96" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Right arrow pointing left -->
+  <polyline points="125,84 112,90 125,96" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- SARO text — ultra-thin geometric -->
+  <text
+    x="200" y="114"
+    font-family="'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font-size="86"
+    font-weight="200"
+    letter-spacing="18"
+    fill="white"
+    opacity="0.95">SARO</text>
+</svg>

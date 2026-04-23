@@ -96,6 +96,22 @@ class ApiClient {
     return await res.json()
   }
 
+  async getLocation(id) {
+    const res = await fetch(`${this.baseUrl}/racha/locations/${id}`)
+    if (!res.ok) throw new Error('Failed to fetch location')
+    return await res.json()
+  }
+
+  async updateLocation(id, formData) {
+    const res = await fetch(`${this.baseUrl}/racha/locations/${id}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: formData
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return await res.json()
+  }
+
   async deleteLocation(id) {
     const res = await fetch(`${this.baseUrl}/racha/locations/${id}`, {
       method: 'DELETE',
@@ -156,6 +172,26 @@ class ApiClient {
       if (!res.ok) return []
       return await res.json()
     } catch { return [] }
+  }
+
+  async deleteAd(id) {
+    const res = await fetch(`${this.baseUrl}/ad/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
+    if (!res.ok) throw new Error(await res.text())
+  }
+
+  async demoteUser(id) {
+    const res = await fetch(`${this.baseUrl}/admin/promote/${id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ role: 'User', CanViewUsers: false, CanEditServices: false, CanDeleteData: false })
+    })
+    if (!res.ok) throw new Error(await res.text())
   }
 }
 

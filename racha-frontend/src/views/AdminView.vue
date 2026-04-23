@@ -75,17 +75,22 @@
               <div class="mcp-label">Layers</div>
               <label class="mcp-row">
                 <span class="material-symbols-outlined mcp-icon">holiday_village</span>
-                <span>Villages & Towns</span>
+                <span>სოფლები / ქალაქები</span>
                 <input type="checkbox" v-model="showAdminLabels" @change="toggleLayer('labels')" class="mcp-check">
               </label>
               <label class="mcp-row">
+                <span class="material-symbols-outlined mcp-icon">route</span>
+                <span>გზები</span>
+                <input type="checkbox" v-model="showAdminRoads" @change="toggleLayer('roads')" class="mcp-check">
+              </label>
+              <label class="mcp-row">
                 <span class="material-symbols-outlined mcp-icon">domain</span>
-                <span>3D Buildings</span>
+                <span>3D შენობები</span>
                 <input type="checkbox" v-model="showAdminBuildings" @change="toggleLayer('buildings')" class="mcp-check">
               </label>
               <label class="mcp-row">
                 <span class="material-symbols-outlined mcp-icon">landscape</span>
-                <span>Terrain Shadow</span>
+                <span>რელიეფის ჩრდილი</span>
                 <input type="checkbox" v-model="showAdminHillshade" @change="toggleLayer('hillshade')" class="mcp-check">
               </label>
             </div>
@@ -188,6 +193,7 @@
                 <label>Category</label>
                 <select v-model="locCategory">
                   <option value="landmark">🏔️ Landmark</option>
+                  <option value="waterfall">🌊 Waterfall</option>
                   <option value="hotel">🏨 Hotel</option>
                   <option value="restaurant">🍽️ Restaurant</option>
                 </select>
@@ -208,6 +214,24 @@
             <button class="action-btn" @click="addLocation">
               <span class="material-symbols-outlined">save</span> Save Location
             </button>
+
+            <!-- Existing Pins List -->
+            <div v-if="existingPins.length" class="pins-list">
+              <div class="pins-list-header">
+                <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">pin_drop</span>
+                დამატებული ლოკაციები ({{ existingPins.length }})
+              </div>
+              <div v-for="pin in existingPins" :key="pin.id" class="pin-list-item">
+                <div class="pin-cat-dot" :style="{ background: PIN_CAT_COLORS[pin.category] || '#72A98F' }"></div>
+                <div class="pin-list-info">
+                  <div class="pin-list-name">{{ pin.nameGeo || pin.name }}</div>
+                  <div class="pin-list-cat">{{ pin.category || 'landmark' }}</div>
+                </div>
+                <button class="pin-del-btn" @click="deletePin(pin.id)" title="წაშლა">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </transition>
@@ -451,25 +475,39 @@ async function addLocation() {
   }
 
   try {
-    await api.addLocation(formData)
-    alert('Location Added!')
-    window.location.reload()
+    const newLoc = await api.addLocation(formData)
+    alert('ლოკაცია დამატებულია!')
+    locName.value = ''; locCoords.value = ''; locDesc.value = ''
+    if (marker) marker.remove()
+    await loadPins()
+    // Render new marker on map
+    if (newLoc && map) {
+      const el = createAdminPin(newLoc.category || locCategory.value)
+      const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([newLoc.longitude, newLoc.latitude]).addTo(map)
+      adminMarkers.push({ mk, el, type: 'poi', locId: newLoc.id })
+    }
   } catch (e) {
     alert(e.message)
   }
 }
 
-// --- 3D Glass Pin (Admin Version) ---
-function createAdminPin() {
+// --- Admin Pin: small green dot with black outline ---
+function createAdminPin(category = 'landmark') {
+  const colors = { landmark: '#4CAF50', waterfall: '#6699cc', hotel: '#F44336', restaurant: '#FFD700' }
+  const color = colors[category] || '#4CAF50'
   const el = document.createElement('div')
-  el.className = 'admin-pin-wrapper'
-  el.innerHTML = `
-    <div class="pin-glass-head">
-      <span class="material-symbols-outlined pin-icon">home</span>
-    </div>
-    <div class="pin-glass-stem"></div>
-    <div class="pin-glass-base"></div>
+  el.className = 'admin-dot-pin'
+  el.style.cssText = `
+    width: 14px; height: 14px; border-radius: 50%;
+    background: ${color};
+    border: 2px solid #111;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.55);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
   `
+  el.addEventListener('mouseenter', () => { el.style.transform = 'scale(1.35)'; el.style.boxShadow = `0 0 0 3px ${color}55, 0 4px 12px rgba(0,0,0,0.6)` })
+  el.addEventListener('mouseleave', () => { el.style.transform = ''; el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.55)' })
   return el
 }
 
@@ -536,9 +574,35 @@ async function resolveRequest(id, status) {
     } catch(e) { alert(e.message) }
 }
 
+// ── PIN LIST ──
+const existingPins = ref([])
+const PIN_CAT_COLORS = {
+  landmark: '#72A98F', waterfall: '#6699cc',
+  hotel: '#FF9F0A', restaurant: '#FF453A'
+}
+
+async function loadPins() {
+  try {
+    const locs = await api.getLocations()
+    existingPins.value = locs || []
+  } catch(e) { console.error(e) }
+}
+
+async function deletePin(id) {
+  if (!confirm('ლოკაცია წაიშლება. გააგრძელოთ?')) return
+  try {
+    await api.deleteLocation(id)
+    existingPins.value = existingPins.value.filter(p => p.id !== id)
+    // Remove marker from map if exists
+    const idx = adminMarkers.findIndex(m => m.locId === id)
+    if (idx !== -1) { adminMarkers[idx].mk.remove(); adminMarkers.splice(idx, 1) }
+  } catch(e) { alert(e.message) }
+}
+
 // ── LAYER CONTROLS (Main Page Parity) ──
 const adminIs3D = ref(true)
 const showAdminLabels = ref(false)
+const showAdminRoads = ref(false)
 const showAdminBuildings = ref(false)
 const showAdminHillshade = ref(false)
 
@@ -559,11 +623,21 @@ function toggleLayer(type) {
             map.setLayoutProperty('terrain-hillshade', 'visibility', showAdminHillshade.value ? 'visible' : 'none')
     }
     if (type === 'labels') {
-        const labelLayers = ['road-label', 'place-label', 'settlement-label', 'country-label', 'state-label']
+        const labelLayers = ['place-label', 'settlement-label', 'poi-label']
         labelLayers.forEach(id => {
             if (map.getLayer(id))
                 map.setLayoutProperty(id, 'visibility', showAdminLabels.value ? 'visible' : 'none')
         })
+    }
+    if (type === 'roads') {
+        const style = map.getStyle()
+        if (style?.layers) {
+          style.layers.forEach(l => {
+            if (l.id.includes('road') || l.id.includes('bridge') || l.id.includes('tunnel')) {
+              try { map.setLayoutProperty(l.id, 'visibility', showAdminRoads.value ? 'visible' : 'none') } catch(e) {}
+            }
+          })
+        }
     }
 }
 
@@ -576,105 +650,64 @@ onMounted(async () => {
   }
   currentUser.value = user
 
-  // Init Admin Map
+  // Init Admin Map — identical setup to main page MapView.vue
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
   map = new mapboxgl.Map({
     container: adminMapContainer.value,
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
-    center: [43.1481, 42.5176],
-    zoom: 10,
-    pitch: 45, // Slight pitch for 3D feel
-    bearing: -10,
-    transparent: true // CRITICAL for Sky Background
+    bounds: [[42.4, 42.2], [44.2, 43.2]], // same RACHA_BOUNDS as main page
+    fitBoundsOptions: { padding: 0, animate: false },
+    pitch: 60,
+    bearing: -8,
+    antialias: true,
+    transparent: true,
+    projection: 'mercator',
+    dragPan: { inertia: true, damping: 0.05 },
   })
 
-  // Add Navigation Control
-  map.addControl(new mapboxgl.NavigationControl(), 'bottom-right')
-
   map.on('load', () => {
-    // ════════════════════════════════════════════════════════════════════════
-    //  MAP PARITY: The following blocks are EXACT REPLICAS of MapView.vue logic
-    //  DO NOT MODIFY without syncing changes to the Main Page map.
-    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Clean start: hide all global label/road/poi/building layers ──
+    const style = map.getStyle()
+    if (style?.layers) {
+      style.layers.forEach(l => {
+        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi') || l.id.includes('building')) {
+          try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+        }
+      })
+    }
 
     // 1. Terrain & DEM
     try {
-      map.addSource('dem', {
-        type: 'raster-dem',
-        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-        tileSize: 512,
-        maxzoom: 14,
-      })
-      map.setTerrain({ source:'dem', exaggeration: 1.5 })
+      map.addSource('dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 })
+      map.setTerrain({ source: 'dem', exaggeration: 1.5 })
     } catch(e) {}
 
-    // 2. Cinematic Lighting
+    // 2. Cinematic Lighting (matches main page)
     try {
-      map.setLight({
-        anchor: 'viewport',
-        color: '#ffffff',
-        intensity: 0.6,
-        position: [1.15, 210, 30],
-        'ambient': {
-          'color': '#ffffff',
-          'intensity': 0.4
-        }
-      })
+      map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.6, position: [1.15, 210, 30] })
     } catch(e) {}
 
-    // 3. Sky / Fog (Crystal Clear)
+    // 3. Fog off (light mode default, same as main page)
     try { map.setFog(null) } catch(e) {}
-    try { map.setConfigProperty('basemap', 'showAtmosphere', false) } catch(e) {}
 
-    // 4. Satellite Raster Boost
-    try {
-      const boostLayer = (id) => {
-        if (!map.getLayer(id)) return
-        map.setPaintProperty(id, 'raster-saturation', -0.2)
-        map.setPaintProperty(id, 'raster-contrast', 0.2)
-        map.setPaintProperty(id, 'raster-brightness-min', 0)
-        map.setPaintProperty(id, 'raster-resampling', 'linear')
-      }
-      boostLayer('satellite')
-    } catch(e) {}
-
-    // 5. 3D Buildings
+    // 4. 3D Buildings (same paint as main page)
     if (!map.getLayer('3d-buildings')) {
       try {
         map.addLayer({
-          'id': '3d-buildings',
-          'source': 'composite',
-          'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'],
-          'type': 'fill-extrusion',
-          'minzoom': 13,
+          'id': '3d-buildings', 'source': 'composite', 'source-layer': 'building',
+          'filter': ['==', 'extrude', 'true'], 'type': 'fill-extrusion', 'minzoom': 12,
+          layout: { visibility: 'none' },
           'paint': {
-            'fill-extrusion-color': '#ccc',
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'min_height'],
-            'fill-extrusion-opacity': 0.8
+            'fill-extrusion-color': '#72A98F',
+            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
+            'fill-extrusion-base':   ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
+            'fill-extrusion-opacity': 0.85
           }
         })
       } catch(e) {}
     }
-
-    // 6. Hillshade
-    try {
-      map.addLayer({
-        id: 'terrain-hillshade',
-        type: 'hillshade',
-        source: 'dem',
-        paint: {
-          'hillshade-exaggeration': 0.45,
-          'hillshade-shadow-color': '#2d2218',
-          'hillshade-highlight-color': '#fff8f0',
-          'hillshade-illumination-direction': 315,
-          'hillshade-illumination-anchor': 'map',
-        }
-      })
-    } catch(e) {}
-
 
     // ─── MASKING & REGION FOCUS (Replicated from Main Page) ───
     
@@ -682,27 +715,20 @@ onMounted(async () => {
     map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
     map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
 
-    // 1. Black Overlay (80% Opacity)
+    // 1. Black Overlay (80% Opacity) — same as main page
     map.addLayer({
-      id: 'dim-mask-layer',
-      type: 'fill',
-      source: 'dim-mask-source',
-      paint: { 
-        'fill-color': '#000000', 
-        'fill-opacity': 0.8 // 80% Black Overlay (Matches Main Page)
-      }
+      id: 'dim-mask-layer', type: 'fill', source: 'dim-mask-source',
+      paint: { 'fill-color': '#000000', 'fill-opacity': 0.8 }
     })
 
-    // 2. Region Highlight Border (White, 2px)
+    // 2. Glow border + sharp border — same as main page
     map.addLayer({
-      id: 'focus-region-border',
-      type: 'line',
-      source: 'focus-region',
-      paint: {
-        'line-color': '#ffffff',
-        'line-width': 2,
-        'line-opacity': 1
-      }
+      id: 'focus-region-glow', type: 'line', source: 'focus-region',
+      paint: { 'line-color': '#ffffff', 'line-width': 12, 'line-blur': 15, 'line-opacity': 0 }
+    })
+    map.addLayer({
+      id: 'focus-region-border', type: 'line', source: 'focus-region',
+      paint: { 'line-color': '#ffffff', 'line-width': 1.5, 'line-opacity': 0, 'line-blur': 0.5 }
     })
 
     // Masking Function (Uses Turf.js)
@@ -764,58 +790,64 @@ onMounted(async () => {
         }
       })
 
-      // Force mask and border to top
+      // Force mask → glow → border to top (same order as main page)
       if (map.getLayer('dim-mask-layer')) map.moveLayer('dim-mask-layer')
-      if (map.getLayer('focus-region-border')) map.moveLayer('focus-region-border')
+      if (map.getLayer('focus-region-glow')) {
+        map.moveLayer('focus-region-glow')
+        map.setPaintProperty('focus-region-glow', 'line-opacity', 0.6)
+      }
+      if (map.getLayer('focus-region-border')) {
+        map.moveLayer('focus-region-border')
+        map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
+      }
     }
 
-    // Fetch ADM1 Data & Apply Mask
+    // Fetch ADM2 Data & Apply Mask — same as main page (Ambrolauri + Oni union)
     ;(async () => {
       try {
-        const GEO_ADM1_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM1/geoBoundaries-GEO-ADM1_simplified.geojson'
-        const res = await fetch(GEO_ADM1_URL)
+        const GEO_ADM2_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson'
+        const res = await fetch(GEO_ADM2_URL)
         const json = await res.json()
-        
-        // Auto-select Racha
-        const racha = json.features.find(f => (f.properties.shapeName||'').includes('Racha'))
-        if (racha) {
-          // Small delay to ensure styles loaded
-          setTimeout(() => selectRegion(racha), 500)
+
+        const rachaFeatures = json.features.filter(f =>
+          ['Ambrolauri', 'Oni'].includes(f.properties.shapeName)
+        )
+        if (rachaFeatures.length > 0) {
+          const combinedRacha = rachaFeatures.reduce((acc, feat) => window.turf.union(acc, feat))
+          combinedRacha.properties = { shapeName: 'Racha' }
+          setTimeout(() => selectRegion(combinedRacha), 500)
         }
       } catch (err) {
-        console.warn('ADM1 fetch failed:', err)
+        console.warn('ADM2 fetch failed:', err)
       }
     })()
 
   })
 
   // Fetch & Render Existing Pins
+  await loadPins()
   try {
-    const locs = await api.getLocations()
-    if (locs) {
-      locs.forEach(l => {
-        const el = createAdminPin()
-        // Optional: Custom tooltip or click event
-        el.addEventListener('click', (e) => {
-          e.stopPropagation() // Prevent map click (which moves the edit marker)
-          // Populate form with this pin's data? 
-          // For now, just a visual confirmation or focus
-          map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60 })
-        })
-        
-        const mk = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
-          .setLngLat([l.longitude, l.latitude])
-          .addTo(map)
-        addAdminMarker(mk, el, 'poi')
+    existingPins.value.forEach(l => {
+      const el = createAdminPin(l.category || 'landmark')
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        locName.value = l.nameGeo || l.name || ''
+        locCategory.value = l.category || 'landmark'
+        locDesc.value = l.description || ''
+        map.flyTo({ center: [l.longitude, l.latitude], zoom: 14, pitch: 60,
+          duration: 1500, easing: t => { const ts = t-1; return ts*ts*ts+1 } })
       })
-    }
-  } catch (e) { console.error('Failed to load pins', e) }
+      const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([l.longitude, l.latitude])
+        .addTo(map)
+      adminMarkers.push({ mk, el, type: 'poi', locId: l.id })
+    })
+  } catch (e) { console.error('Failed to render pins', e) }
 
-  // Create Custom Admin Marker (for adding new)
-  const pinEl = createAdminPin()
-  pinEl.classList.add('new-pin-marker') // Distinguished style if needed
-  marker = new mapboxgl.Marker({ element: pinEl, anchor: 'bottom' })
-    .setLngLat([43.1481, 42.5176]) 
+  // Cursor marker for placing new pin (updated dynamically when category changes)
+  const pinEl = createAdminPin('landmark')
+  marker = new mapboxgl.Marker({ element: pinEl, anchor: 'center' })
+    .setLngLat([43.1481, 42.5176])
 
   map.on('click', (e) => {
     const lat = e.lngLat.lat
@@ -824,17 +856,11 @@ onMounted(async () => {
     // Normal Pin Mode
     if (activeTab.value === 'map') {
         locCoords.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-        marker.setLngLat(e.lngLat).addTo(map)
-        
-        // Ensure this marker is also tracked for clipping
-        if (!adminMarkers.some(m => m.mk === marker)) {
-            addAdminMarker(marker, pinEl, 'new-poi')
-        }
-        
-        // Animate pin drop
-        pinEl.classList.remove('drop-anim')
-        void pinEl.offsetWidth 
-        pinEl.classList.add('drop-anim')
+        // Update placement marker color to match selected category
+        const newEl = createAdminPin(locCategory.value)
+        marker.remove()
+        marker = new mapboxgl.Marker({ element: newEl, anchor: 'center' })
+          .setLngLat(e.lngLat).addTo(map)
     }
     
     // Add Ad Mode
@@ -1215,6 +1241,38 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   0% { transform: translateY(-100px) scale(0); opacity: 0; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
+
+/* ── Pin List ── */
+.pins-list {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 240px; overflow-y: auto;
+}
+.pins-list-header {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  opacity: 0.5; font-weight: 700; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.pin-list-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px; transition: background 0.2s;
+}
+.pin-list-item:hover { background: rgba(255,255,255,0.08); }
+.pin-cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pin-list-info { flex: 1; min-width: 0; }
+.pin-list-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-list-cat { font-size: 10px; opacity: 0.5; text-transform: capitalize; }
+.pin-del-btn {
+  background: transparent; border: none;
+  color: rgba(255,68,68,0.5); cursor: pointer;
+  display: flex; align-items: center; font-size: 16px;
+  transition: color 0.2s;
+}
+.pin-del-btn:hover { color: #ff4444; }
 
 /* ── Animated Sky Background ── */
 .sky-background {
