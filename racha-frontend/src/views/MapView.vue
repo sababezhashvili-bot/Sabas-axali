@@ -232,255 +232,199 @@
 
     </div>
 
-    <!-- Route Sidebar (full-height left drawer) -->
+    <!-- Route Sidebar — Google Maps style -->
     <transition name="route-drawer">
       <div v-if="showRoutePanel" class="route-drawer" @click.stop>
 
-        <!-- Header -->
+        <!-- ── MODE BAR + CLOSE ── -->
         <div class="rd-head">
-          <div class="rd-title">
-            <span class="material-symbols-outlined" style="color:var(--accent)">route</span>
-            მარშრუტის დაგეგმვა
+          <div class="rd-modes-bar">
+            <button v-for="m in ROUTE_MODES" :key="m.val"
+              class="rd-mode-pill" :class="{ active: routeMode === m.val }"
+              @click="setRouteMode(m.val)" :title="m.label">
+              <span class="material-symbols-outlined">{{ m.icon }}</span>
+              <span class="rd-mode-pill-lbl">{{ m.label }}</span>
+            </button>
           </div>
           <button class="rd-close" @click="showRoutePanel = false">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <!-- Tabs -->
-        <div class="rd-tabs">
-          <button :class="['rd-tab', { active: routeTab === 'plan' }]" @click="routeTab = 'plan'">
-            <span class="material-symbols-outlined">map</span> გეგმა
-          </button>
-          <button :class="['rd-tab', { active: routeTab === 'transport' }]" @click="routeTab = 'transport'">
-            <span class="material-symbols-outlined">commute</span> ტრანსპორტი
-          </button>
-          <button :class="['rd-tab', { active: routeTab === 'ticket' }]" @click="routeTab = 'ticket'">
-            <span class="material-symbols-outlined">confirmation_number</span> ბილეთი
-          </button>
-        </div>
+        <!-- ── INPUTS ── -->
+        <div class="rd-inputs-wrap">
 
-        <!-- ─── TAB: PLAN ─── -->
-        <div v-if="routeTab === 'plan'" class="rd-body">
-
-          <!-- Hint when selecting -->
-          <div v-if="selectingWaypointIdx >= 0" class="rd-hint">
-            <span class="material-symbols-outlined">touch_app</span>
-            რუკაზე დააჭირეთ წ. {{ selectingWaypointIdx + 1 }}-ის დასამატებლად
-          </div>
-
-          <!-- Quick suggested routes -->
-          <div class="rd-section-label">🚀 სწრაფი მარშრუტები</div>
-          <div class="rd-suggestions">
-            <button v-for="sr in SUGGESTED_ROUTES" :key="sr.label"
-              class="rd-suggestion-btn" @click="applySuggestedRoute(sr)">
-              <span class="material-symbols-outlined" style="font-size:14px">route</span>
-              {{ sr.label }}
-            </button>
-          </div>
-
-          <!-- Waypoints -->
-          <div class="rd-section-label" style="margin-top:12px">📍 წერტილები</div>
-          <div class="rd-waypoints">
-            <div v-for="(wp, i) in routeWaypoints" :key="i" class="rd-wp">
-              <div class="rd-wp-line">
-                <div class="rd-wp-dot" :style="{ background: i === 0 ? '#4CAF50' : i === routeWaypoints.length-1 ? '#F44336' : '#72A98F' }"></div>
-                <div v-if="i < routeWaypoints.length - 1" class="rd-wp-connector"></div>
-              </div>
-              <div class="rd-wp-field" :class="{ active: selectingWaypointIdx === i }">
-                <input
-                  type="text"
-                  v-model="wp.name"
-                  @keydown.enter.prevent="geocodeWaypoint(i, wp.name)"
-                  :placeholder="i === 0 ? '🟢 საწყისი ადგილი...' : i === routeWaypoints.length-1 ? '🔴 დანიშნულება...' : `⚪ გამავალი წ. ${i}...`"
-                  class="rd-wp-input"
-                />
-                <div class="rd-wp-actions">
-                  <span v-if="wp.lat !== null" class="rd-wp-ok">✓</span>
-                  <button class="rd-wp-pin-btn" :class="{ active: selectingWaypointIdx === i }"
-                    @click.stop="selectingWaypointIdx = selectingWaypointIdx === i ? -1 : i"
-                    title="რუკაზე მონიშვნა">
-                    <span class="material-symbols-outlined">my_location</span>
-                  </button>
-                  <button v-if="routeWaypoints.length > 2" class="rd-wp-del-btn" @click.stop="removeRouteWaypoint(i)">
-                    <span class="material-symbols-outlined">remove_circle</span>
-                  </button>
-                </div>
-              </div>
+          <!-- Origin -->
+          <div class="rd-input-row">
+            <div class="rd-dot-col">
+              <div class="rd-dot" style="background:#34A853;border-radius:50%"></div>
+              <div class="rd-connector" v-if="routeWaypoints.length >= 2"></div>
             </div>
-          </div>
-          <button class="rd-add-wp" @click="addWaypointToRoute" v-if="routeWaypoints.length < 5">
-            <span class="material-symbols-outlined">add_location</span> გამავალი წერტილის დამატება
-          </button>
-
-          <!-- Transport Mode -->
-          <div class="rd-section-label" style="margin-top:16px">გადაადგილების ტიპი</div>
-          <div class="rd-modes">
-            <button v-for="m in ROUTE_MODES" :key="m.val"
-              class="rd-mode-btn" :class="{ active: routeMode === m.val }"
-              @click="routeMode = m.val; clearRouteLayer()">
-              <span class="material-symbols-outlined">{{ m.icon }}</span>
-              <span class="rd-mode-label">{{ m.label }}</span>
-            </button>
-          </div>
-
-          <!-- Calculate -->
-          <button class="rd-calc-btn" @click="calculateRoute"
-            :disabled="routeWaypoints.filter(w => w.lat !== null).length < 2">
-            <span class="material-symbols-outlined">navigation</span>
-            მარშრუტის გამოთვლა
-          </button>
-
-          <!-- Clear route -->
-          <button v-if="routeResult" class="rd-clear-btn" @click="clearRouteLayer(); routeResult = null">
-            <span class="material-symbols-outlined" style="font-size:14px">delete_sweep</span>
-            მარშრუტის გასუფთავება
-          </button>
-
-          <!-- Result -->
-          <div v-if="routeResult" class="rd-result" ref="routeResultEl">
-            <div class="rd-result-hero">
-              <div class="rd-res-item">
-                <span class="material-symbols-outlined">straighten</span>
-                <span class="rd-res-val">{{ routeResult.distance }}</span>
-                <span class="rd-res-lbl">მანძილი</span>
-              </div>
-              <div class="rd-res-sep"></div>
-              <div class="rd-res-item">
-                <span class="material-symbols-outlined">schedule</span>
-                <span class="rd-res-val">{{ routeResult.duration }}</span>
-                <span class="rd-res-lbl">სავ. დრო</span>
-              </div>
-              <div v-if="routeResult.cost" class="rd-res-sep"></div>
-              <div v-if="routeResult.cost" class="rd-res-item">
-                <span class="material-symbols-outlined">local_taxi</span>
-                <span class="rd-res-val accent">{{ routeResult.cost }}</span>
-                <span class="rd-res-lbl">ტაქსი</span>
-              </div>
-            </div>
-
-            <!-- Steps breakdown -->
-            <div class="rd-breakdown">
-              <div class="rd-bk-row">
-                <span class="material-symbols-outlined" style="color:#4CAF50">radio_button_checked</span>
-                <span>{{ routeWaypoints[0].name || 'საწყისი' }}</span>
-              </div>
-              <div v-for="(wp, i) in routeWaypoints.slice(1, -1)" :key="i" class="rd-bk-row">
-                <span class="material-symbols-outlined" style="color:#72A98F">radio_button_unchecked</span>
-                <span>{{ wp.name || `წ. ${i+2}` }}</span>
-              </div>
-              <div class="rd-bk-row">
-                <span class="material-symbols-outlined" style="color:#F44336">location_on</span>
-                <span>{{ routeWaypoints[routeWaypoints.length-1].name || 'დანიშნულება' }}</span>
-              </div>
-            </div>
-
-            <!-- Transport time comparison -->
-            <div v-if="routeAllTimes" class="rd-time-compare">
-              <div class="rd-tc-row">
-                <span class="material-symbols-outlined" style="color:#72A98F">directions_car</span>
-                <span class="rd-tc-mode">ავტომობილი</span>
-                <span class="rd-tc-time" :class="{ active: routeMode==='driving' }">{{ routeAllTimes.driving }}</span>
-              </div>
-              <div class="rd-tc-row">
-                <span class="material-symbols-outlined" style="color:#FFD700">directions_bike</span>
-                <span class="rd-tc-mode">ველოსიპედი</span>
-                <span class="rd-tc-time" :class="{ active: routeMode==='cycling' }">{{ routeAllTimes.cycling }}</span>
-              </div>
-              <div class="rd-tc-row">
-                <span class="material-symbols-outlined" style="color:#6699cc">directions_walk</span>
-                <span class="rd-tc-mode">ფეხით</span>
-                <span class="rd-tc-time" :class="{ active: routeMode==='walking' }">{{ routeAllTimes.walking }}</span>
-              </div>
-            </div>
-
-            <button class="rd-book-shortcut" @click="routeTab = 'ticket'">
-              <span class="material-symbols-outlined">confirmation_number</span>
-              ტაქსის დაჯავშნა →
-            </button>
-          </div>
-        </div>
-
-        <!-- ─── TAB: TRANSPORT ─── -->
-        <div v-if="routeTab === 'transport'" class="rd-body">
-          <div class="rd-section-label">ხელმისაწვდომი ტრანსპორტი</div>
-          <div class="rd-transport-list">
-            <div v-for="t in TRANSPORT_OPTIONS" :key="t.type" class="rd-transport-card"
-              :class="{ selected: selectedTransport === t.type }"
-              @click="selectedTransport = t.type">
-              <div class="rd-tc-icon">
-                <span class="material-symbols-outlined">{{ t.icon }}</span>
-              </div>
-              <div class="rd-tc-info">
-                <div class="rd-tc-name">{{ t.name }}</div>
-                <div class="rd-tc-desc">{{ t.desc }}</div>
-              </div>
-              <div class="rd-tc-price">
-                <span v-if="routeResult && t.costFn">{{ t.costFn(routeResult.rawDist) }}</span>
-                <span v-else class="rd-tc-free">{{ t.basePrice }}</span>
-              </div>
-            </div>
-          </div>
-          <div v-if="!routeResult" class="rd-transport-hint">
-            ჯერ გამოთვალეთ მარშრუტი "გეგმა" ჩანართიდან
-          </div>
-        </div>
-
-        <!-- ─── TAB: TICKET ─── -->
-        <div v-if="routeTab === 'ticket'" class="rd-body">
-          <div v-if="!ticketBooked">
-            <div class="rd-section-label">ტაქსის დაჯავშნა</div>
-
-            <div v-if="routeResult" class="rd-ticket-summary">
-              <div class="rd-ts-row">
-                <span class="material-symbols-outlined">straighten</span>
-                <span>{{ routeResult.distance }}</span>
-              </div>
-              <div class="rd-ts-row">
-                <span class="material-symbols-outlined">schedule</span>
-                <span>{{ routeResult.duration }}</span>
-              </div>
-              <div class="rd-ts-row accent">
-                <span class="material-symbols-outlined">payments</span>
-                <span>{{ routeResult.cost || '—' }}</span>
-              </div>
-            </div>
-            <div v-else class="rd-transport-hint">ჯერ გამოთვალეთ მარშრუტი</div>
-
-            <div class="rd-form">
-              <div class="rd-form-label">სახელი</div>
-              <input type="text" v-model="ticketName" placeholder="შენი სახელი..." class="rd-form-input" />
-              <div class="rd-form-label">ტელეფონი</div>
-              <input type="tel" v-model="ticketPhone" placeholder="+995 5XX XXX XXX" class="rd-form-input" />
-              <div class="rd-form-label">ტრანსპორტი</div>
-              <select v-model="ticketType" class="rd-form-input">
-                <option value="taxi">🚗 ტაქსი (სტანდარტი)</option>
-                <option value="minibus">🚌 მიქსვანი</option>
-                <option value="private">🚙 კერძო მძღოლი</option>
-              </select>
-              <div class="rd-form-label">სასურველი დრო</div>
-              <input type="datetime-local" v-model="ticketTime" class="rd-form-input" />
-              <button class="rd-book-btn" @click="bookTicket" :disabled="!ticketName || !ticketPhone">
-                <span class="material-symbols-outlined">confirmation_number</span>
-                ბილეთის დაჯავშნა
+            <div class="rd-input-box" :class="{ focused: activeInputIdx === 0 }">
+              <input type="text" v-model="routeWaypoints[0].name"
+                @input="onWpInput(0)" @focus="activeInputIdx = 0" @blur="onInputBlur"
+                @keydown.enter.prevent="pickFirstSuggestion(0)"
+                @keydown.escape="routeSuggestions = []"
+                placeholder="საწყისი ადგილი..." class="rd-input-field" />
+              <button class="rd-gps-btn" :class="{ busy: gpsBusy }" @click.stop="useGPS" title="ჩემი მდებარეობა">
+                <span class="material-symbols-outlined" :style="gpsBusy ? 'animation:spin 1s linear infinite' : ''">
+                  {{ gpsBusy ? 'progress_activity' : 'my_location' }}
+                </span>
               </button>
             </div>
           </div>
 
-          <!-- Booked confirmation -->
-          <div v-else class="rd-booked">
-            <div class="rd-booked-icon">
-              <span class="material-symbols-outlined">check_circle</span>
+          <!-- Middle waypoints -->
+          <template v-for="(wp, mi) in routeWaypoints.slice(1, -1)" :key="`mid${mi}`">
+            <div class="rd-input-row">
+              <div class="rd-dot-col">
+                <div class="rd-dot" style="background:#4285F4;border-radius:50%"></div>
+                <div class="rd-connector"></div>
+              </div>
+              <div class="rd-input-box" :class="{ focused: activeInputIdx === mi+1 }">
+                <input type="text" v-model="routeWaypoints[mi+1].name"
+                  @input="onWpInput(mi+1)" @focus="activeInputIdx = mi+1" @blur="onInputBlur"
+                  @keydown.enter.prevent="pickFirstSuggestion(mi+1)"
+                  :placeholder="`გამავალი წ. ${mi+1}...`" class="rd-input-field" />
+                <button class="rd-del-wp-btn" @click.stop="removeRouteWaypoint(mi+1)">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
             </div>
-            <div class="rd-booked-title">წარმატებით დაჯავშნა!</div>
-            <div class="rd-booked-sub">{{ ticketName }}, მძღოლი მალე დაგიკავშირდება</div>
-            <div class="rd-booked-ref"># {{ ticketRef }}</div>
-            <button class="rd-book-btn" @click="ticketBooked = false; ticketName = ''; ticketPhone = ''" style="margin-top:16px">
-              ახალი ჯავშანი
+          </template>
+
+          <!-- Destination -->
+          <div class="rd-input-row">
+            <div class="rd-dot-col">
+              <div class="rd-dot" style="background:#EA4335;border-radius:3px;width:10px;height:10px"></div>
+            </div>
+            <div class="rd-input-box" :class="{ focused: activeInputIdx === routeWaypoints.length-1 }">
+              <input type="text" v-model="routeWaypoints[routeWaypoints.length-1].name"
+                @input="onWpInput(routeWaypoints.length-1)"
+                @focus="activeInputIdx = routeWaypoints.length-1" @blur="onInputBlur"
+                @keydown.enter.prevent="pickFirstSuggestion(routeWaypoints.length-1)"
+                @keydown.escape="routeSuggestions = []"
+                placeholder="სად მიდიხართ?..." class="rd-input-field" />
+            </div>
+          </div>
+
+          <!-- Swap / Add stop -->
+          <div class="rd-input-actions">
+            <button class="rd-action-btn" @click.stop="swapWaypoints" title="შეცვლა">
+              <span class="material-symbols-outlined">swap_vert</span>
             </button>
+            <button class="rd-action-btn" @click.stop="addWaypointToRoute" v-if="routeWaypoints.length < 5" title="გამავალი წ.">
+              <span class="material-symbols-outlined">add_location_alt</span>
+            </button>
+          </div>
+
+          <!-- Autocomplete dropdown -->
+          <div v-if="routeSuggestions.length && activeInputIdx >= 0" class="rd-dropdown">
+            <div v-for="s in routeSuggestions" :key="s.id"
+              class="rd-sugg-item" @mousedown.prevent="pickSuggestion(s)" @touchstart.prevent="pickSuggestion(s)">
+              <div class="rd-sugg-icon"><span class="material-symbols-outlined">{{ s.icon }}</span></div>
+              <div class="rd-sugg-text">
+                <div class="rd-sugg-name">{{ s.name }}</div>
+                <div class="rd-sugg-sub" v-if="s.sub && s.sub !== s.name">{{ s.sub }}</div>
+              </div>
+            </div>
           </div>
         </div>
 
+        <!-- ── SCROLLABLE BODY ── -->
+        <div class="rd-body" ref="rdBodyRef">
+
+          <!-- Loading -->
+          <div v-if="routeLoading" class="rd-loading">
+            <div class="rd-spinner"></div>
+            <span>მარშრუტი ითვლება...</span>
+          </div>
+
+          <!-- Error -->
+          <div v-if="routeError && !routeLoading" class="rd-error-msg">
+            <span class="material-symbols-outlined">error_outline</span>
+            {{ routeError }}
+          </div>
+
+          <!-- ── RESULT ── -->
+          <template v-if="routeResult && !routeLoading">
+
+            <!-- Big duration + distance — Google Maps style -->
+            <div class="rd-result-hero">
+              <div class="rd-result-duration">{{ routeResult.duration }}</div>
+              <div class="rd-result-meta">{{ routeResult.distance }}{{ routeResult.cost ? ' · ' + routeResult.cost : '' }}</div>
+            </div>
+
+            <!-- Mode time tabs -->
+            <div class="rd-mode-times">
+              <button v-for="m in ROUTE_MODES" :key="m.val"
+                class="rd-mode-time-btn" :class="{ active: routeMode === m.val }"
+                @click="setRouteMode(m.val)">
+                <span class="material-symbols-outlined">{{ m.icon }}</span>
+                <span class="rd-mt-label">{{ m.label }}</span>
+                <span class="rd-mt-time">{{ routeAllTimes?.[m.val] || '—' }}</span>
+              </button>
+            </div>
+
+            <!-- Live Navigation button -->
+            <button class="rd-live-btn" :class="{ active: liveNavActive }" @click="toggleLiveNav">
+              <span class="material-symbols-outlined">{{ liveNavActive ? 'navigation' : 'near_me' }}</span>
+              {{ liveNavActive ? '🔴 Live — ჩართულია' : 'Live Navigation' }}
+            </button>
+
+            <!-- Clear -->
+            <button class="rd-clear-btn" @click="clearRoute">
+              <span class="material-symbols-outlined">close</span>
+              მარშრუტის გასუფთავება
+            </button>
+
+            <!-- Steps -->
+            <div v-if="routeSteps.length" class="rd-steps">
+              <div class="rd-steps-header">ბიჯ-ბიჯ მარშრუტი</div>
+
+              <!-- Origin label -->
+              <div class="rd-step-endpoint">
+                <div class="rd-step-ep-dot" style="background:#34A853"></div>
+                <span>{{ routeWaypoints[0].name || 'საწყისი' }}</span>
+              </div>
+
+              <!-- Each step -->
+              <div v-for="(step, i) in routeSteps" :key="i"
+                class="rd-step" :class="{ current: liveNavActive && i === liveNavStep }">
+                <div class="rd-step-ico">
+                  <span class="material-symbols-outlined">{{ step.icon }}</span>
+                </div>
+                <div class="rd-step-body">
+                  <div class="rd-step-instr">{{ step.instruction }}</div>
+                  <div class="rd-step-dist" v-if="step.dist">{{ step.dist }}</div>
+                </div>
+              </div>
+
+              <!-- Destination label -->
+              <div class="rd-step-endpoint">
+                <div class="rd-step-ep-dot" style="background:#EA4335;border-radius:3px"></div>
+                <span>{{ routeWaypoints[routeWaypoints.length-1].name || 'დანიშნულება' }}</span>
+              </div>
+            </div>
+          </template>
+
+          <!-- ── EMPTY STATE ── -->
+          <template v-if="!routeResult && !routeLoading && !routeError">
+            <div class="rd-empty-hint">
+              <span class="material-symbols-outlined" style="font-size:32px;opacity:.3">route</span>
+              <span>შეიყვანეთ საწყისი და დანიშნულება</span>
+            </div>
+            <div class="rd-quick-label">⚡ სწრაფი მარშრუტები</div>
+            <div class="rd-quick-grid">
+              <button v-for="sr in SUGGESTED_ROUTES" :key="sr.label"
+                class="rd-quick-btn" @click="applySuggestedRoute(sr)">
+                <span class="material-symbols-outlined">route</span>
+                {{ sr.label }}
+              </button>
+            </div>
+          </template>
+
+        </div>
       </div>
     </transition>
 
@@ -621,36 +565,39 @@ const weatherIcon      = ref('wb_sunny')
 const weatherIconColor = ref('#ffcc00')
 const weatherCondition = ref('Clear')
 
-// Route Panel
-const showRoutePanel      = ref(false)
-const routeWaypoints      = ref([{ name: '', lng: null, lat: null }, { name: '', lng: null, lat: null }])
-const routeMode           = ref('driving')
-const routeResult         = ref(null)
-const routeResultEl       = ref(null)
+// ── Route Panel ────────────────────────────────────────────────────
+const showRoutePanel       = ref(false)
+const routeWaypoints       = ref([{ name: '', lng: null, lat: null }, { name: '', lng: null, lat: null }])
+const routeMode            = ref('driving')
+const routeResult          = ref(null)
+const routeLoading         = ref(false)
+const routeError           = ref('')
+const routeSteps           = ref([])
+const routeSuggestions     = ref([])
+const activeInputIdx       = ref(-1)
+const gpsBusy              = ref(false)
+const rdBodyRef            = ref(null)
 const selectingWaypointIdx = ref(-1)
-const routeTab            = ref('plan')
-const selectedTransport   = ref('taxi')
-const ticketBooked        = ref(false)
-const ticketName          = ref('')
-const ticketPhone         = ref('')
-const ticketType          = ref('taxi')
-const ticketTime          = ref('')
-const ticketRef           = ref('')
+// Live navigation
+const liveNavActive  = ref(false)
+const liveNavStep    = ref(0)
+let liveNavWatchId   = null
+let liveNavMarker    = null
+let searchTimer      = null
 
 const ROUTE_MODES = [
-  { val: 'driving', icon: 'directions_car',  label: 'ავტო'   },
-  { val: 'walking', icon: 'directions_walk', label: 'ფეხით'  },
-  { val: 'cycling', icon: 'directions_bike', label: 'ველო'   },
+  { val: 'driving', icon: 'directions_car',  label: 'ავტო'  },
+  { val: 'walking', icon: 'directions_walk', label: 'ფეხით' },
+  { val: 'cycling', icon: 'directions_bike', label: 'ველო'  },
 ]
 
-// Estimated times for all modes based on raw distance
 const routeAllTimes = computed(() => {
   if (!routeResult.value) return null
-  const km = routeResult.value.rawDist
-  const fmt = (min) => min >= 60 ? `${Math.floor(min/60)}სთ ${min%60}წთ` : `${Math.round(min)} წთ`
+  const km  = routeResult.value.rawDist
+  const fmt = m => m >= 60 ? `${Math.floor(m/60)}სთ ${m%60 ? m%60+'წთ' : ''}`.trim() : `${Math.round(m)}წთ`
   return {
-    driving: routeMode.value === 'driving' ? routeResult.value.duration : fmt(km * 1.4),
-    cycling: routeMode.value === 'cycling' ? routeResult.value.duration : fmt(km * 3.5),
+    driving: routeMode.value === 'driving' ? routeResult.value.duration : fmt(km * 0.9),
+    cycling: routeMode.value === 'cycling' ? routeResult.value.duration : fmt(km * 4),
     walking: routeMode.value === 'walking' ? routeResult.value.duration : fmt(km * 12),
   }
 })
@@ -671,19 +618,7 @@ function applySuggestedRoute(sr) {
   clearRouteLayer()
 }
 
-const TRANSPORT_OPTIONS = [
-  { type: 'taxi',    icon: 'local_taxi',      name: 'ტაქსი',         desc: 'სტანდარტი, 24/7',      basePrice: '~3 ₾/კმ', costFn: d => `~${(3 + d * 1.5).toFixed(0)} ₾` },
-  { type: 'minibus', icon: 'airport_shuttle', name: 'მიქსვანი',      desc: 'ბათუმი-ამბ. / ონი',    basePrice: '5–15 ₾',  costFn: null },
-  { type: 'private', icon: 'directions_car',  name: 'კერძო მძღოლი', desc: 'დასაჯავშნია ადრე',     basePrice: 'შეთანხმება', costFn: d => `~${(2.5 + d * 1.2).toFixed(0)} ₾` },
-  { type: 'walk',    icon: 'directions_walk', name: 'ფეხი',          desc: 'ბილიკები / ბუნება',    basePrice: 'უფასო',   costFn: null },
-]
-
-function bookTicket() {
-  if (!ticketName.value || !ticketPhone.value) return
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  ticketRef.value = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-  ticketBooked.value = true
-}
+// (ticket/transport tabs removed — simplified to core route planner)
 
 // Layer Toggles
 const showLabels    = ref(false)
@@ -1854,152 +1789,327 @@ function toggleTheme() {
 // toggleForest is no longer needed — showForest watcher inside watch([...showForest], updateLayers) handles it
 function toggleForest() {}
 
-// ─── ROUTE ────────────────────────────────────────────────────────────────────
+// ─── ROUTE — Google Maps style ───────────────────────────────────────────────
 let routeMarkers = []
+const CAT_ICONS_MAP = { landmark:'landscape', waterfall:'water', hotel:'hotel', restaurant:'restaurant' }
 
-function updateRouteMarkers() {
-  routeMarkers.forEach(m => m.remove())
-  routeMarkers = []
-  if (!map || !showRoutePanel.value) return
-  routeWaypoints.value.forEach((wp, i) => {
-    if (wp.lat === null) return
-    const color = i === 0 ? '#4CAF50' : i === routeWaypoints.value.length - 1 ? '#F44336' : '#72A98F'
-    const el = document.createElement('div')
-    el.style.cssText = `width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;`
-    const mk = new mapboxgl.Marker({ element: el, anchor: 'center' })
-      .setLngLat([wp.lng, wp.lat]).addTo(map)
-    routeMarkers.push(mk)
-  })
+// ── Input autocomplete ────────────────────────────────────────────
+function onWpInput(idx) {
+  // Clear coordinates when user edits text
+  routeWaypoints.value[idx].lat = null
+  routeWaypoints.value[idx].lng = null
+  clearTimeout(searchTimer)
+  const q = routeWaypoints.value[idx].name.trim()
+  if (!q || q.length < 2) { routeSuggestions.value = []; return }
+  searchTimer = setTimeout(() => fetchSuggestions(q), 300)
 }
 
-watch([routeWaypoints, showRoutePanel], updateRouteMarkers, { deep: true })
-
-watch(selectingWaypointIdx, (idx) => {
-  if (!map) return
-  map.getCanvas().style.cursor = idx >= 0 ? 'crosshair' : ''
-})
-
-async function geocodeWaypoint(idx, name) {
-  if (!name?.trim()) return
+async function fetchSuggestions(q) {
+  const results = []
+  // 1. Local pins
+  ;(existingPins.value || [])
+    .filter(p => (p.nameGeo || p.name || '').toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 4)
+    .forEach(p => results.push({
+      id: `pin-${p.id}`,
+      name: p.nameGeo || p.name || '',
+      sub: p.typeGeo || '',
+      icon: CAT_ICONS_MAP[(p.category||'').toLowerCase()] || 'place',
+      lat: parseFloat(p.latitude), lng: parseFloat(p.longitude)
+    }))
+  // 2. Mapbox geocoding
   try {
+    const center = map?.getCenter()
+    const prox = center ? `&proximity=${center.lng.toFixed(4)},${center.lat.toFixed(4)}` : ''
     const res = await fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(name)}.json?country=ge&access_token=${mapboxgl.accessToken}`
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=ge${prox}&access_token=${mapboxgl.accessToken}`
     )
     const data = await res.json()
-    if (data.features?.length) {
-      const [lng, lat] = data.features[0].geometry.coordinates
-      routeWaypoints.value[idx].lng = parseFloat(lng.toFixed(6))
-      routeWaypoints.value[idx].lat = parseFloat(lat.toFixed(6))
-      routeWaypoints.value[idx].name = data.features[0].text || name
-    }
+    ;(data.features || []).slice(0, 4).forEach(f => results.push({
+      id: f.id, name: f.text || f.place_name,
+      sub: f.place_name, icon: 'location_on',
+      lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0]
+    }))
   } catch(e) {}
+  routeSuggestions.value = results.slice(0, 7)
 }
 
+function onInputBlur() {
+  // Small delay so mousedown on suggestion fires first
+  setTimeout(() => { routeSuggestions.value = []; activeInputIdx.value = -1 }, 200)
+}
+
+function pickSuggestion(s) {
+  if (activeInputIdx.value < 0) return
+  routeWaypoints.value[activeInputIdx.value] = { name: s.name, lat: s.lat, lng: s.lng }
+  routeSuggestions.value = []
+  activeInputIdx.value = -1
+  // Auto-calculate when both ends filled
+  const filled = routeWaypoints.value.filter(w => w.lat !== null)
+  if (filled.length >= 2) calculateRoute()
+}
+
+function pickFirstSuggestion(idx) {
+  if (routeSuggestions.value.length) {
+    activeInputIdx.value = idx
+    pickSuggestion(routeSuggestions.value[0])
+  }
+}
+
+// ── GPS current location ──────────────────────────────────────────
+async function useGPS() {
+  if (!navigator.geolocation) { routeError.value = 'GPS არ არის ხელმისაწვდომი'; return }
+  gpsBusy.value = true
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude: lat, longitude: lng } = pos.coords
+    let name = 'ჩემი მდებარეობა'
+    try {
+      const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}`)
+      const d = await r.json()
+      if (d.features?.[0]) name = d.features[0].text || name
+    } catch(e) {}
+    routeWaypoints.value[0] = { name, lat, lng }
+    gpsBusy.value = false
+    if (routeWaypoints.value[routeWaypoints.value.length-1].lat !== null) calculateRoute()
+  }, () => { routeError.value = 'მდებარეობა ვერ განისაზღვრა'; gpsBusy.value = false })
+}
+
+// ── Swap origin ↔ destination ─────────────────────────────────────
+function swapWaypoints() {
+  const wps = routeWaypoints.value
+  const first = { ...wps[0] }, last = { ...wps[wps.length-1] }
+  wps[0] = last; wps[wps.length-1] = first
+  if (routeResult.value) calculateRoute()
+}
+
+// ── Mode switch + recalculate ─────────────────────────────────────
+function setRouteMode(mode) {
+  routeMode.value = mode
+  if (routeWaypoints.value.filter(w => w.lat !== null).length >= 2) calculateRoute()
+}
+
+// ── Add / remove waypoints ────────────────────────────────────────
 function addWaypointToRoute() {
   if (routeWaypoints.value.length >= 5) return
-  const mid = { name: '', lng: null, lat: null }
-  routeWaypoints.value.splice(routeWaypoints.value.length - 1, 0, mid)
-  selectingWaypointIdx.value = routeWaypoints.value.length - 2
+  routeWaypoints.value.splice(routeWaypoints.value.length - 1, 0, { name: '', lng: null, lat: null })
 }
-
 function removeRouteWaypoint(i) {
   if (routeWaypoints.value.length <= 2) return
   routeWaypoints.value.splice(i, 1)
-  clearRouteLayer()
+  if (routeWaypoints.value.filter(w => w.lat !== null).length >= 2) calculateRoute()
+  else removeRouteLayers()
 }
 
-function clearRouteLayer() {
+// ── Clear (full reset) ────────────────────────────────────────────
+function clearRoute() {
+  removeRouteLayers()
   routeResult.value = null
+  routeSteps.value  = []
+  routeError.value  = ''
+  stopLiveNav()
+}
+// Legacy alias used elsewhere
+function clearRouteLayer() { clearRoute() }
+
+// ── Remove map layers only (no state change) ──────────────────────
+function removeRouteLayers() {
   if (!map) return
-  try { if (map.getLayer('route-line'))        map.removeLayer('route-line') } catch(e) {}
-  try { if (map.getSource('route-source'))     map.removeSource('route-source') } catch(e) {}
-  try { if (map.getLayer('route-wp-outer'))    map.removeLayer('route-wp-outer') } catch(e) {}
-  try { if (map.getLayer('route-wp-inner'))    map.removeLayer('route-wp-inner') } catch(e) {}
-  try { if (map.getLayer('route-wp-labels'))   map.removeLayer('route-wp-labels') } catch(e) {}
-  try { if (map.getSource('route-wp-src'))     map.removeSource('route-wp-src') } catch(e) {}
+  ;['route-line-bg','route-line','route-wp-labels','route-wp-outer','route-wp-inner'].forEach(id => {
+    try { if (map.getLayer(id))   map.removeLayer(id)   } catch(e) {}
+  })
+  ;['route-source','route-wp-src'].forEach(id => {
+    try { if (map.getSource(id)) map.removeSource(id) } catch(e) {}
+  })
   routeMarkers.forEach(m => m.remove()); routeMarkers = []
 }
 
+// ── Maneuver helpers ──────────────────────────────────────────────
+function maneuverIcon(step) {
+  const t = step.maneuver.type, mod = step.maneuver.modifier || ''
+  if (t === 'depart')  return 'trip_origin'
+  if (t === 'arrive')  return 'flag'
+  if (t === 'roundabout' || t === 'rotary') return 'roundabout_left'
+  if (t === 'fork')    return mod.includes('left') ? 'fork_left' : 'fork_right'
+  if (t === 'merge')   return mod.includes('left') ? 'merge_type' : 'merge_type'
+  if (t === 'turn' || t === 'end of road') {
+    if (mod === 'uturn') return 'u_turn_left'
+    if (mod.includes('sharp left') || mod === 'left') return 'turn_left'
+    if (mod.includes('sharp right') || mod === 'right') return 'turn_right'
+    if (mod.includes('slight left'))  return 'turn_slight_left'
+    if (mod.includes('slight right')) return 'turn_slight_right'
+  }
+  return 'straight'
+}
+
+function maneuverText(step) {
+  const t = step.maneuver.type, mod = step.maneuver.modifier || ''
+  const road = step.name ? ` — ${step.name}` : ''
+  const map2 = {
+    depart: `გამოსვლა${road}`, arrive: `მივedეთ${road}`,
+    'new name': `გაგრძელება${road}`, continue: `გაგრძელება${road}`, straight: `პირდაპირ${road}`,
+    merge: `შეერთება${road}`, rotary: `სარგვალი${road}`,
+    roundabout: `რგოლი${road}`, 'exit roundabout': `რგოლიდან${road}`,
+  }
+  if (map2[t]) return map2[t]
+  if (t === 'turn' || t === 'end of road' || t === 'fork') {
+    if (mod === 'uturn') return `მობრუნება${road}`
+    if (mod.includes('sharp left') || mod === 'left') return `მარცხნივ${road}`
+    if (mod.includes('sharp right') || mod === 'right') return `მარჯვნივ${road}`
+    if (mod.includes('slight left'))  return `ოდნავ მარცხნივ${road}`
+    if (mod.includes('slight right')) return `ოდნავ მარჯვნივ${road}`
+    return `პირდაპირ${road}`
+  }
+  return `გაგრძელება${road}`
+}
+
+// ── Main calculate ────────────────────────────────────────────────
 async function calculateRoute() {
   const valid = routeWaypoints.value.filter(wp => wp.lat !== null && wp.lng !== null)
   if (valid.length < 2) return
-  const coords = valid.map(wp => `${wp.lng},${wp.lat}`).join(';')
-  const profile = routeMode.value === 'cycling' ? 'cycling' : routeMode.value === 'walking' ? 'walking' : 'driving'
-  const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coords}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+
+  routeLoading.value = true
+  routeError.value   = ''
+  removeRouteLayers()
+
   try {
-    const res = await fetch(url)
+    const coords  = valid.map(wp => `${wp.lng},${wp.lat}`).join(';')
+    const profile = routeMode.value === 'cycling' ? 'cycling' : routeMode.value === 'walking' ? 'walking' : 'driving'
+    const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coords}?geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`
+
+    const res  = await fetch(url)
     const data = await res.json()
-    if (!data.routes?.length) { alert('მარშრუტი ვერ მოიძებნა'); return }
-    const route = data.routes[0]
+    if (!data.routes?.length) { routeError.value = 'მარშრუტი ვერ მოიძებნა. სცადეთ სხვა წერტილები.'; return }
+
+    const route  = data.routes[0]
     const distKm = (route.distance / 1000).toFixed(1)
     const durMin = Math.round(route.duration / 60)
-    const durStr = durMin >= 60 ? `${Math.floor(durMin/60)}სთ ${durMin%60}წთ` : `${durMin} წთ`
-    const gelCost = routeMode.value === 'driving'
-      ? `~${(3 + parseFloat(distKm) * 1.5).toFixed(0)} ₾`
-      : null
-    routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost: gelCost, rawDist: parseFloat(distKm) }
-    // Scroll result into view on mobile
-    nextTick(() => { routeResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) })
+    const durStr = durMin >= 60 ? `${Math.floor(durMin/60)}სთ ${durMin%60 ? durMin%60+'წთ' : ''}`.trim() : `${durMin} წთ`
+    const cost   = routeMode.value === 'driving' ? `~${(3 + parseFloat(distKm)*1.5).toFixed(0)} ₾` : null
 
-    clearRouteLayer()
+    routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost, rawDist: parseFloat(distKm) }
 
-    // ── Route line ──
+    // Parse steps
+    routeSteps.value = (route.legs || []).flatMap(leg => leg.steps || [])
+      .filter(s => s.maneuver.type !== 'arrive' || (route.legs || []).flatMap(l=>l.steps||[]).indexOf(s) === (route.legs||[]).flatMap(l=>l.steps||[]).length - 1)
+      .map(s => ({
+        icon: maneuverIcon(s),
+        instruction: maneuverText(s),
+        dist: s.distance > 30 ? s.distance >= 1000 ? `${(s.distance/1000).toFixed(1)} კმ` : `${Math.round(s.distance)} მ` : ''
+      }))
+
+    // ── Route line (Google Maps blue) ──
     map.addSource('route-source', { type: 'geojson', data: route.geometry })
+    map.addLayer({
+      id: 'route-line-bg', type: 'line', source: 'route-source',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#000', 'line-width': 10, 'line-opacity': 0.12 }
+    })
+    const lineColor = routeMode.value === 'walking' ? '#5C85D6' : routeMode.value === 'cycling' ? '#F9A825' : '#1A73E8'
     map.addLayer({
       id: 'route-line', type: 'line', source: 'route-source',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'line-color': routeMode.value === 'walking' ? '#6699cc' : routeMode.value === 'cycling' ? '#FFD700' : '#72A98F',
-        'line-width': 5, 'line-opacity': 0.92,
-        'line-dasharray': routeMode.value === 'walking' ? [1.5, 2] : [1]
+        'line-color': lineColor, 'line-width': 6, 'line-opacity': 0.95,
+        'line-dasharray': routeMode.value === 'walking' ? [1.5, 2.5] : [1]
       }
     })
-    try { map.moveLayer('route-line') } catch(e) {}
 
-    // ── Waypoint GL markers (Task 5) ──
+    // ── Waypoint pins with labels ──
     const wpFeatures = valid.map((wp, i) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [wp.lng, wp.lat] },
       properties: {
-        idx: i, name: wp.name || (i === 0 ? 'საწყისი' : i === valid.length-1 ? 'დანიშნულება' : `წ.${i+1}`),
-        color: i === 0 ? '#4CAF50' : i === valid.length-1 ? '#F44336' : '#72A98F',
-        isEnd: i === valid.length - 1 ? 1 : 0
+        label: i === 0 ? 'A' : i === valid.length-1 ? 'B' : String.fromCharCode(65+i),
+        name:  wp.name || (i === 0 ? 'საწყისი' : i === valid.length-1 ? 'დანიშნულება' : `${i+1}`),
+        color: i === 0 ? '#34A853' : i === valid.length-1 ? '#EA4335' : '#4285F4',
       }
     }))
     map.addSource('route-wp-src', { type: 'geojson', data: { type: 'FeatureCollection', features: wpFeatures } })
+    // Outer circle
     map.addLayer({
       id: 'route-wp-outer', type: 'circle', source: 'route-wp-src',
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': 13,
-        'circle-stroke-width': 3,
-        'circle-stroke-color': '#ffffff',
-        'circle-opacity': 1
-      }
+      paint: { 'circle-color': ['get','color'], 'circle-radius': 14, 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' }
     })
+    // Inner white dot (for origin)
     map.addLayer({
       id: 'route-wp-inner', type: 'circle', source: 'route-wp-src',
-      paint: {
-        'circle-color': '#ffffff',
-        'circle-radius': 5,
-        'circle-opacity': ['case', ['==', ['get', 'isEnd'], 1], 0, 1]
-      }
+      paint: { 'circle-color': '#fff', 'circle-radius': 5 }
     })
-    // Move all above mask
-    ;['route-wp-outer', 'route-wp-inner'].forEach(id => { try { map.moveLayer(id) } catch(e) {} })
+    // Name labels below pin
+    map.addLayer({
+      id: 'route-wp-labels', type: 'symbol', source: 'route-wp-src',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+        'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, 1.6],
+        'text-max-width': 10
+      },
+      paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,0.75)', 'text-halo-width': 2 }
+    })
 
-    // ── fitBounds preserving current pitch (Task 6) ──
+    // Move layers to top
+    ;['route-line-bg','route-line','route-wp-outer','route-wp-inner','route-wp-labels'].forEach(id => {
+      try { map.moveLayer(id) } catch(e) {}
+    })
+
+    // ── Fit bounds to full route ──
     const bounds = new mapboxgl.LngLatBounds()
     route.geometry.coordinates.forEach(c => bounds.extend(c))
-    map.fitBounds(bounds, {
-      padding: { top: 120, bottom: 120, left: 120, right: 380 },
-      pitch: map.getPitch(),
-      bearing: map.getBearing(),
-      duration: 1800,
-      easing: t => { const ts = t-1; return ts*ts*ts+1 }
-    })
-  } catch(e) { console.error('Route error', e) }
+    const padLeft = window.innerWidth < 768 ? 20 : 370
+    map.fitBounds(bounds, { padding: { top: 100, bottom: 200, left: padLeft, right: 60 }, maxZoom: 14, duration: 1400 })
+
+    // Scroll body to top to show result
+    nextTick(() => { if (rdBodyRef.value) rdBodyRef.value.scrollTop = 0 })
+
+  } catch(e) {
+    routeError.value = 'კავშირის შეცდომა. სცადეთ თავიდან.'
+    console.error('Route error', e)
+  } finally {
+    routeLoading.value = false
+  }
 }
+
+// ── Live Navigation ───────────────────────────────────────────────
+function toggleLiveNav() {
+  if (liveNavActive.value) { stopLiveNav(); return }
+  if (!navigator.geolocation) { routeError.value = 'GPS არ არის ხელმისაწვდომი'; return }
+  liveNavActive.value = true
+  liveNavStep.value   = 0
+
+  // Create navigation arrow marker
+  const el = document.createElement('div')
+  el.className = 'live-nav-arrow'
+  el.innerHTML = `<span class="material-symbols-outlined" style="font-size:28px;color:#1A73E8;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))">navigation</span>`
+  liveNavMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+
+  liveNavWatchId = navigator.geolocation.watchPosition(pos => {
+    const { latitude: lat, longitude: lng, heading } = pos.coords
+    // Update marker
+    if (!liveNavMarker._map) liveNavMarker.addTo(map)
+    liveNavMarker.setLngLat([lng, lat])
+    // Rotate arrow
+    if (heading !== null) el.style.transform = `rotate(${heading}deg)`
+    // Follow camera
+    map.easeTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 13), duration: 800 })
+    // Advance step based on proximity to next maneuver
+    const steps = routeSteps.value
+    if (steps.length && liveNavStep.value < steps.length - 1) {
+      // Simple: advance every ~15 seconds (real impl would compare coords to step location)
+    }
+  }, () => {
+    routeError.value = 'GPS სიგნალი დაიკარგა'
+    stopLiveNav()
+  }, { enableHighAccuracy: true, maximumAge: 2000 })
+}
+
+function stopLiveNav() {
+  if (liveNavWatchId !== null) { navigator.geolocation.clearWatch(liveNavWatchId); liveNavWatchId = null }
+  if (liveNavMarker) { try { liveNavMarker.remove() } catch(e) {}; liveNavMarker = null }
+  liveNavActive.value = false
+  liveNavStep.value   = 0
+}
+
+watch(selectingWaypointIdx, idx => { if (map) map.getCanvas().style.cursor = idx >= 0 ? 'crosshair' : '' })
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function toggleAuth() {
@@ -3360,6 +3470,282 @@ body.dark-theme .clouds {
   background: rgba(114,169,143,0.15);
   border-color: rgba(114,169,143,0.35);
   color: #fff;
+}
+
+/* ══════════════════════════════════════════════
+   NEW Google-Maps-style Route Drawer CSS
+══════════════════════════════════════════════ */
+
+/* Mode bar (car / walk / bike) in header */
+.rd-modes-bar {
+  display: flex; gap: 4px; flex: 1;
+}
+.rd-mode-pill {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 4px; border-radius: 10px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.45); cursor: pointer;
+  transition: all 0.18s;
+}
+.rd-mode-pill .material-symbols-outlined { font-size: 18px !important; }
+.rd-mode-pill:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.rd-mode-pill.active {
+  background: #1A73E8; border-color: #1A73E8; color: #fff;
+  box-shadow: 0 0 14px rgba(26,115,232,0.4);
+}
+.rd-mode-pill-lbl { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+
+/* Inputs section */
+.rd-inputs-wrap {
+  padding: 10px 14px 0;
+  position: relative;
+  flex-shrink: 0;
+}
+.rd-input-row {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 2px;
+}
+.rd-dot-col {
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: 14px; width: 18px; flex-shrink: 0;
+}
+.rd-dot {
+  width: 11px; height: 11px; flex-shrink: 0;
+}
+.rd-connector {
+  width: 2px; flex: 1; min-height: 14px;
+  background: rgba(255,255,255,0.12);
+  margin: 3px 0;
+}
+.rd-input-box {
+  flex: 1; display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; min-width: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.09);
+  border-radius: 10px; margin-bottom: 4px;
+  transition: border-color 0.18s, background 0.18s;
+}
+.rd-input-box.focused {
+  border-color: #1A73E8;
+  background: rgba(26,115,232,0.07);
+}
+.rd-input-field {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #fff; font-size: 13px; min-width: 0; font-family: inherit;
+}
+.rd-input-field::placeholder { color: rgba(255,255,255,0.3); }
+
+/* GPS button */
+.rd-gps-btn {
+  background: transparent; border: none; color: rgba(255,255,255,0.4);
+  cursor: pointer; display: flex; align-items: center; padding: 2px;
+  border-radius: 6px; transition: color 0.18s;
+  flex-shrink: 0;
+}
+.rd-gps-btn .material-symbols-outlined { font-size: 17px !important; }
+.rd-gps-btn:hover { color: #1A73E8; }
+.rd-gps-btn.busy { color: #1A73E8; }
+
+/* Delete middle waypoint */
+.rd-del-wp-btn {
+  background: transparent; border: none; color: rgba(255,255,255,0.3);
+  cursor: pointer; display: flex; align-items: center;
+  padding: 2px; border-radius: 5px; transition: color 0.15s; flex-shrink: 0;
+}
+.rd-del-wp-btn .material-symbols-outlined { font-size: 15px !important; }
+.rd-del-wp-btn:hover { color: #ff4444; }
+
+/* Swap / Add stop row */
+.rd-input-actions {
+  display: flex; gap: 6px; padding: 4px 0 8px;
+  justify-content: flex-end;
+}
+.rd-action-btn {
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; color: rgba(255,255,255,0.6); cursor: pointer;
+  display: flex; align-items: center; padding: 5px 8px; gap: 4px;
+  font-size: 12px; font-family: inherit;
+  transition: all 0.18s;
+}
+.rd-action-btn .material-symbols-outlined { font-size: 16px !important; }
+.rd-action-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+/* Autocomplete dropdown */
+.rd-dropdown {
+  position: relative; z-index: 1;
+  background: rgba(14,14,26,0.97);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  margin-bottom: 8px;
+}
+.rd-sugg-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.12s;
+}
+.rd-sugg-item:last-child { border-bottom: none; }
+.rd-sugg-item:hover { background: rgba(26,115,232,0.12); }
+.rd-sugg-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.rd-sugg-icon .material-symbols-outlined { font-size: 16px !important; color: var(--accent); }
+.rd-sugg-text { flex: 1; min-width: 0; }
+.rd-sugg-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-sugg-sub  { font-size: 11px; color: rgba(255,255,255,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+/* Loading state */
+.rd-loading {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px; padding: 32px 16px; color: rgba(255,255,255,0.55); font-size: 13px;
+}
+.rd-spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid rgba(26,115,232,0.25);
+  border-top-color: #1A73E8;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Error message */
+.rd-error-msg {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.25);
+  color: #F44336; font-size: 13px;
+}
+.rd-error-msg .material-symbols-outlined { font-size: 18px !important; flex-shrink: 0; }
+
+/* Result hero (big duration + distance) */
+.rd-result-hero {
+  padding: 14px 0 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  margin-bottom: 8px;
+}
+.rd-result-duration {
+  font-size: 28px; font-weight: 800; color: #fff; line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+.rd-result-meta {
+  font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 3px;
+}
+
+/* Mode time comparison row */
+.rd-mode-times {
+  display: flex; gap: 5px; margin-bottom: 6px;
+}
+.rd-mode-time-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 7px 4px; border-radius: 10px;
+  background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.45); cursor: pointer;
+  transition: all 0.18s; font-family: inherit;
+}
+.rd-mode-time-btn .material-symbols-outlined { font-size: 16px !important; }
+.rd-mode-time-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.rd-mode-time-btn.active {
+  background: rgba(26,115,232,0.15); border-color: #1A73E8; color: #fff;
+}
+.rd-mt-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.6; }
+.rd-mt-time  { font-size: 11px; font-weight: 700; color: #fff; }
+
+/* Live Navigation button */
+.rd-live-btn {
+  width: 100%; padding: 11px 14px; margin-bottom: 4px;
+  background: rgba(26,115,232,0.12); border: 1.5px solid rgba(26,115,232,0.4);
+  border-radius: 12px; color: #4A9EFF;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all 0.2s; font-family: inherit;
+}
+.rd-live-btn .material-symbols-outlined { font-size: 18px !important; }
+.rd-live-btn:hover { background: rgba(26,115,232,0.22); border-color: #4A9EFF; }
+.rd-live-btn.active {
+  background: rgba(244,67,54,0.15); border-color: #F44336;
+  color: #FF6B6B; animation: live-pulse 1.5s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%,100% { border-color: rgba(244,67,54,0.4); }
+  50% { border-color: #F44336; box-shadow: 0 0 12px rgba(244,67,54,0.35); }
+}
+
+/* Steps section */
+.rd-steps {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px; overflow: hidden;
+  margin-top: 8px;
+}
+.rd-steps-header {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: rgba(255,255,255,0.4);
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.rd-step-endpoint {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; font-size: 13px; font-weight: 600; color: #fff;
+}
+.rd-step-ep-dot {
+  width: 11px; height: 11px; flex-shrink: 0;
+}
+.rd-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 14px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.15s;
+}
+.rd-step.current {
+  background: rgba(26,115,232,0.12);
+  border-left: 3px solid #1A73E8;
+}
+.rd-step-ico {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: rgba(255,255,255,0.07);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.rd-step-ico .material-symbols-outlined { font-size: 15px !important; color: rgba(255,255,255,0.7); }
+.rd-step-body { flex: 1; min-width: 0; }
+.rd-step-instr { font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.4; }
+.rd-step-dist  { font-size: 11px; color: rgba(255,255,255,0.38); margin-top: 2px; }
+
+/* Empty state */
+.rd-empty-hint {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 16px 12px; text-align: center;
+  font-size: 13px; color: rgba(255,255,255,0.38);
+}
+.rd-quick-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: rgba(255,255,255,0.35);
+  padding: 4px 0 6px;
+}
+.rd-quick-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.rd-quick-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 10px; border-radius: 10px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.65); font-size: 11px; font-weight: 500;
+  font-family: inherit; cursor: pointer; text-align: left;
+  transition: all 0.18s;
+}
+.rd-quick-btn .material-symbols-outlined { font-size: 14px !important; color: var(--accent); flex-shrink: 0; }
+.rd-quick-btn:hover { background: rgba(114,169,143,0.14); border-color: rgba(114,169,143,0.35); color: #fff; }
+
+/* Live nav arrow marker */
+.live-nav-arrow {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #1A73E8; border: 3px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(26,115,232,0.6);
+  font-size: 18px; color: #fff;
 }
 
 /* ── Ad Modal — Glassmorphism ── */
