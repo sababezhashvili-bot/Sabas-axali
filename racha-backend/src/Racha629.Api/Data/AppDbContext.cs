@@ -15,6 +15,10 @@ namespace Racha629.Api.Data
         public DbSet<AdSpace> AdSpaces { get; set; }
         public DbSet<RentRequest> RentRequests { get; set; }
         public DbSet<SiteSetting> SiteSettings { get; set; }
+        public DbSet<TourPackage> TourPackages { get; set; }
+        public DbSet<TourWaypoint> TourWaypoints { get; set; }
+        public DbSet<TransportBooking> TransportBookings { get; set; }
+        public DbSet<DirectorySubmission> DirectorySubmissions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -34,6 +38,12 @@ namespace Racha629.Api.Data
                 .HasMany(u => u.ActivityLogs)
                 .WithOne(l => l.User)
                 .HasForeignKey(l => l.UserId);
+
+            modelBuilder.Entity<TourPackage>()
+                .HasMany(t => t.Waypoints)
+                .WithOne(w => w.TourPackage)
+                .HasForeignKey(w => w.TourPackageId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             base.OnModelCreating(modelBuilder);
         }
@@ -145,5 +155,62 @@ namespace Racha629.Api.Data
         public int Id { get; set; }
         public string Key { get; set; } = "";
         public string Value { get; set; } = "";
+    }
+
+    // 9. ტური (Tour Package)
+    public class TourPackage
+    {
+        public int Id { get; set; }
+        public string NameGeo { get; set; } = "";
+        public string? DescriptionGeo { get; set; }
+        public decimal Price { get; set; }
+        public string? ImageUrl { get; set; }
+        public double? DurationHours { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public List<TourWaypoint> Waypoints { get; set; } = new();
+    }
+
+    // 10. ტურის საყრდენი წერტილი (Tour Waypoint)
+    public class TourWaypoint
+    {
+        public int Id { get; set; }
+        public int TourPackageId { get; set; }
+        public string Name { get; set; } = "";
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public int OrderIndex { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public TourPackage? TourPackage { get; set; }
+    }
+
+    // 11. ტრანსპორტის ჯავშანი (Transport Booking)
+    public class TransportBooking
+    {
+        public int Id { get; set; }
+        public string FullName { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string FromLocation { get; set; } = "";
+        public string ToLocation { get; set; } = "";
+        public double DistanceKm { get; set; }
+        public string VehicleType { get; set; } = "taxi"; // taxi, comfort
+        public double Price { get; set; }
+        public string Status { get; set; } = "Pending"; // Pending, Confirmed, Cancelled
+        public DateTime BookingDate { get; set; } = DateTime.UtcNow;
+        public string? Notes { get; set; }
+    }
+
+    // 12. ცნობარის გამოწერა (Directory Submission)
+    public class DirectorySubmission
+    {
+        public int Id { get; set; }
+        public string FullName { get; set; } = "";
+        public string District { get; set; } = ""; // ამბროლაური or ონი
+        public string Village { get; set; } = "";
+        public string LocationType { get; set; } = "";
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
+        public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
+        public string? Notes { get; set; }
     }
 }

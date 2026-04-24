@@ -216,6 +216,109 @@ class ApiClient {
     })
     if (!res.ok) throw new Error(await res.text())
   }
+
+  // ── Tours ──
+  async getTours() {
+    try {
+      const res = await fetch(`${this.baseUrl}/tours`)
+      if (!res.ok) return []
+      return await res.json()
+    } catch { return [] }
+  }
+
+  async createTour(tourData) {
+    const res = await fetch(`${this.baseUrl}/tours`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(tourData)
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return await res.json()
+  }
+
+  async updateTour(id, tourData) {
+    const res = await fetch(`${this.baseUrl}/tours/${id}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(tourData)
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return await res.json()
+  }
+
+  async deleteTour(id) {
+    const res = await fetch(`${this.baseUrl}/tours/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
+    if (!res.ok) throw new Error(await res.text())
+  }
+
+  // ── Transport ──
+  async bookTransport(data) {
+    const res = await fetch(`${this.baseUrl}/transport/book`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return await res.json()
+  }
+
+  async getTransportBookings() {
+    try {
+      const res = await fetch(`${this.baseUrl}/transport`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      })
+      if (!res.ok) return []
+      return await res.json()
+    } catch { return [] }
+  }
+
+  async updateTransportStatus(id, status) {
+    const res = await fetch(`${this.baseUrl}/transport/${id}/${status}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
+    if (!res.ok) throw new Error(await res.text())
+  }
+
+  // ── Directory ──
+  async submitDirectory(data) {
+    const res = await fetch(`${this.baseUrl}/directory`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return await res.json()
+  }
+
+  async getDirectorySubmissions() {
+    try {
+      const res = await fetch(`${this.baseUrl}/directory`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      })
+      if (!res.ok) return []
+      return await res.json()
+    } catch { return [] }
+  }
+
+  async updateDirectoryStatus(id, status) {
+    const res = await fetch(`${this.baseUrl}/directory/${id}/${status}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
+    if (!res.ok) throw new Error(await res.text())
+  }
+
+  async deleteDirectorySubmission(id) {
+    const res = await fetch(`${this.baseUrl}/directory/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${this.token}` }
+    })
+    if (!res.ok) throw new Error(await res.text())
+  }
 }
 
 export const api = new ApiClient()
