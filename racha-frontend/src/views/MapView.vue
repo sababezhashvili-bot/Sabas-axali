@@ -225,12 +225,37 @@
         </button>
       </div>
 
+      <!-- My Location Button -->
+      <button class="pill-btn" :class="{ active: myLocActive }" @click.stop="toggleMyLocation" title="ჩემი მდებარეობა">
+        <span class="material-symbols-outlined">{{ myLocActive ? 'my_location' : 'location_searching' }}</span>
+      </button>
+
       <!-- Route Planner Button -->
       <button class="pill-btn" :class="{ active: showRoutePanel }" @click.stop="showRoutePanel = !showRoutePanel; isWeatherOpen = false; isLayerWidgetOpen = false" title="მარშრუტი">
         <span class="material-symbols-outlined">route</span>
       </button>
 
     </div>
+
+    <!-- ── Live Navigation Banner (Google Maps style top bar) ── -->
+    <transition name="nav-banner">
+      <div v-if="liveNavActive && routeSteps.length" class="live-nav-banner">
+        <div class="lnb-icon">
+          <span class="material-symbols-outlined">{{ routeSteps[liveNavStep]?.icon || 'navigation' }}</span>
+        </div>
+        <div class="lnb-body">
+          <div class="lnb-instr">{{ routeSteps[liveNavStep]?.instruction || 'გაგრძელება...' }}</div>
+          <div class="lnb-dist" v-if="routeSteps[liveNavStep]?.dist">{{ routeSteps[liveNavStep].dist }}</div>
+        </div>
+        <div class="lnb-meta" v-if="routeResult">
+          <div class="lnb-eta">{{ routeResult.duration }}</div>
+          <div class="lnb-km">{{ routeResult.distance }}</div>
+        </div>
+        <button class="lnb-stop" @click="stopLiveNav" title="ნავიგაციის შეჩერება">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    </transition>
 
     <!-- Route Sidebar — Google Maps style -->
     <transition name="route-drawer">
@@ -368,8 +393,8 @@
 
             <!-- Live Navigation button -->
             <button class="rd-live-btn" :class="{ active: liveNavActive }" @click="toggleLiveNav">
-              <span class="material-symbols-outlined">{{ liveNavActive ? 'navigation' : 'near_me' }}</span>
-              {{ liveNavActive ? '🔴 Live — ჩართულია' : 'Live Navigation' }}
+              <span class="material-symbols-outlined">{{ liveNavActive ? 'stop_circle' : 'navigation' }}</span>
+              {{ liveNavActive ? 'ნავიგაციის შეჩერება' : '🧭 ნავიგაციის დაწყება' }}
             </button>
 
             <!-- Clear -->
@@ -581,9 +606,17 @@ const selectingWaypointIdx = ref(-1)
 // Live navigation
 const liveNavActive  = ref(false)
 const liveNavStep    = ref(0)
-let liveNavWatchId   = null
-let liveNavMarker    = null
 let searchTimer      = null
+
+// My Location — persistent blue dot (Google Maps style)
+const myLocActive    = ref(false)
+let myLocWatchId     = null
+let myLocMarker      = null
+let myLocEl          = null
+let lastCamUpdate    = 0
+let lastUserLat      = null
+let lastUserLng      = null
+let lastUserHeading  = null
 
 const ROUTE_MODES = [
   { val: 'driving', icon: 'directions_car',  label: 'ავტო'  },
@@ -1617,6 +1650,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   markers.forEach(m => m.mk.remove())
+  // Clean up location tracking
+  if (myLocWatchId !== null) navigator.geolocation.clearWatch(myLocWatchId)
+  if (myLocMarker) try { myLocMarker.remove() } catch(e) {}
   if(map) map.remove()
 })
 
@@ -1790,7 +1826,8 @@ function toggleTheme() {
 function toggleForest() {}
 
 // ─── ROUTE — Google Maps style ───────────────────────────────────────────────
-let routeMarkers = []
+let routeMarkers  = []
+let routeGeometry = null   // stored for re-fitting after navigation ends
 const CAT_ICONS_MAP = { landmark:'landscape', waterfall:'water', hotel:'hotel', restaurant:'restaurant' }
 
 // ── Input autocomplete ────────────────────────────────────────────
@@ -1856,12 +1893,37 @@ function pickFirstSuggestion(idx) {
   }
 }
 
-// ── GPS current location ──────────────────────────────────────────
+// ── Haversine distance (meters) ───────────────────────────────────
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000
+  const toRad = d => d * Math.PI / 180
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// ── GPS for route origin (uses cached loc if available) ───────────
 async function useGPS() {
   if (!navigator.geolocation) { routeError.value = 'GPS არ არის ხელმისაწვდომი'; return }
+
+  // Use already-tracked position if we have it
+  if (lastUserLat !== null && lastUserLng !== null) {
+    let name = 'ჩემი მდებარეობა'
+    try {
+      const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lastUserLng},${lastUserLat}.json?access_token=${mapboxgl.accessToken}`)
+      const d = await r.json()
+      if (d.features?.[0]) name = d.features[0].text || name
+    } catch(e) {}
+    routeWaypoints.value[0] = { name, lat: lastUserLat, lng: lastUserLng }
+    if (routeWaypoints.value[routeWaypoints.value.length-1].lat !== null) calculateRoute()
+    return
+  }
+
+  // Fresh one-shot request
   gpsBusy.value = true
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude: lat, longitude: lng } = pos.coords
+    lastUserLat = lat; lastUserLng = lng
     let name = 'ჩემი მდებარეობა'
     try {
       const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}`)
@@ -1872,6 +1934,108 @@ async function useGPS() {
     gpsBusy.value = false
     if (routeWaypoints.value[routeWaypoints.value.length-1].lat !== null) calculateRoute()
   }, () => { routeError.value = 'მდებარეობა ვერ განისაზღვრა'; gpsBusy.value = false })
+}
+
+// ── My Location — Google Maps blue dot ───────────────────────────
+function toggleMyLocation() {
+  if (myLocActive.value) { stopMyLocation(); return }
+  startMyLocation(false)
+}
+
+function startMyLocation(navMode) {
+  if (!navigator.geolocation) { alert('ბრაუზერი GPS-ს არ უჭერს მხარს'); return }
+
+  // Create Google Maps-style dot element
+  myLocEl = document.createElement('div')
+  myLocEl.className = 'user-loc-wrapper no-heading'
+  myLocEl.innerHTML = `
+    <div class="user-loc-pulse"></div>
+    <div class="user-loc-dot"></div>
+    <div class="user-loc-cone"></div>
+  `
+  myLocMarker = new mapboxgl.Marker({ element: myLocEl, anchor: 'center' })
+  myLocActive.value = true
+
+  if (navMode) {
+    liveNavActive.value = true
+    liveNavStep.value = 0
+  }
+
+  let firstFix = true
+
+  myLocWatchId = navigator.geolocation.watchPosition(pos => {
+    const { latitude: lat, longitude: lng, heading, accuracy } = pos.coords
+    lastUserLat = lat; lastUserLng = lng; lastUserHeading = heading
+
+    // Place / update marker
+    if (!myLocMarker._map) myLocMarker.addTo(map)
+    myLocMarker.setLngLat([lng, lat])
+
+    // Heading cone — rotate the wrapper
+    const hasHeading = heading !== null && heading !== undefined && !isNaN(heading)
+    if (hasHeading) {
+      myLocEl.classList.remove('no-heading')
+      myLocEl.style.transform = `rotate(${heading}deg)`
+    } else {
+      myLocEl.classList.add('no-heading')
+      myLocEl.style.transform = ''
+    }
+
+    // First fix: fly to location
+    if (firstFix) {
+      firstFix = false
+      if (!liveNavActive.value) {
+        map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 13), duration: 1200 })
+      } else {
+        // Nav start: cinematic zoom in + pitch
+        map.easeTo({
+          center: [lng, lat], zoom: 16, pitch: 50,
+          bearing: hasHeading ? heading : 0,
+          duration: 1800, essential: true
+        })
+        lastCamUpdate = Date.now()
+      }
+      return
+    }
+
+    // Nav mode: follow camera (throttled to avoid freezing)
+    if (liveNavActive.value) {
+      const now = Date.now()
+      if (now - lastCamUpdate > 700) {
+        lastCamUpdate = now
+        map.easeTo({
+          center: [lng, lat],
+          zoom: Math.max(map.getZoom(), 15),
+          pitch: 50,
+          bearing: hasHeading ? heading : map.getBearing(),
+          duration: 700,
+          essential: false
+        })
+      }
+
+      // Auto-advance step based on proximity to next maneuver point
+      const steps = routeSteps.value
+      if (steps.length && liveNavStep.value < steps.length - 1) {
+        const next = steps[liveNavStep.value + 1]
+        if (next?.loc) {
+          const dist = haversineM(lat, lng, next.loc[1], next.loc[0])
+          if (dist < 35) liveNavStep.value = Math.min(liveNavStep.value + 1, steps.length - 1)
+        }
+      }
+    }
+  }, err => {
+    console.warn('Geolocation error:', err.code, err.message)
+    if (err.code === 1) alert('მდებარეობის გაზიარება უარყოფილია. ჩართეთ ბრაუზერის პარამეტრებში.')
+    stopMyLocation()
+  }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 })
+}
+
+function stopMyLocation() {
+  if (myLocWatchId !== null) { navigator.geolocation.clearWatch(myLocWatchId); myLocWatchId = null }
+  if (myLocMarker)  { try { myLocMarker.remove() } catch(e) {}; myLocMarker = null }
+  myLocEl = null
+  myLocActive.value = false
+  if (liveNavActive.value) stopLiveNav()
 }
 
 // ── Swap origin ↔ destination ─────────────────────────────────────
@@ -1945,7 +2109,7 @@ function maneuverText(step) {
   const t = step.maneuver.type, mod = step.maneuver.modifier || ''
   const road = step.name ? ` — ${step.name}` : ''
   const map2 = {
-    depart: `გამოსვლა${road}`, arrive: `მივedეთ${road}`,
+    depart: `გამოსვლა${road}`, arrive: `მივედით${road}`,
     'new name': `გაგრძელება${road}`, continue: `გაგრძელება${road}`, straight: `პირდაპირ${road}`,
     merge: `შეერთება${road}`, rotary: `სარგვალი${road}`,
     roundabout: `რგოლი${road}`, 'exit roundabout': `რგოლიდან${road}`,
@@ -1987,15 +2151,16 @@ async function calculateRoute() {
     const cost   = routeMode.value === 'driving' ? `~${(3 + parseFloat(distKm)*1.5).toFixed(0)} ₾` : null
 
     routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost, rawDist: parseFloat(distKm) }
+    routeGeometry = route.geometry  // Store for re-fitting after nav ends
 
-    // Parse steps
-    routeSteps.value = (route.legs || []).flatMap(leg => leg.steps || [])
-      .filter(s => s.maneuver.type !== 'arrive' || (route.legs || []).flatMap(l=>l.steps||[]).indexOf(s) === (route.legs||[]).flatMap(l=>l.steps||[]).length - 1)
-      .map(s => ({
-        icon: maneuverIcon(s),
-        instruction: maneuverText(s),
-        dist: s.distance > 30 ? s.distance >= 1000 ? `${(s.distance/1000).toFixed(1)} კმ` : `${Math.round(s.distance)} მ` : ''
-      }))
+    // Parse steps — include maneuver location for proximity-based step advance
+    const allSteps = (route.legs || []).flatMap(leg => leg.steps || [])
+    routeSteps.value = allSteps.map(s => ({
+      icon: maneuverIcon(s),
+      instruction: maneuverText(s),
+      dist: s.distance > 30 ? (s.distance >= 1000 ? `${(s.distance/1000).toFixed(1)} კმ` : `${Math.round(s.distance)} მ`) : '',
+      loc: s.maneuver.location  // [lng, lat] — used for auto-advance during live nav
+    }))
 
     // ── Route line (Google Maps blue) ──
     map.addSource('route-source', { type: 'geojson', data: route.geometry })
@@ -2072,41 +2237,45 @@ async function calculateRoute() {
 // ── Live Navigation ───────────────────────────────────────────────
 function toggleLiveNav() {
   if (liveNavActive.value) { stopLiveNav(); return }
-  if (!navigator.geolocation) { routeError.value = 'GPS არ არის ხელმისაწვდომი'; return }
-  liveNavActive.value = true
-  liveNavStep.value   = 0
-
-  // Create navigation arrow marker
-  const el = document.createElement('div')
-  el.className = 'live-nav-arrow'
-  el.innerHTML = `<span class="material-symbols-outlined" style="font-size:28px;color:#1A73E8;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))">navigation</span>`
-  liveNavMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-
-  liveNavWatchId = navigator.geolocation.watchPosition(pos => {
-    const { latitude: lat, longitude: lng, heading } = pos.coords
-    // Update marker
-    if (!liveNavMarker._map) liveNavMarker.addTo(map)
-    liveNavMarker.setLngLat([lng, lat])
-    // Rotate arrow
-    if (heading !== null) el.style.transform = `rotate(${heading}deg)`
-    // Follow camera
-    map.easeTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 13), duration: 800 })
-    // Advance step based on proximity to next maneuver
-    const steps = routeSteps.value
-    if (steps.length && liveNavStep.value < steps.length - 1) {
-      // Simple: advance every ~15 seconds (real impl would compare coords to step location)
-    }
-  }, () => {
-    routeError.value = 'GPS სიგნალი დაიკარგა'
-    stopLiveNav()
-  }, { enableHighAccuracy: true, maximumAge: 2000 })
+  if (!routeResult.value || !routeSteps.value.length) {
+    routeError.value = 'ჯერ გამოთვალეთ მარშრუტი'
+    return
+  }
+  // If location dot is already tracking, just enable nav mode (no new watchPosition)
+  if (myLocActive.value && lastUserLat !== null) {
+    liveNavActive.value = true
+    liveNavStep.value   = 0
+    lastCamUpdate = 0
+    const h = lastUserHeading
+    const hasH = h !== null && h !== undefined && !isNaN(h)
+    map.easeTo({
+      center: [lastUserLng, lastUserLat], zoom: 16, pitch: 50,
+      bearing: hasH ? h : 0, duration: 1500, essential: true
+    })
+  } else {
+    // Start location tracking in nav mode (starts watchPosition + sets nav camera on first fix)
+    startMyLocation(true)
+  }
 }
 
 function stopLiveNav() {
-  if (liveNavWatchId !== null) { navigator.geolocation.clearWatch(liveNavWatchId); liveNavWatchId = null }
-  if (liveNavMarker) { try { liveNavMarker.remove() } catch(e) {}; liveNavMarker = null }
   liveNavActive.value = false
   liveNavStep.value   = 0
+  lastCamUpdate = 0
+  if (map) {
+    map.easeTo({ pitch: 0, bearing: 0, duration: 900 })
+    // Re-fit route bounds after camera resets
+    if (routeGeometry) {
+      setTimeout(() => {
+        try {
+          const bounds = new mapboxgl.LngLatBounds()
+          routeGeometry.coordinates.forEach(c => bounds.extend(c))
+          const padL = window.innerWidth < 768 ? 20 : 370
+          map.fitBounds(bounds, { padding: { top: 80, bottom: 180, left: padL, right: 60 }, maxZoom: 13, duration: 1200 })
+        } catch(e) {}
+      }, 950)
+    }
+  }
 }
 
 watch(selectingWaypointIdx, idx => { if (map) map.getCanvas().style.cursor = idx >= 0 ? 'crosshair' : '' })
@@ -3828,6 +3997,85 @@ body.dark-theme .clouds {
 .adm-rent-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none !important; filter: none !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── My Location Dot — Google Maps Style ── */
+.user-loc-wrapper {
+  position: relative;
+  width: 56px; height: 56px;
+  pointer-events: none;
+  /* Rotation controlled by JS (heading) */
+}
+.user-loc-pulse {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 46px; height: 46px; border-radius: 50%;
+  background: rgba(66, 133, 244, 0.18);
+  border: 1.5px solid rgba(66, 133, 244, 0.32);
+  animation: uloc-pulse 2.8s ease-out infinite;
+}
+.user-loc-dot {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #4285F4;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 10px rgba(66,133,244,0.6), 0 1px 3px rgba(0,0,0,0.3);
+  z-index: 2;
+}
+/* Direction cone — points UP by default (north at 0°) */
+.user-loc-cone {
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 20px solid rgba(66, 133, 244, 0.42);
+  top: 2px;            /* above dot center (wrapper center = 28px, cone base ~19px) */
+  left: 50%; transform: translateX(-50%);
+}
+.user-loc-wrapper.no-heading .user-loc-cone { display: none; }
+@keyframes uloc-pulse {
+  0%   { transform: translate(-50%,-50%) scale(0.55); opacity: 0.9; }
+  65%  { transform: translate(-50%,-50%) scale(1.45); opacity: 0.15; }
+  100% { transform: translate(-50%,-50%) scale(1.65); opacity: 0; }
+}
+
+/* ── Live Navigation Top Banner ── */
+.live-nav-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 25000;
+  background: linear-gradient(135deg, #1254C4 0%, #1A73E8 100%);
+  color: #fff;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px;
+  min-height: 68px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.45);
+}
+.lnb-icon {
+  width: 46px; height: 46px; border-radius: 12px;
+  background: rgba(255,255,255,0.22);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.lnb-icon .material-symbols-outlined { font-size: 26px !important; }
+.lnb-body { flex: 1; min-width: 0; }
+.lnb-instr {
+  font-size: 17px; font-weight: 800; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lnb-dist { font-size: 12px; opacity: 0.72; margin-top: 3px; }
+.lnb-meta { text-align: right; flex-shrink: 0; line-height: 1.3; }
+.lnb-eta  { font-size: 15px; font-weight: 700; }
+.lnb-km   { font-size: 11px; opacity: 0.62; }
+.lnb-stop {
+  background: rgba(255,255,255,0.22); border: none; border-radius: 50%;
+  width: 38px; height: 38px; cursor: pointer; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: background 0.18s;
+}
+.lnb-stop:hover { background: rgba(255,255,255,0.38); }
+.lnb-stop .material-symbols-outlined { font-size: 18px !important; }
+/* Slide in from top */
+.nav-banner-enter-active, .nav-banner-leave-active { transition: transform 0.3s cubic-bezier(0.2,0.8,0.2,1), opacity 0.3s; }
+.nav-banner-enter-from, .nav-banner-leave-to { transform: translateY(-100%); opacity: 0; }
+
 /* ═══════════════════════════════════════════════
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
@@ -3910,6 +4158,13 @@ body.dark-theme .clouds {
   /* Bottom counter */
   .bottom-label { font-size: 10px; padding: 6px 12px; }
   .icon-pill-nav::after { display: none; }
+
+  /* Live nav banner on mobile */
+  .live-nav-banner { padding: 10px 14px; min-height: 58px; gap: 10px; }
+  .lnb-icon { width: 40px; height: 40px; }
+  .lnb-icon .material-symbols-outlined { font-size: 22px !important; }
+  .lnb-instr { font-size: 14px; }
+  .lnb-eta { font-size: 13px; }
 }
 
 @media (max-width: 480px) {
