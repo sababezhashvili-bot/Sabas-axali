@@ -459,7 +459,43 @@
           </button>
         </div>
 
+        <!-- ── Taxi / Car price card ── -->
+        <div class="rd-taxi-card" v-if="routeResult && !routeLoading">
+          <div class="rd-taxi-header">
+            <span class="material-symbols-outlined" style="color:#FBBC04;font-size:18px">local_taxi</span>
+            <span class="rd-taxi-title">ტაქსი / ავტო სერვისი</span>
+          </div>
+          <div class="rd-taxi-row">
+            <span class="material-symbols-outlined rd-taxi-ico">directions_car</span>
+            <div class="rd-taxi-info">
+              <div class="rd-taxi-type">ლოკალური ტაქსი</div>
+              <div class="rd-taxi-desc">{{ routeResult.distance }} · სავარაუდო ფასი</div>
+            </div>
+            <div class="rd-taxi-price">{{ (20 + routeResult.rawDist * 2).toFixed(0) }} ₾</div>
+          </div>
+          <div class="rd-taxi-row">
+            <span class="material-symbols-outlined rd-taxi-ico">directions_car</span>
+            <div class="rd-taxi-info">
+              <div class="rd-taxi-type">კომფორტი / მინივენი</div>
+              <div class="rd-taxi-desc">{{ routeResult.distance }} · სავარაუდო ფასი</div>
+            </div>
+            <div class="rd-taxi-price">{{ (30 + routeResult.rawDist * 2.5).toFixed(0) }} ₾</div>
+          </div>
+          <div class="rd-taxi-note">
+            <span class="material-symbols-outlined" style="font-size:12px;opacity:.5">info</span>
+            საბაზო: 20 ₾ + 2 ₾/კმ · ფასი სავარაუდოა
+          </div>
+        </div>
+
       </div>
+    </transition>
+
+    <!-- Recenter button — shown only during nav when user has scrolled away -->
+    <transition name="fade">
+      <button v-if="liveNavActive && !navFollowing && hasUserLoc"
+        class="recenter-btn" @click="recenterNav" title="ჩემს მდებარეობაზე დაბრუნება">
+        <span class="material-symbols-outlined">my_location</span>
+      </button>
     </transition>
 
     <!-- Top Bar — round icon-only buttons -->
@@ -618,10 +654,13 @@ const selectingWaypointIdx = ref(-1)
 // Live navigation
 const liveNavActive  = ref(false)
 const liveNavStep    = ref(0)
+const navFollowing   = ref(false)   // camera follows user; false = user took control
 let searchTimer      = null
 
 // My Location — persistent blue dot (Google Maps style)
-const myLocActive    = ref(false)
+const myLocActive       = ref(false)
+const hasUserLoc        = ref(false)   // reactive: true after first GPS fix
+const mapUserInteracting = ref(false)  // reactive: true while user drags/zooms
 let myLocWatchId     = null
 let myLocMarker      = null
 let myLocEl          = null
@@ -629,6 +668,7 @@ let lastCamUpdate    = 0
 let lastUserLat      = null
 let lastUserLng      = null
 let lastUserHeading  = null
+let interactionTimer = null
 
 const ROUTE_MODES = [
   { val: 'driving', icon: 'directions_car',  label: 'ავტო'  },
@@ -636,14 +676,19 @@ const ROUTE_MODES = [
   { val: 'cycling', icon: 'directions_bike', label: 'ველო'  },
 ]
 
+// Cache confirmed API times per mode — prevents stale duration showing on mode switch
+const cachedModeTimes = ref({ driving: null, cycling: null, walking: null })
+
 const routeAllTimes = computed(() => {
   if (!routeResult.value) return null
   const km  = routeResult.value.rawDist
+  // Estimate minutes if this mode hasn't been API-calculated yet
+  // driving ~67 km/h → 0.9 min/km, cycling ~15 km/h → 4 min/km, walking ~5 km/h → 12 min/km
   const fmt = m => m >= 60 ? `${Math.floor(m/60)}სთ ${m%60 ? m%60+'წთ' : ''}`.trim() : `${Math.round(m)}წთ`
   return {
-    driving: routeMode.value === 'driving' ? routeResult.value.duration : fmt(km * 0.9),
-    cycling: routeMode.value === 'cycling' ? routeResult.value.duration : fmt(km * 4),
-    walking: routeMode.value === 'walking' ? routeResult.value.duration : fmt(km * 12),
+    driving: cachedModeTimes.value.driving ?? fmt(km * 0.9),
+    cycling: cachedModeTimes.value.cycling ?? fmt(km * 4),
+    walking: cachedModeTimes.value.walking ?? fmt(km * 12),
   }
 })
 
@@ -1587,16 +1632,16 @@ onMounted(async () => {
   map.on('moveend', updateWeather)
 
   // Click handler for route waypoints
-  // ── User interaction tracking — pauses nav camera follow ──────────
-  let userInteracting = false
-  let interactionTimer = null
+  // ── User interaction tracking — pauses/stops nav camera follow ────
   const onInteractStart = () => {
-    userInteracting = true
+    mapUserInteracting.value = true
     clearTimeout(interactionTimer)
+    // If navigating, hand camera control back to user
+    if (liveNavActive.value) navFollowing.value = false
   }
   const onInteractEnd = () => {
     clearTimeout(interactionTimer)
-    interactionTimer = setTimeout(() => { userInteracting = false }, 2500)
+    interactionTimer = setTimeout(() => { mapUserInteracting.value = false }, 2000)
   }
   map.on('dragstart',  onInteractStart)
   map.on('zoomstart',  onInteractStart)
@@ -1604,8 +1649,6 @@ onMounted(async () => {
   map.on('dragend',    onInteractEnd)
   map.on('zoomend',    onInteractEnd)
   map.on('pitchend',   onInteractEnd)
-  // Expose to closure for startMyLocation
-  window.__mapUserInteracting = () => userInteracting
 
   map.on('click', (e) => {
     if (selectingWaypointIdx.value >= 0 && showRoutePanel.value) {
@@ -2003,25 +2046,27 @@ function startMyLocation(navMode) {
     <div class="user-loc-cone"></div>
   `
   myLocMarker = new mapboxgl.Marker({ element: myLocEl, anchor: 'center' })
-  myLocActive.value = true
+  myLocActive.value  = true
+  hasUserLoc.value   = false
 
   if (navMode) {
     liveNavActive.value = true
-    liveNavStep.value = 0
+    liveNavStep.value   = 0
+    navFollowing.value  = true
   }
 
   let firstFix = true
 
   myLocWatchId = navigator.geolocation.watchPosition(pos => {
-    const { latitude: lat, longitude: lng, heading, accuracy } = pos.coords
+    const { latitude: lat, longitude: lng, heading } = pos.coords
     lastUserLat = lat; lastUserLng = lng; lastUserHeading = heading
 
-    // Place / update marker
+    // ── Instant marker update — no animation, zero GPU cost ──
     if (!myLocMarker._map) myLocMarker.addTo(map)
     myLocMarker.setLngLat([lng, lat])
 
-    // Heading cone — rotate the wrapper
-    const hasHeading = heading !== null && heading !== undefined && !isNaN(heading)
+    // Heading direction cone — pure CSS transform, no map involvement
+    const hasHeading = typeof heading === 'number' && !isNaN(heading)
     if (hasHeading) {
       myLocEl.classList.remove('no-heading')
       myLocEl.style.transform = `rotate(${heading}deg)`
@@ -2030,59 +2075,71 @@ function startMyLocation(navMode) {
       myLocEl.style.transform = ''
     }
 
-    // First fix: fly to location
+    // ── FIRST FIX: one-time cinematic fly-to ──────────────────────
     if (firstFix) {
       firstFix = false
-      if (!liveNavActive.value) {
-        map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 13), duration: 1200 })
-      } else {
-        // Nav start: cinematic zoom in + pitch
-        map.easeTo({
-          center: [lng, lat], zoom: 16, pitch: 50,
+      hasUserLoc.value = true
+      if (navMode) {
+        // Nav start: pitch + zoom in once — after this, user is in control
+        map.flyTo({
+          center: [lng, lat], zoom: 15, pitch: 45,
           bearing: hasHeading ? heading : 0,
           duration: 1800, essential: true
         })
-        lastCamUpdate = Date.now()
+        lastCamUpdate = Date.now() + 1800  // block follow until flyTo finishes
+      } else {
+        map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 13), duration: 1000 })
       }
       return
     }
+    hasUserLoc.value = true
 
-    // Nav mode: follow camera — throttled + non-blocking + respects user interaction
-    if (liveNavActive.value) {
-      const isUserInteracting = typeof window.__mapUserInteracting === 'function'
-        ? window.__mapUserInteracting() : false
-
-      if (!isUserInteracting) {
-        const now = Date.now()
-        if (now - lastCamUpdate > 1200) {
-          lastCamUpdate = now
-          // Only move center + bearing — don't touch zoom so user can zoom freely
-          // Short 400ms animation is smooth but doesn't block map interaction
-          map.easeTo({
-            center: [lng, lat],
-            bearing: hasHeading ? heading : map.getBearing(),
-            duration: 400,
-            easing: t => t  // linear, lightweight
-            // NO zoom, NO pitch change during follow — set once at nav start
-          })
-        }
+    // ── NAV FOLLOWING: setCenter (instant, zero animation cost) ───
+    // Only runs when: navigating + user hasn't taken manual control + not currently interacting
+    if (liveNavActive.value && navFollowing.value && !mapUserInteracting.value) {
+      const now = Date.now()
+      if (now > lastCamUpdate) {
+        lastCamUpdate = now + 3000  // at most once every 3 seconds
+        // setCenter is completely non-blocking — no render loop interference
+        map.setCenter([lng, lat])
+        if (hasHeading) map.setBearing(heading)
       }
+    }
 
-      // Auto-advance step based on proximity to next maneuver point
-      const steps = routeSteps.value
-      if (steps.length && liveNavStep.value < steps.length - 1) {
-        const next = steps[liveNavStep.value + 1]
-        if (next?.loc) {
-          const dist = haversineM(lat, lng, next.loc[1], next.loc[0])
-          if (dist < 35) liveNavStep.value = Math.min(liveNavStep.value + 1, steps.length - 1)
-        }
+    // ── Auto-advance step by proximity to maneuver point ──────────
+    const steps = routeSteps.value
+    if (liveNavActive.value && steps.length && liveNavStep.value < steps.length - 1) {
+      const next = steps[liveNavStep.value + 1]
+      if (next?.loc) {
+        const dist = haversineM(lat, lng, next.loc[1], next.loc[0])
+        if (dist < 35) liveNavStep.value = Math.min(liveNavStep.value + 1, steps.length - 1)
       }
     }
   }, err => {
     console.warn('Geolocation error:', err.code, err.message)
     if (err.code === 1) alert('მდებარეობის გაზიარება უარყოფილია. ჩართეთ ბრაუზერის პარამეტრებში.')
     stopMyLocation()
-  }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 })
+  }, {
+    enableHighAccuracy: true,
+    maximumAge: 5000,   // accept positions up to 5s old — reduces battery/CPU
+    timeout: 20000
+  })
+}
+
+// Re-center camera on user's location (called when recenter button tapped)
+function recenterNav() {
+  if (lastUserLat === null) return
+  navFollowing.value = true
+  const h = lastUserHeading
+  const hasH = typeof h === 'number' && !isNaN(h)
+  map.flyTo({
+    center: [lastUserLng, lastUserLat],
+    zoom: Math.max(map.getZoom(), 15),
+    pitch: 45,
+    bearing: hasH ? h : map.getBearing(),
+    duration: 900
+  })
+  lastCamUpdate = Date.now() + 900
 }
 
 function stopMyLocation() {
@@ -2125,6 +2182,7 @@ function clearRoute() {
   routeResult.value = null
   routeSteps.value  = []
   routeError.value  = ''
+  cachedModeTimes.value = { driving: null, cycling: null, walking: null }
   stopLiveNav()
 }
 // Legacy alias used elsewhere
@@ -2206,6 +2264,8 @@ async function calculateRoute() {
     const cost   = routeMode.value === 'driving' ? `~${(3 + parseFloat(distKm)*1.5).toFixed(0)} ₾` : null
 
     routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost, rawDist: parseFloat(distKm) }
+    // Cache this mode's real API time so switching modes doesn't show stale value
+    cachedModeTimes.value[routeMode.value] = durStr
     routeGeometry = route.geometry  // Store for re-fitting after nav ends
 
     // Parse steps — include maneuver location for proximity-based step advance
@@ -4105,6 +4165,56 @@ body.dark-theme .clouds {
 }
 .rd-start-btn.active:hover { box-shadow: 0 6px 28px rgba(211,47,47,0.55); }
 
+/* ── Recenter floating button (live nav) ── */
+.recenter-btn {
+  position: absolute;
+  bottom: 200px; right: 20px;
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: rgba(20,25,35,0.82);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  border: 1.5px solid rgba(255,255,255,0.18);
+  color: #1A73E8;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 9999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.recenter-btn:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(0,0,0,0.55); }
+.recenter-btn .material-symbols-outlined { font-size: 24px !important; }
+
+/* ── Taxi / Car price card ── */
+.rd-taxi-card {
+  margin: 0 16px 14px;
+  background: rgba(255,193,7,0.07);
+  border: 1px solid rgba(255,193,7,0.22);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.rd-taxi-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85);
+}
+.rd-taxi-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px; padding: 9px 11px;
+}
+.rd-taxi-ico { font-size: 20px !important; color: rgba(255,255,255,0.55); flex-shrink: 0; }
+.rd-taxi-info { flex: 1; }
+.rd-taxi-type { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); }
+.rd-taxi-desc { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.rd-taxi-price {
+  font-size: 16px; font-weight: 700; color: #FBBC04;
+  flex-shrink: 0; min-width: 48px; text-align: right;
+}
+.rd-taxi-note {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: rgba(255,255,255,0.35);
+}
+
 /* ── "ყველა" off state ── */
 .icon-pill.all-off {
   background: rgba(244,67,54,0.12) !important;
@@ -4221,8 +4331,8 @@ body.dark-theme .clouds {
   .user-auth-wrap { top: 10px; right: 10px; }
   .user-auth-wrap .pill-btn { width: 46px; height: 46px; }
 
-  /* Controls — smaller, closer to edge */
-  .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
+  /* Controls — below the geocoder bar (geocoder top:66px + ~50px height) */
+  .ctrl-panel { top: 130px; left: 10px; gap: 8px; }
 
   /* Geocoder — centered below top bar */
   .geocoder-center {
@@ -4300,7 +4410,7 @@ body.dark-theme .clouds {
     left: 8px;
   }
   .user-auth-wrap .pill-btn { width: 42px; height: 42px; }
-  .ctrl-panel { top: 62px; left: 8px; }
+  .ctrl-panel { top: 118px; left: 8px; }
   .geocoder-center { top: 58px; width: calc(100vw - 16px); }
 }
 </style>
