@@ -257,11 +257,11 @@
       </div>
     </transition>
 
-    <!-- Route Sidebar — Google Maps style -->
+    <!-- Route Sidebar — Google Maps style, glassmorphism -->
     <transition name="route-drawer">
       <div v-if="showRoutePanel" class="route-drawer" @click.stop>
 
-        <!-- ── MODE BAR + CLOSE ── -->
+        <!-- ── HEADER: mode pills + close ── -->
         <div class="rd-head">
           <div class="rd-modes-bar">
             <button v-for="m in ROUTE_MODES" :key="m.val"
@@ -271,7 +271,7 @@
               <span class="rd-mode-pill-lbl">{{ m.label }}</span>
             </button>
           </div>
-          <button class="rd-close" @click="showRoutePanel = false">
+          <button class="rd-close" @click="showRoutePanel = false" title="დახურვა">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -283,7 +283,7 @@
           <div class="rd-input-row">
             <div class="rd-dot-col">
               <div class="rd-dot" style="background:#34A853;border-radius:50%"></div>
-              <div class="rd-connector" v-if="routeWaypoints.length >= 2"></div>
+              <div class="rd-connector"></div>
             </div>
             <div class="rd-input-box" :class="{ focused: activeInputIdx === 0 }">
               <input type="text" v-model="routeWaypoints[0].name"
@@ -333,13 +333,22 @@
             </div>
           </div>
 
-          <!-- Swap / Add stop -->
+          <!-- Actions: swap · add-stop · CALCULATE -->
           <div class="rd-input-actions">
             <button class="rd-action-btn" @click.stop="swapWaypoints" title="შეცვლა">
               <span class="material-symbols-outlined">swap_vert</span>
             </button>
-            <button class="rd-action-btn" @click.stop="addWaypointToRoute" v-if="routeWaypoints.length < 5" title="გამავალი წ.">
+            <button class="rd-action-btn" @click.stop="addWaypointToRoute" v-if="routeWaypoints.length < 5" title="შუა წ.">
               <span class="material-symbols-outlined">add_location_alt</span>
+            </button>
+            <!-- Inline Calculate button -->
+            <button class="rd-calc-inline"
+              :disabled="routeLoading || routeWaypoints.filter(w=>w.lat!==null).length < 2"
+              @click.stop="calculateRoute">
+              <span class="material-symbols-outlined" :style="routeLoading?'animation:spin 1s linear infinite':''">
+                {{ routeLoading ? 'progress_activity' : 'directions' }}
+              </span>
+              {{ routeLoading ? 'ითვლება...' : 'გამოთვლა' }}
             </button>
           </div>
 
@@ -374,13 +383,13 @@
           <!-- ── RESULT ── -->
           <template v-if="routeResult && !routeLoading">
 
-            <!-- Big duration + distance — Google Maps style -->
+            <!-- Hero: big duration + distance -->
             <div class="rd-result-hero">
               <div class="rd-result-duration">{{ routeResult.duration }}</div>
               <div class="rd-result-meta">{{ routeResult.distance }}{{ routeResult.cost ? ' · ' + routeResult.cost : '' }}</div>
             </div>
 
-            <!-- Mode time tabs -->
+            <!-- Mode time comparison -->
             <div class="rd-mode-times">
               <button v-for="m in ROUTE_MODES" :key="m.val"
                 class="rd-mode-time-btn" :class="{ active: routeMode === m.val }"
@@ -391,29 +400,22 @@
               </button>
             </div>
 
-            <!-- Live Navigation button -->
-            <button class="rd-live-btn" :class="{ active: liveNavActive }" @click="toggleLiveNav">
-              <span class="material-symbols-outlined">{{ liveNavActive ? 'stop_circle' : 'navigation' }}</span>
-              {{ liveNavActive ? 'ნავიგაციის შეჩერება' : '🧭 ნავიგაციის დაწყება' }}
-            </button>
-
-            <!-- Clear -->
+            <!-- Clear route -->
             <button class="rd-clear-btn" @click="clearRoute">
-              <span class="material-symbols-outlined">close</span>
+              <span class="material-symbols-outlined">delete_outline</span>
               მარშრუტის გასუფთავება
             </button>
 
-            <!-- Steps -->
+            <!-- Step-by-step directions -->
             <div v-if="routeSteps.length" class="rd-steps">
-              <div class="rd-steps-header">ბიჯ-ბიჯ მარშრუტი</div>
-
-              <!-- Origin label -->
+              <div class="rd-steps-header">
+                <span class="material-symbols-outlined" style="font-size:14px">turn_right</span>
+                ბიჯ-ბიჯ მარშრუტი
+              </div>
               <div class="rd-step-endpoint">
                 <div class="rd-step-ep-dot" style="background:#34A853"></div>
                 <span>{{ routeWaypoints[0].name || 'საწყისი' }}</span>
               </div>
-
-              <!-- Each step -->
               <div v-for="(step, i) in routeSteps" :key="i"
                 class="rd-step" :class="{ current: liveNavActive && i === liveNavStep }">
                 <div class="rd-step-ico">
@@ -424,8 +426,6 @@
                   <div class="rd-step-dist" v-if="step.dist">{{ step.dist }}</div>
                 </div>
               </div>
-
-              <!-- Destination label -->
               <div class="rd-step-endpoint">
                 <div class="rd-step-ep-dot" style="background:#EA4335;border-radius:3px"></div>
                 <span>{{ routeWaypoints[routeWaypoints.length-1].name || 'დანიშნულება' }}</span>
@@ -436,8 +436,8 @@
           <!-- ── EMPTY STATE ── -->
           <template v-if="!routeResult && !routeLoading && !routeError">
             <div class="rd-empty-hint">
-              <span class="material-symbols-outlined" style="font-size:32px;opacity:.3">route</span>
-              <span>შეიყვანეთ საწყისი და დანიშნულება</span>
+              <span class="material-symbols-outlined" style="font-size:36px;opacity:.25">route</span>
+              <span>შეიყვანეთ საწყისი და დანიშნულება<br><small style="opacity:.55">ავტოდასრულება ამოქმედდება ბეჭდვის დროს</small></span>
             </div>
             <div class="rd-quick-label">⚡ სწრაფი მარშრუტები</div>
             <div class="rd-quick-grid">
@@ -450,16 +450,28 @@
           </template>
 
         </div>
+
+        <!-- ── STICKY FOOTER: Start / Stop Navigation ── -->
+        <div class="rd-footer" v-if="routeResult && !routeLoading">
+          <button class="rd-start-btn" :class="{ active: liveNavActive }" @click="toggleLiveNav">
+            <span class="material-symbols-outlined">{{ liveNavActive ? 'stop_circle' : 'navigation' }}</span>
+            {{ liveNavActive ? 'ნავიგაციის შეჩერება' : 'Start — ნავიგაციის დაწყება' }}
+          </button>
+        </div>
+
       </div>
     </transition>
 
     <!-- Top Bar — round icon-only buttons -->
     <div class="top-bar">
       <button v-for="c in CATS" :key="c.v"
-        :class="['icon-pill', { active: activeCat===c.v }]"
-        :title="c.l"
+        :class="['icon-pill', {
+          active: c.v === 'all' ? (!pinsHidden && activeCat === 'all') : activeCat === c.v,
+          'all-off': c.v === 'all' && pinsHidden
+        }]"
+        :title="c.v === 'all' ? (pinsHidden ? 'ობიექტების ჩვენება' : 'ყველა ობიექტი / გამორთვა') : c.l"
         @click="filterCat(c.v)">
-        <span class="material-symbols-outlined">{{ c.i }}</span>
+        <span class="material-symbols-outlined">{{ c.v === 'all' && pinsHidden ? 'visibility_off' : c.i }}</span>
       </button>
       <div class="icon-pill-divider"></div>
       <button :class="['icon-pill', 'icon-pill-nav', { active: showAdSpaces }]"
@@ -927,6 +939,7 @@ watch(showBuildings, (v) => {
 
 // Filter
 const activeCat     = ref('all')
+const pinsHidden    = ref(false)   // "ყველა" second-click hides all pins
 const showAdSpaces  = ref(false)
 const showContactModal = ref(false)
 const showAboutModal   = ref(false)
@@ -1574,6 +1587,26 @@ onMounted(async () => {
   map.on('moveend', updateWeather)
 
   // Click handler for route waypoints
+  // ── User interaction tracking — pauses nav camera follow ──────────
+  let userInteracting = false
+  let interactionTimer = null
+  const onInteractStart = () => {
+    userInteracting = true
+    clearTimeout(interactionTimer)
+  }
+  const onInteractEnd = () => {
+    clearTimeout(interactionTimer)
+    interactionTimer = setTimeout(() => { userInteracting = false }, 2500)
+  }
+  map.on('dragstart',  onInteractStart)
+  map.on('zoomstart',  onInteractStart)
+  map.on('pitchstart', onInteractStart)
+  map.on('dragend',    onInteractEnd)
+  map.on('zoomend',    onInteractEnd)
+  map.on('pitchend',   onInteractEnd)
+  // Expose to closure for startMyLocation
+  window.__mapUserInteracting = () => userInteracting
+
   map.on('click', (e) => {
     if (selectingWaypointIdx.value >= 0 && showRoutePanel.value) {
       const idx = selectingWaypointIdx.value
@@ -1727,16 +1760,32 @@ function setPinCatVisibility(cat) {
 }
 
 function filterCat(cat) {
-  // Toggle off if same category clicked again
+  if (cat === 'all') {
+    if (!pinsHidden.value && activeCat.value === 'all') {
+      // Already showing all → hide all pins
+      pinsHidden.value = true
+      markers.forEach(m => { m.el.style.display = 'none' })
+      setPinCatVisibility('none')
+    } else {
+      // Pins hidden or filtered → show all
+      pinsHidden.value = false
+      activeCat.value = 'all'
+      markers.forEach(m => { if (m.isInside) m.el.style.display = 'block' })
+      setPinCatVisibility('all')
+      setAdVisibility(false)
+    }
+    return
+  }
+  // Specific category: toggle off if already active
+  pinsHidden.value = false
   if (activeCat.value === cat) {
     activeCat.value = 'all'
+    markers.forEach(m => { if (m.isInside) m.el.style.display = 'block' })
     setPinCatVisibility('all')
     return
   }
   activeCat.value = cat
-  // Hide ad spaces — selecting any location category deactivates ads
   setAdVisibility(false)
-  // Show only selected category (or all if 'all')
   setPinCatVisibility(cat)
 }
 
@@ -1998,19 +2047,25 @@ function startMyLocation(navMode) {
       return
     }
 
-    // Nav mode: follow camera (throttled to avoid freezing)
+    // Nav mode: follow camera — throttled + non-blocking + respects user interaction
     if (liveNavActive.value) {
-      const now = Date.now()
-      if (now - lastCamUpdate > 700) {
-        lastCamUpdate = now
-        map.easeTo({
-          center: [lng, lat],
-          zoom: Math.max(map.getZoom(), 15),
-          pitch: 50,
-          bearing: hasHeading ? heading : map.getBearing(),
-          duration: 700,
-          essential: false
-        })
+      const isUserInteracting = typeof window.__mapUserInteracting === 'function'
+        ? window.__mapUserInteracting() : false
+
+      if (!isUserInteracting) {
+        const now = Date.now()
+        if (now - lastCamUpdate > 1200) {
+          lastCamUpdate = now
+          // Only move center + bearing — don't touch zoom so user can zoom freely
+          // Short 400ms animation is smooth but doesn't block map interaction
+          map.easeTo({
+            center: [lng, lat],
+            bearing: hasHeading ? heading : map.getBearing(),
+            duration: 400,
+            easing: t => t  // linear, lightweight
+            // NO zoom, NO pitch change during follow — set once at nav start
+          })
+        }
       }
 
       // Auto-advance step based on proximity to next maneuver point
@@ -3341,19 +3396,19 @@ body.dark-theme .clouds {
 .panel-slide-enter-from, .panel-slide-leave-to { opacity: 0; transform: translateX(-12px) scale(0.97); }
 
 /* ══════════════════════════════════════════════
-   Route Drawer — full-height left sidebar
+   Route Drawer — full-height left sidebar, GLASSMORPHISM
 ══════════════════════════════════════════════ */
 .route-drawer {
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  width: 340px;
-  background: rgba(8, 8, 18, 0.96);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-right: 1px solid rgba(255,255,255,0.10);
+  width: 348px;
+  background: rgba(8, 11, 24, 0.78);
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  border-right: 1px solid rgba(255,255,255,0.12);
   z-index: 20000;
   display: flex; flex-direction: column;
-  box-shadow: 8px 0 48px rgba(0,0,0,0.6);
+  box-shadow: 12px 0 60px rgba(0,0,0,0.55), inset -1px 0 0 rgba(255,255,255,0.06);
   color: #fff;
   overflow: hidden;
 }
@@ -3365,7 +3420,8 @@ body.dark-theme .clouds {
 /* Header */
 .rd-head {
   display: flex; align-items: center; gap: 10px;
-  padding: 22px 20px 16px;
+  padding: 22px 16px 14px;
+  background: rgba(255,255,255,0.03);
   border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
 }
@@ -3997,6 +4053,65 @@ body.dark-theme .clouds {
 .adm-rent-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none !important; filter: none !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── rd-input-box glassmorphism upgrade ── */
+.rd-input-box {
+  background: rgba(255,255,255,0.07) !important;
+  border: 1.5px solid rgba(255,255,255,0.11) !important;
+}
+.rd-input-box.focused {
+  background: rgba(26,115,232,0.1) !important;
+  border-color: rgba(26,115,232,0.55) !important;
+}
+
+/* ── Inline Calculate button ── */
+.rd-calc-inline {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: 10px;
+  background: rgba(26,115,232,0.15);
+  border: 1.5px solid rgba(26,115,232,0.4);
+  color: #4A9EFF; font-size: 12px; font-weight: 700;
+  font-family: inherit; cursor: pointer;
+  transition: all 0.18s;
+}
+.rd-calc-inline .material-symbols-outlined { font-size: 15px !important; }
+.rd-calc-inline:hover { background: rgba(26,115,232,0.28); border-color: #4A9EFF; color: #fff; }
+.rd-calc-inline:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Sticky footer ── */
+.rd-footer {
+  flex-shrink: 0;
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255,255,255,0.09);
+  background: rgba(0,0,0,0.25);
+}
+
+/* ── Start Navigation button ── */
+.rd-start-btn {
+  width: 100%; padding: 15px;
+  background: linear-gradient(135deg, #1A73E8, #1254C4);
+  border: none; border-radius: 14px; color: #fff;
+  font-weight: 800; font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  transition: all 0.22s;
+  box-shadow: 0 4px 22px rgba(26,115,232,0.45);
+  font-family: inherit; letter-spacing: 0.3px;
+}
+.rd-start-btn .material-symbols-outlined { font-size: 20px !important; }
+.rd-start-btn:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 6px 28px rgba(26,115,232,0.55); }
+.rd-start-btn.active {
+  background: linear-gradient(135deg, #d32f2f, #b71c1c);
+  box-shadow: 0 4px 22px rgba(211,47,47,0.45);
+}
+.rd-start-btn.active:hover { box-shadow: 0 6px 28px rgba(211,47,47,0.55); }
+
+/* ── "ყველა" off state ── */
+.icon-pill.all-off {
+  background: rgba(244,67,54,0.12) !important;
+  border-color: rgba(244,67,54,0.3) !important;
+  color: #ff6b6b !important;
+}
+
 /* ── My Location Dot — Google Maps Style ── */
 .user-loc-wrapper {
   position: relative;
@@ -4165,6 +4280,10 @@ body.dark-theme .clouds {
   .lnb-icon .material-symbols-outlined { font-size: 22px !important; }
   .lnb-instr { font-size: 14px; }
   .lnb-eta { font-size: 13px; }
+
+  /* Route drawer footer on mobile */
+  .rd-footer { padding: 10px 12px 12px; }
+  .rd-start-btn { padding: 13px; font-size: 14px; }
 }
 
 @media (max-width: 480px) {
