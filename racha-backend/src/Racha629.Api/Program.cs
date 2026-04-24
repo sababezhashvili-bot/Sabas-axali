@@ -57,6 +57,53 @@ using (var scope = app.Services.CreateScope())
     {
         db.Database.EnsureCreated();
         Console.WriteLine("✅ Database schema ensured.");
+
+        // ── Idempotent table creation for newly added models ──
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS ""TourPackages"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""NameGeo"" TEXT NOT NULL DEFAULT '',
+                ""DescriptionGeo"" TEXT,
+                ""Price"" NUMERIC NOT NULL DEFAULT 0,
+                ""ImageUrl"" TEXT,
+                ""DurationHours"" DOUBLE PRECISION,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""TourWaypoints"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""TourPackageId"" INTEGER NOT NULL REFERENCES ""TourPackages""(""Id"") ON DELETE CASCADE,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""Latitude"" DOUBLE PRECISION NOT NULL,
+                ""Longitude"" DOUBLE PRECISION NOT NULL,
+                ""OrderIndex"" INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS ""TransportBookings"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""FullName"" TEXT NOT NULL DEFAULT '',
+                ""Phone"" TEXT NOT NULL DEFAULT '',
+                ""FromLocation"" TEXT NOT NULL DEFAULT '',
+                ""ToLocation"" TEXT NOT NULL DEFAULT '',
+                ""DistanceKm"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                ""VehicleType"" TEXT NOT NULL DEFAULT 'taxi',
+                ""Price"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                ""Status"" TEXT NOT NULL DEFAULT 'Pending',
+                ""BookingDate"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""Notes"" TEXT
+            );
+            CREATE TABLE IF NOT EXISTS ""DirectorySubmissions"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""FullName"" TEXT NOT NULL DEFAULT '',
+                ""District"" TEXT NOT NULL DEFAULT '',
+                ""Village"" TEXT NOT NULL DEFAULT '',
+                ""LocationType"" TEXT NOT NULL DEFAULT '',
+                ""Latitude"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                ""Longitude"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                ""Status"" TEXT NOT NULL DEFAULT 'Pending',
+                ""SubmittedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                ""Notes"" TEXT
+            );
+        ");
+        Console.WriteLine("✅ New tables ensured.");
     }
     catch (Exception ex)
     {

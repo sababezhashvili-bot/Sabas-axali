@@ -465,25 +465,29 @@
             <span class="material-symbols-outlined" style="color:#FBBC04;font-size:18px">local_taxi</span>
             <span class="rd-taxi-title">ტაქსი / ავტო სერვისი</span>
           </div>
-          <div class="rd-taxi-row">
-            <span class="material-symbols-outlined rd-taxi-ico">directions_car</span>
+          <div class="rd-taxi-row" @click="openTransportBooking(routeWaypoints[0]?.name||'საწყისი', routeWaypoints[routeWaypoints.length-1]?.name||'დანიშნულება', routeResult.rawDist)" style="cursor:pointer">
+            <span class="material-symbols-outlined rd-taxi-ico">local_taxi</span>
             <div class="rd-taxi-info">
               <div class="rd-taxi-type">ლოკალური ტაქსი</div>
-              <div class="rd-taxi-desc">{{ routeResult.distance }} · სავარაუდო ფასი</div>
+              <div class="rd-taxi-desc">{{ routeResult.distance }} · 20 ₾ + 2 ₾/კმ</div>
             </div>
             <div class="rd-taxi-price">{{ (20 + routeResult.rawDist * 2).toFixed(0) }} ₾</div>
           </div>
-          <div class="rd-taxi-row">
+          <div class="rd-taxi-row" @click="openTransportBooking(routeWaypoints[0]?.name||'საწყისი', routeWaypoints[routeWaypoints.length-1]?.name||'დანიშნულება', routeResult.rawDist)" style="cursor:pointer">
             <span class="material-symbols-outlined rd-taxi-ico">directions_car</span>
             <div class="rd-taxi-info">
               <div class="rd-taxi-type">კომფორტი / მინივენი</div>
-              <div class="rd-taxi-desc">{{ routeResult.distance }} · სავარაუდო ფასი</div>
+              <div class="rd-taxi-desc">{{ routeResult.distance }} · 30 ₾ + 2.5 ₾/კმ</div>
             </div>
             <div class="rd-taxi-price">{{ (30 + routeResult.rawDist * 2.5).toFixed(0) }} ₾</div>
           </div>
+          <button class="rd-taxi-book-btn" @click="openTransportBooking(routeWaypoints[0]?.name||'საწყისი', routeWaypoints[routeWaypoints.length-1]?.name||'დანიშნულება', routeResult.rawDist)">
+            <span class="material-symbols-outlined" style="font-size:15px">directions_car</span>
+            ტაქსის ჯავშნა
+          </button>
           <div class="rd-taxi-note">
             <span class="material-symbols-outlined" style="font-size:12px;opacity:.5">info</span>
-            საბაზო: 20 ₾ + 2 ₾/კმ · ფასი სავარაუდოა
+            ფასი სავარაუდოა · ოფიციალური დადასტურება ტელეფონით
           </div>
         </div>
 
@@ -520,6 +524,10 @@
       </button>
       <button class="icon-pill icon-pill-nav" title="ჩვენს შესახებ" @click="showAboutModal = true">
         <span class="material-symbols-outlined">info</span>
+      </button>
+      <button :class="['icon-pill', 'icon-pill-znobari', { active: showZnobariPanel }]"
+        title="ცნობარის შევსება" @click="showZnobariPanel = !showZnobariPanel">
+        <span class="material-symbols-outlined">contact_page</span>
       </button>
     </div>
 
@@ -595,6 +603,168 @@
         <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0;white-space:pre-line">
           {{ siteSettings.about_text || 'რაჭა 629 — ინტერაქტიული 3D რუკა, რომელიც წარმოაჩენს რაჭის რეგიონის ღირსშესანიშნაობებს, სასტუმროებს, რესტორნებსა და ბუნებრივ ობიექტებს. პროექტი შექმნილია რაჭის ტურიზმის განვითარების მიზნით.' }}
         </p>
+      </div>
+    </div>
+
+    <!-- ── ცნობარის პანელი (Directory Form) ── -->
+    <transition name="znobari-slide">
+      <div v-if="showZnobariPanel" class="znobari-panel" @click.stop>
+        <div class="znobari-head">
+          <div class="znobari-title">
+            <span class="material-symbols-outlined" style="color:#F44336;font-size:20px">contact_page</span>
+            ცნობარის შევსება
+          </div>
+          <button class="znobari-close" @click="showZnobariPanel = false">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="znobari-body">
+          <!-- Success state -->
+          <div v-if="znobariDone" class="znobari-success">
+            <span class="material-symbols-outlined" style="font-size:40px;color:#4CAF50">check_circle</span>
+            <div style="font-size:15px;font-weight:600;margin-top:10px">გმადლობთ!</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">თქვენი ინფორმაცია მიღებულია. ადმინი განიხილავს და დაამატებს რუკაზე.</div>
+            <button class="znobari-submit" style="margin-top:16px;background:rgba(76,175,80,0.2);border-color:rgba(76,175,80,0.4)" @click="znobariDone=false;resetZnobari()">
+              კიდევ ერთი
+            </button>
+          </div>
+
+          <template v-else>
+            <!-- 1. სახელი და გვარი -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">1</span> სახელი და გვარი
+              </label>
+              <input v-model="znobari.fullName" class="zn-input" placeholder="მაგ. გიორგი ბერიძე" />
+            </div>
+
+            <!-- 2. რაიონი → სოფელი -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">2</span> რაიონი და სოფელი
+              </label>
+              <div class="zn-row">
+                <select v-model="znobari.district" class="zn-input zn-select" @change="znobari.village = ''">
+                  <option value="">— რაიონი —</option>
+                  <option value="ამბროლაური">ამბროლაური</option>
+                  <option value="ონი">ონი</option>
+                </select>
+                <select v-model="znobari.village" class="zn-input zn-select" :disabled="!znobari.district">
+                  <option value="">— სოფელი —</option>
+                  <option v-for="v in znobariVillages" :key="v" :value="v">{{ v }}</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 3. ობიექტის ტიპი -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">3</span> ობიექტის ტიპი
+              </label>
+              <div class="zn-type-grid">
+                <button v-for="lt in LOCATION_TYPES" :key="lt.v"
+                  :class="['zn-type-btn', { active: znobari.locationType === lt.v }]"
+                  @click="znobari.locationType = lt.v">
+                  <span class="material-symbols-outlined">{{ lt.icon }}</span>
+                  {{ lt.l }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 4. პინ მანიშნებელი -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">4</span> ადგილმდებარეობა რუკაზე
+              </label>
+              <div class="zn-coord-wrap">
+                <div :class="['zn-coord-box', { active: znobariPlacing, filled: znobari.lat !== null }]">
+                  <span class="material-symbols-outlined" style="font-size:16px">
+                    {{ znobari.lat !== null ? 'location_on' : 'my_location' }}
+                  </span>
+                  <span>{{ znobari.lat !== null ? `${znobari.lat.toFixed(5)}, ${znobari.lng.toFixed(5)}` : 'კოორდინატი არ არის' }}</span>
+                </div>
+                <button :class="['zn-place-btn', { active: znobariPlacing }]" @click="znobariPlacing = !znobariPlacing">
+                  <span class="material-symbols-outlined">{{ znobariPlacing ? 'cancel' : 'add_location_alt' }}</span>
+                  {{ znobariPlacing ? 'გაუქმება' : 'რუკაზე მონიშნვა' }}
+                </button>
+              </div>
+              <div v-if="znobariPlacing" class="zn-hint">
+                <span class="material-symbols-outlined" style="font-size:13px;color:#FBBC04">touch_app</span>
+                რუკაზე დააჭირეთ ობიექტის ადგილმდებარეობაზე
+              </div>
+            </div>
+
+            <!-- Error -->
+            <div v-if="znobariError" class="zn-error">{{ znobariError }}</div>
+
+            <!-- Submit -->
+            <button class="znobari-submit" @click="submitZnobari" :disabled="znobariLoading">
+              <span class="material-symbols-outlined" :class="{ 'spin-anim': znobariLoading }">
+                {{ znobariLoading ? 'progress_activity' : 'send' }}
+              </span>
+              {{ znobariLoading ? 'იგზავნება...' : 'ცნობარის გაგზავნა' }}
+            </button>
+          </template>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Transport Booking Modal -->
+    <div v-if="showTransportModal" class="modal-overlay" @click.self="showTransportModal = false">
+      <div class="glass-modal" style="max-width:400px;width:90%">
+        <span class="material-symbols-outlined close-modal" @click="showTransportModal = false">close</span>
+        <span class="material-symbols-outlined" style="font-size:36px;color:#FBBC04;margin-bottom:10px">local_taxi</span>
+        <h2 style="margin:0 0 4px;font-size:18px">ტრანსპორტის ჯავშანი</h2>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px">
+          {{ transportBooking.from }} → {{ transportBooking.to }} · {{ transportBooking.dist.toFixed(1) }} კმ
+        </div>
+
+        <!-- Vehicle type -->
+        <div class="tb-vehicle-row">
+          <button :class="['tb-v-btn', { active: transportBooking.type === 'taxi' }]" @click="transportBooking.type = 'taxi'">
+            <span class="material-symbols-outlined">local_taxi</span>
+            <div>
+              <div class="tb-v-name">ლოკალური ტაქსი</div>
+              <div class="tb-v-price">{{ (20 + transportBooking.dist * 2).toFixed(0) }} ₾</div>
+            </div>
+          </button>
+          <button :class="['tb-v-btn', { active: transportBooking.type === 'comfort' }]" @click="transportBooking.type = 'comfort'">
+            <span class="material-symbols-outlined">directions_car</span>
+            <div>
+              <div class="tb-v-name">კომფორტი</div>
+              <div class="tb-v-price">{{ (30 + transportBooking.dist * 2.5).toFixed(0) }} ₾</div>
+            </div>
+          </button>
+        </div>
+
+        <div class="info-modal-row" style="margin-bottom:10px;background:rgba(251,188,4,0.08);border-radius:10px;padding:10px 12px;border:1px solid rgba(251,188,4,0.2)">
+          <span class="material-symbols-outlined" style="color:#FBBC04">payments</span>
+          <span style="font-weight:700;font-size:16px">
+            {{ transportBooking.type === 'comfort'
+              ? (30 + transportBooking.dist * 2.5).toFixed(0)
+              : (20 + transportBooking.dist * 2).toFixed(0) }} ₾
+          </span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.4);margin-left:auto">სავარაუდო ფასი</span>
+        </div>
+
+        <input v-model="transportBooking.name" class="zn-input" placeholder="სახელი და გვარი *" style="margin-bottom:10px" />
+        <input v-model="transportBooking.phone" class="zn-input" placeholder="ტელეფონი *" style="margin-bottom:10px" />
+        <textarea v-model="transportBooking.notes" class="zn-input" rows="2" placeholder="შენიშვნა (არასავალდებულო)" style="margin-bottom:14px;resize:none"></textarea>
+
+        <div v-if="transportError" class="zn-error">{{ transportError }}</div>
+
+        <button class="znobari-submit" @click="bookTransport" :disabled="transportLoading">
+          <span class="material-symbols-outlined" :class="{ 'spin-anim': transportLoading }">
+            {{ transportLoading ? 'progress_activity' : 'directions_car' }}
+          </span>
+          {{ transportLoading ? 'ეგზავნება...' : 'ჯავშნის გაგზავნა' }}
+        </button>
+
+        <div v-if="transportDone" class="znobari-success" style="margin-top:12px">
+          <span class="material-symbols-outlined" style="font-size:28px;color:#4CAF50">check_circle</span>
+          <div style="font-size:13px;margin-top:6px">ჯავშანი მიღებულია! ადმინი დაგიკავშირდებათ.</div>
+        </div>
       </div>
     </div>
 
@@ -799,6 +969,103 @@ function selectSubRegion(r) {
           })
        }
     }
+  }
+}
+
+// ── ცნობარი (Directory Submission) ──
+const showZnobariPanel = ref(false)
+const znobariPlacing   = ref(false)
+const znobariDone      = ref(false)
+const znobariLoading   = ref(false)
+const znobariError     = ref('')
+const znobari = ref({ fullName: '', district: '', village: '', locationType: '', lat: null, lng: null })
+
+const LOCATION_TYPES = [
+  { v: 'landmark',    l: 'ღირსშ.',    icon: 'landscape'        },
+  { v: 'waterfall',   l: 'ჩანჩქ.',    icon: 'water'            },
+  { v: 'hotel',       l: 'სასტ.',     icon: 'hotel'            },
+  { v: 'restaurant',  l: 'კვება',     icon: 'restaurant'       },
+  { v: 'church',      l: 'ეკლ.',      icon: 'church'           },
+  { v: 'other',       l: 'სხვა',      icon: 'location_on'      },
+]
+
+const DISTRICT_VILLAGES = {
+  'ამბროლაური': [
+    'ამბროლაური', 'ხიდიკარი', 'ჭყვიში', 'ცხვარიჭამია', 'ნიჯგორი', 'სკანდა',
+    'ჩხარი', 'ბარა', 'მათხოჯი', 'ნიკორწმინდა', 'ბუგეული', 'ხვამლი',
+    'ჭრება', 'ლეგვა', 'ავნევი', 'ღვარდი', 'მოსია', 'ჯონეთი', 'ბოლქვა'
+  ],
+  'ონი': [
+    'ონი', 'ეწერი', 'ჭიორა', 'გლოლა', 'ჩხოლთა', 'ბარი', 'ნახი',
+    'სიონი', 'სადმელი', 'ხელე', 'წედისი', 'ღება', 'ჭიდება', 'ნარეკვავი'
+  ]
+}
+
+const znobariVillages = computed(() =>
+  znobari.value.district ? (DISTRICT_VILLAGES[znobari.value.district] || []) : []
+)
+
+function resetZnobari() {
+  znobari.value = { fullName: '', district: '', village: '', locationType: '', lat: null, lng: null }
+  znobariError.value = ''
+  znobariPlacing.value = false
+}
+
+async function submitZnobari() {
+  const z = znobari.value
+  if (!z.fullName.trim())   { znobariError.value = 'სახელი სავალდებულოა';      return }
+  if (!z.district)          { znobariError.value = 'რაიონი სავალდებულოა';      return }
+  if (!z.village)           { znobariError.value = 'სოფელი სავალდებულოა';      return }
+  if (!z.locationType)      { znobariError.value = 'ობიექტის ტიპი სავალდებულო'; return }
+  if (z.lat === null)       { znobariError.value = 'მონიშნეთ ლოკაცია რუკაზე'; return }
+  znobariError.value = ''
+  znobariLoading.value = true
+  try {
+    await api.submitDirectory({
+      fullName: z.fullName, district: z.district, village: z.village,
+      locationType: z.locationType, latitude: z.lat, longitude: z.lng
+    })
+    znobariDone.value = true
+    // Remove temp placement marker if any
+    if (window.__znobariMarker) { window.__znobariMarker.remove(); window.__znobariMarker = null }
+  } catch(e) {
+    znobariError.value = e.message || 'შეცდომა, სცადეთ თავიდან'
+  } finally {
+    znobariLoading.value = false
+  }
+}
+
+// ── Transport Booking ──
+const showTransportModal = ref(false)
+const transportDone      = ref(false)
+const transportLoading   = ref(false)
+const transportError     = ref('')
+const transportBooking = ref({ from: '', to: '', dist: 0, type: 'taxi', name: '', phone: '', notes: '' })
+
+function openTransportBooking(from, to, dist) {
+  transportBooking.value = { from, to, dist, type: 'taxi', name: '', phone: '', notes: '' }
+  transportDone.value = false
+  transportError.value = ''
+  showTransportModal.value = true
+}
+
+async function bookTransport() {
+  const b = transportBooking.value
+  if (!b.name.trim() || !b.phone.trim()) { transportError.value = 'სახელი და ტელეფონი სავალდებულოა'; return }
+  transportError.value = ''
+  transportLoading.value = true
+  try {
+    await api.bookTransport({
+      fullName: b.name, phone: b.phone,
+      fromLocation: b.from, toLocation: b.to, distanceKm: b.dist,
+      vehicleType: b.type, notes: b.notes
+    })
+    transportDone.value = true
+    setTimeout(() => { showTransportModal.value = false }, 3000)
+  } catch(e) {
+    transportError.value = e.message || 'შეცდომა, სცადეთ თავიდან'
+  } finally {
+    transportLoading.value = false
   }
 }
 
@@ -1651,6 +1918,7 @@ onMounted(async () => {
   map.on('pitchend',   onInteractEnd)
 
   map.on('click', (e) => {
+    // Route waypoint placement
     if (selectingWaypointIdx.value >= 0 && showRoutePanel.value) {
       const idx = selectingWaypointIdx.value
       const wp = routeWaypoints.value[idx]
@@ -1660,8 +1928,27 @@ onMounted(async () => {
         wp.name = idx === 0 ? 'საწყისი' : idx === routeWaypoints.value.length - 1 ? 'დანიშნულება' : `წ. ${idx+1}`
       }
       selectingWaypointIdx.value = -1
+      return
+    }
+
+    // ცნობარი location placement
+    if (znobariPlacing.value && showZnobariPanel.value) {
+      znobari.value.lat = parseFloat(e.lngLat.lat.toFixed(6))
+      znobari.value.lng = parseFloat(e.lngLat.lng.toFixed(6))
+      znobariPlacing.value = false
+      map.getCanvas().style.cursor = ''
+      // Add/move a marker to show the chosen spot
+      if (window.__znobariMarker) window.__znobariMarker.remove()
+      const el = document.createElement('div')
+      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#F44336;border:2.5px solid #fff;box-shadow:0 0 0 3px rgba(244,67,54,0.4);'
+      window.__znobariMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([e.lngLat.lng, e.lngLat.lat]).addTo(map)
+      return
     }
   })
+
+  // Keep cursor in sync with znobariPlacing
+  watch(znobariPlacing, v => { if (map) map.getCanvas().style.cursor = v ? 'crosshair' : '' })
 
   try {
     const gc = new MapboxGeocoder({
@@ -4394,6 +4681,194 @@ body.dark-theme .clouds {
   /* Route drawer footer on mobile */
   .rd-footer { padding: 10px 12px 12px; }
   .rd-start-btn { padding: 13px; font-size: 14px; }
+}
+
+/* ── ცნობარი panel ── */
+.icon-pill-znobari {
+  background: rgba(244,67,54,0.18) !important;
+  border-color: rgba(244,67,54,0.4) !important;
+  color: #F44336 !important;
+}
+.icon-pill-znobari.active, .icon-pill-znobari:hover {
+  background: rgba(244,67,54,0.32) !important;
+}
+
+.znobari-panel {
+  position: absolute;
+  top: 70px; right: 20px;
+  width: 320px;
+  max-height: calc(100vh - 100px);
+  background: rgba(12,16,26,0.88);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1.5px solid rgba(244,67,54,0.3);
+  border-radius: 20px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  z-index: 9999;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+}
+
+/* Transition */
+.znobari-slide-enter-active, .znobari-slide-leave-active {
+  transition: opacity 0.3s, transform 0.3s cubic-bezier(0.2,0.8,0.2,1);
+}
+.znobari-slide-enter-from, .znobari-slide-leave-to {
+  opacity: 0; transform: translateY(-12px) scale(0.97);
+}
+
+.znobari-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.znobari-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.9);
+}
+.znobari-close {
+  background: none; border: none; color: rgba(255,255,255,0.4);
+  cursor: pointer; padding: 2px;
+  display: flex; align-items: center;
+}
+.znobari-close:hover { color: rgba(255,255,255,0.9); }
+.znobari-close .material-symbols-outlined { font-size: 18px !important; }
+
+.znobari-body {
+  overflow-y: auto; padding: 14px 16px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+  scrollbar-width: thin;
+}
+
+.zn-field { display: flex; flex-direction: column; gap: 6px; }
+.zn-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6);
+}
+.zn-num {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(244,67,54,0.3); border: 1px solid rgba(244,67,54,0.5);
+  color: #F44336; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; flex-shrink: 0;
+}
+.zn-input {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px; padding: 9px 12px;
+  color: rgba(255,255,255,0.9); font-size: 13px; font-family: inherit;
+  outline: none; transition: border-color 0.2s;
+}
+.zn-input:focus { border-color: rgba(244,67,54,0.5); }
+.zn-select { appearance: none; cursor: pointer; }
+.zn-row { display: flex; gap: 8px; }
+.zn-row .zn-input { flex: 1; }
+
+.zn-type-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
+}
+.zn-type-btn {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 8px 4px;
+  color: rgba(255,255,255,0.55); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 11px; font-family: inherit; transition: all 0.18s;
+}
+.zn-type-btn .material-symbols-outlined { font-size: 18px !important; }
+.zn-type-btn.active {
+  background: rgba(244,67,54,0.2); border-color: rgba(244,67,54,0.5);
+  color: #F44336;
+}
+.zn-type-btn:hover { border-color: rgba(244,67,54,0.35); color: rgba(255,255,255,0.8); }
+
+.zn-coord-wrap { display: flex; flex-direction: column; gap: 6px; }
+.zn-coord-box {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 8px 12px;
+  font-size: 12px; color: rgba(255,255,255,0.4);
+  transition: border-color 0.2s;
+}
+.zn-coord-box.filled { border-color: rgba(76,175,80,0.4); color: #4CAF50; }
+.zn-coord-box.active { border-color: rgba(244,67,54,0.4); }
+.zn-coord-box .material-symbols-outlined { font-size: 16px !important; flex-shrink: 0; }
+
+.zn-place-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(244,67,54,0.15); border: 1px solid rgba(244,67,54,0.35);
+  border-radius: 10px; padding: 8px 12px;
+  color: #F44336; font-size: 12px; font-family: inherit;
+  cursor: pointer; transition: all 0.18s; font-weight: 600;
+}
+.zn-place-btn.active { background: rgba(244,67,54,0.3); }
+.zn-place-btn:hover { background: rgba(244,67,54,0.25); }
+.zn-place-btn .material-symbols-outlined { font-size: 16px !important; }
+
+.zn-hint {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: rgba(255,255,255,0.5);
+  background: rgba(251,188,4,0.08); border: 1px solid rgba(251,188,4,0.2);
+  border-radius: 8px; padding: 7px 10px;
+}
+
+.zn-error {
+  font-size: 12px; color: #F44336;
+  background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.25);
+  border-radius: 8px; padding: 8px 12px;
+}
+
+.znobari-submit {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 13px;
+  background: linear-gradient(135deg, #F44336, #C62828);
+  border: none; border-radius: 12px; color: #fff;
+  font-size: 14px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: filter 0.18s, transform 0.18s;
+  box-shadow: 0 4px 20px rgba(244,67,54,0.4);
+}
+.znobari-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+.znobari-submit:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+.znobari-submit .material-symbols-outlined { font-size: 18px !important; }
+
+.znobari-success {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 16px;
+}
+.spin-anim { animation: spin 0.9s linear infinite; }
+
+/* ── Transport booking vehicle buttons ── */
+.tb-vehicle-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.tb-v-btn {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 10px 12px; cursor: pointer;
+  color: rgba(255,255,255,0.65); transition: all 0.18s; font-family: inherit;
+}
+.tb-v-btn .material-symbols-outlined { font-size: 22px !important; flex-shrink: 0; }
+.tb-v-btn.active { border-color: rgba(251,188,4,0.5); background: rgba(251,188,4,0.1); color: #FBBC04; }
+.tb-v-btn:hover:not(.active) { border-color: rgba(255,255,255,0.2); }
+.tb-v-name { font-size: 12px; font-weight: 600; }
+.tb-v-price { font-size: 15px; font-weight: 800; color: #FBBC04; }
+
+/* ── Taxi book button ── */
+.rd-taxi-book-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px 12px;
+  background: rgba(251,188,4,0.18); border: 1px solid rgba(251,188,4,0.4);
+  border-radius: 10px; color: #FBBC04;
+  font-size: 13px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: background 0.18s;
+}
+.rd-taxi-book-btn:hover { background: rgba(251,188,4,0.28); }
+.rd-taxi-book-btn .material-symbols-outlined { font-size: 15px !important; }
+
+/* ── ცნობარი on mobile ── */
+@media (max-width: 768px) {
+  .znobari-panel {
+    top: auto; bottom: 0; right: 0; left: 0;
+    width: 100%; border-radius: 22px 22px 0 0;
+    max-height: 80vh; border-left: none; border-right: none; border-bottom: none;
+  }
 }
 
 @media (max-width: 480px) {

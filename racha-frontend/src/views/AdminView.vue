@@ -45,6 +45,15 @@
         <button :class="['nav-btn', { active: activeTab === 'map' }]" @click="switchTab('map')" title="Map Overview">
           <span class="material-symbols-outlined">map</span>
         </button>
+        <button :class="['nav-btn', { active: activeTab === 'tours' }]" @click="switchTab('tours')" title="ტური პაკეტები">
+          <span class="material-symbols-outlined">luggage</span>
+        </button>
+        <button :class="['nav-btn', { active: activeTab === 'transport' }]" @click="switchTab('transport')" title="ტრანსპორტი">
+          <span class="material-symbols-outlined">directions_car</span>
+        </button>
+        <button :class="['nav-btn', { active: activeTab === 'directory' }]" @click="switchTab('directory')" title="ცნობარის მოთხოვნები">
+          <span class="material-symbols-outlined">assignment</span>
+        </button>
         <button :class="['nav-btn', { active: activeTab === 'users' }]" @click="switchTab('users')" title="Users">
           <span class="material-symbols-outlined">group</span>
         </button>
@@ -556,6 +565,193 @@
         </div>
       </transition>
 
+      <!-- WIDGET: Tour Packages -->
+      <transition name="fade-slide">
+        <div v-if="activeTab === 'tours'" class="glass-widget pin-manager">
+          <div class="widget-header">
+            <h3>
+              <span class="material-symbols-outlined">{{ editingTour ? 'edit' : 'luggage' }}</span>
+              {{ editingTour ? 'ტურის რედაქტირება' : 'ტური პაკეტები' }}
+            </h3>
+            <button v-if="editingTour" class="icon-btn sm" @click="cancelTour">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="widget-body">
+
+            <!-- Tour Form -->
+            <div class="pm-form">
+              <div class="pm-field">
+                <label class="pm-label">ტურის სახელი (ქართ.)</label>
+                <input v-model="tourForm.nameGeo" class="pm-input" placeholder="მაგ. რაჭის სრული ტური" />
+              </div>
+              <div class="pm-field">
+                <label class="pm-label">აღწერა</label>
+                <textarea v-model="tourForm.descriptionGeo" rows="2" class="pm-input pm-textarea" placeholder="ტურის მოკლე აღწერა..."></textarea>
+              </div>
+              <div class="pm-row">
+                <div class="pm-field">
+                  <label class="pm-label">ფასი (₾)</label>
+                  <input v-model.number="tourForm.price" type="number" class="pm-input" placeholder="0" min="0" />
+                </div>
+                <div class="pm-field">
+                  <label class="pm-label">ხანგრძლივობა (სთ)</label>
+                  <input v-model.number="tourForm.durationHours" type="number" class="pm-input" placeholder="ავტო" step="0.5" />
+                </div>
+              </div>
+
+              <!-- Waypoints -->
+              <div class="pm-field">
+                <label class="pm-label">ლოკაციები ({{ tourForm.waypoints.length }})</label>
+                <div v-for="(wp, wi) in tourForm.waypoints" :key="wi" class="tour-wp-row">
+                  <span class="tour-wp-num">{{ wi + 1 }}</span>
+                  <input v-model="wp.name" class="pm-input" placeholder="ლოკაციის სახელი" style="flex:1" />
+                  <div class="pm-coord-wrap" style="flex:1">
+                    <input :value="wp.lat ? `${wp.lat.toFixed(4)},${wp.lng.toFixed(4)}` : ''" class="pm-input" readonly
+                      :placeholder="tourWpPlacing === wi ? 'რუკაზე დააჭირეთ...' : 'კოორდინატი'"
+                      :style="tourWpPlacing === wi ? { borderColor:'var(--accent)', color:'#4CAF50' } : {}" />
+                    <button class="pm-place-btn" :class="{ active: tourWpPlacing === wi }"
+                      @click="tourWpPlacing = tourWpPlacing === wi ? -1 : wi">
+                      <span class="material-symbols-outlined">{{ tourWpPlacing === wi ? 'location_on' : 'add_location_alt' }}</span>
+                    </button>
+                  </div>
+                  <button class="icon-btn sm" @click="tourForm.waypoints.splice(wi,1)" title="წაშლა">
+                    <span class="material-symbols-outlined">remove</span>
+                  </button>
+                </div>
+                <button class="pm-cancel-btn" style="width:100%;margin-top:6px" @click="tourForm.waypoints.push({name:'',lat:null,lng:null})">
+                  <span class="material-symbols-outlined">add_location_alt</span> ლოკაციის დამატება
+                </button>
+              </div>
+
+              <div class="pm-actions">
+                <button class="pm-save-btn" @click="saveTour" :disabled="tourSaving || !tourForm.nameGeo">
+                  <span class="material-symbols-outlined" :class="{ 'spin-icon': tourSaving }">
+                    {{ tourSaving ? 'progress_activity' : (editingTour ? 'save' : 'add') }}
+                  </span>
+                  {{ tourSaving ? 'ინახება...' : (editingTour ? 'განახლება' : 'ტურის დამატება') }}
+                </button>
+                <button v-if="editingTour" class="pm-cancel-btn" @click="cancelTour">
+                  <span class="material-symbols-outlined">close</span> გაუქმება
+                </button>
+              </div>
+            </div>
+
+            <!-- Tours list -->
+            <div class="pins-list">
+              <div class="pins-list-header">
+                <span class="material-symbols-outlined" style="font-size:14px;color:var(--accent)">luggage</span>
+                ტურები ({{ tours.length }})
+              </div>
+              <div class="pins-scroll">
+                <div v-if="tours.length === 0" class="pins-empty">ტური ჯერ არ არის დამატებული</div>
+                <div v-for="t in tours" :key="t.id" class="pin-list-item" :class="{ 'pin-list-item--editing': editingTour?.id === t.id }">
+                  <div class="pin-cat-dot" style="background:#6699cc"></div>
+                  <div class="pin-list-info" style="flex:1;cursor:pointer" @click="startEditTour(t)">
+                    <div class="pin-list-name">{{ t.nameGeo }}</div>
+                    <div class="pin-list-cat">{{ t.price }} ₾ · {{ t.waypoints?.length || 0 }} ლოკ. · {{ t.durationHours ? t.durationHours+'სთ' : 'ხანგრ. ავტო' }}</div>
+                  </div>
+                  <button class="pin-edit-btn" @click="startEditTour(t)" title="რედაქტირება">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="pin-del-btn" @click="deleteTour(t.id)" title="წაშლა">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </transition>
+
+      <!-- WIDGET: Transport Bookings -->
+      <transition name="fade-slide">
+        <div v-if="activeTab === 'transport'" class="glass-widget ad-manager">
+          <div class="widget-header">
+            <h3><span class="material-symbols-outlined">directions_car</span> ტრანსპორტის ჯავშნები</h3>
+            <button class="icon-btn sm" @click="loadTransport"><span class="material-symbols-outlined">refresh</span></button>
+          </div>
+          <div class="widget-body scrollable-y" style="max-height:calc(100vh - 220px)">
+            <div v-if="transportLoading" class="loading-spinner"></div>
+            <div v-else-if="transportBookings.length === 0" class="pins-empty" style="padding:24px 0">ჯავშანი არ არის</div>
+            <div v-for="b in transportBookings" :key="b.id" class="transport-booking-card">
+              <div class="tb-header">
+                <span class="tb-name">{{ b.fullName }}</span>
+                <span :class="['badge', b.status.toLowerCase()]">{{ b.status }}</span>
+              </div>
+              <div class="tb-row">
+                <span class="material-symbols-outlined tb-ico">phone</span>{{ b.phone }}
+              </div>
+              <div class="tb-row">
+                <span class="material-symbols-outlined tb-ico">route</span>
+                {{ b.fromLocation }} → {{ b.toLocation }}
+              </div>
+              <div class="tb-row">
+                <span class="material-symbols-outlined tb-ico">directions_car</span>
+                {{ b.vehicleType === 'comfort' ? 'კომფორტი' : 'ტაქსი' }} · {{ b.distanceKm.toFixed(1) }} კმ · <strong>{{ b.price }} ₾</strong>
+              </div>
+              <div class="tb-row" v-if="b.notes">
+                <span class="material-symbols-outlined tb-ico">notes</span>{{ b.notes }}
+              </div>
+              <div class="tb-actions">
+                <button v-if="b.status === 'Pending'" class="icon-btn approve" @click="updateTransport(b.id,'Confirmed')" title="დადასტურება">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+                <button v-if="b.status !== 'Cancelled'" class="icon-btn reject" @click="updateTransport(b.id,'Cancelled')" title="გაუქმება">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- WIDGET: Directory Submissions -->
+      <transition name="fade-slide">
+        <div v-if="activeTab === 'directory'" class="glass-widget ad-manager">
+          <div class="widget-header">
+            <h3><span class="material-symbols-outlined">assignment</span> ცნობარის მოთხოვნები</h3>
+            <button class="icon-btn sm" @click="loadDirectory"><span class="material-symbols-outlined">refresh</span></button>
+          </div>
+          <div class="widget-body scrollable-y" style="max-height:calc(100vh - 220px)">
+            <div v-if="directoryLoading" class="loading-spinner"></div>
+            <div v-else-if="dirSubmissions.length === 0" class="pins-empty" style="padding:24px 0">მოთხოვნა არ არის</div>
+            <div v-for="s in dirSubmissions" :key="s.id" class="transport-booking-card">
+              <div class="tb-header">
+                <span class="tb-name">{{ s.fullName }}</span>
+                <span :class="['badge', s.status.toLowerCase()]">{{ s.status }}</span>
+              </div>
+              <div class="tb-row">
+                <span class="material-symbols-outlined tb-ico">location_city</span>
+                {{ s.district }} · {{ s.village }}
+              </div>
+              <div class="tb-row">
+                <span class="material-symbols-outlined tb-ico">category</span>{{ s.locationType }}
+              </div>
+              <div class="tb-row">
+                <span class="material-symbols-outlined tb-ico">my_location</span>
+                {{ s.latitude.toFixed(5) }}, {{ s.longitude.toFixed(5) }}
+              </div>
+              <div class="tb-row" v-if="s.notes">
+                <span class="material-symbols-outlined tb-ico">notes</span>{{ s.notes }}
+              </div>
+              <div class="tb-actions">
+                <button v-if="s.status === 'Pending'" class="icon-btn approve" @click="updateDirectory(s.id,'Approved')" title="დამტკიცება">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+                <button v-if="s.status === 'Pending'" class="icon-btn reject" @click="updateDirectory(s.id,'Rejected')" title="უარყოფა">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+                <button class="icon-btn sm" @click="deleteDirectory(s.id)" title="წაშლა" style="color:#F44336">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+
       <!-- WIDGET: Stats (Bottom Left - Always Visible) -->
       <div class="glass-widget stats-widget">
         <div class="stat-item">
@@ -772,8 +968,11 @@ function switchTab(tab) {
   } else {
     stopPolling()
   }
-  if (tab === 'logs') loadLogs()
-  if (tab === 'ads') loadAdsData()
+  if (tab === 'logs')      loadLogs()
+  if (tab === 'ads')       loadAdsData()
+  if (tab === 'tours')     loadTours()
+  if (tab === 'transport') loadTransport()
+  if (tab === 'directory') loadDirectory()
 }
 
 // --- Auth ---
@@ -1114,6 +1313,101 @@ async function deleteAd(id) {
   } catch(e) { alert(e.message) }
 }
 
+// ── TOURS ──
+const tours = ref([])
+const editingTour = ref(null)
+const tourSaving = ref(false)
+const tourWpPlacing = ref(-1) // index of waypoint being placed, -1 = none
+const tourForm = ref({ nameGeo: '', descriptionGeo: '', price: 0, durationHours: null, waypoints: [] })
+
+async function loadTours() {
+  tours.value = await api.getTours()
+}
+
+function startEditTour(t) {
+  editingTour.value = t
+  tourForm.value = {
+    nameGeo: t.nameGeo,
+    descriptionGeo: t.descriptionGeo || '',
+    price: t.price,
+    durationHours: t.durationHours || null,
+    waypoints: (t.waypoints || []).map(w => ({ name: w.name, lat: w.latitude, lng: w.longitude }))
+  }
+}
+
+function cancelTour() {
+  editingTour.value = null
+  tourWpPlacing.value = -1
+  tourForm.value = { nameGeo: '', descriptionGeo: '', price: 0, durationHours: null, waypoints: [] }
+}
+
+async function saveTour() {
+  if (!tourForm.value.nameGeo) { alert('სახელი შეიყვანეთ'); return }
+  tourSaving.value = true
+  try {
+    const payload = {
+      nameGeo: tourForm.value.nameGeo,
+      descriptionGeo: tourForm.value.descriptionGeo,
+      price: tourForm.value.price,
+      durationHours: tourForm.value.durationHours,
+      waypoints: tourForm.value.waypoints.filter(w => w.name).map(w => ({
+        name: w.name, latitude: w.lat || 0, longitude: w.lng || 0
+      }))
+    }
+    if (editingTour.value) {
+      await api.updateTour(editingTour.value.id, payload)
+    } else {
+      await api.createTour(payload)
+    }
+    cancelTour()
+    await loadTours()
+  } catch(e) { alert(e.message) }
+  finally { tourSaving.value = false }
+}
+
+async function deleteTour(id) {
+  if (!confirm('ტური წაიშლება. გავაგრძელოთ?')) return
+  try { await api.deleteTour(id); await loadTours() } catch(e) { alert(e.message) }
+}
+
+// ── TRANSPORT ──
+const transportBookings = ref([])
+const transportLoading = ref(false)
+
+async function loadTransport() {
+  transportLoading.value = true
+  try { transportBookings.value = await api.getTransportBookings() }
+  catch(e) { console.error(e) }
+  finally { transportLoading.value = false }
+}
+
+async function updateTransport(id, status) {
+  try { await api.updateTransportStatus(id, status); await loadTransport() }
+  catch(e) { alert(e.message) }
+}
+
+// ── DIRECTORY ──
+const dirSubmissions = ref([])
+const directoryLoading = ref(false)
+
+async function loadDirectory() {
+  directoryLoading.value = true
+  try { dirSubmissions.value = await api.getDirectorySubmissions() }
+  catch(e) { console.error(e) }
+  finally { directoryLoading.value = false }
+}
+
+async function updateDirectory(id, status) {
+  try { await api.updateDirectoryStatus(id, status); await loadDirectory() }
+  catch(e) { alert(e.message) }
+}
+
+async function deleteDirectory(id) {
+  if (!confirm('ჩანაწერი წაიშლება?')) return
+  try { await api.deleteDirectorySubmission(id); await loadDirectory() }
+  catch(e) { alert(e.message) }
+}
+
 // ── PIN LIST ──
 const existingPins = ref([])
 const PIN_CAT_COLORS = {
@@ -1381,9 +1675,12 @@ async function initAdminMap() {
     if (!map.getSource('admin-pins')) renderAdminGLPins()
   })
 
-  // isPlacingPin cursor feedback
+  // isPlacingPin / tourWpPlacing cursor feedback
   watch(isPlacingPin, (val) => {
     if (map) map.getCanvas().style.cursor = val ? 'crosshair' : ''
+  })
+  watch(tourWpPlacing, (val) => {
+    if (map) map.getCanvas().style.cursor = val >= 0 ? 'crosshair' : ''
   })
 
   // Map click — only captures coord when placing pin or placing ad
@@ -1413,6 +1710,17 @@ async function initAdminMap() {
       adEl.style.cssText = `width:12px;height:12px;border-radius:50%;background:#FF9800;border:2px solid #fff;pointer-events:none;`
       tempAdMarker = new mapboxgl.Marker({ element: adEl, anchor: 'center' })
         .setLngLat([e.lngLat.lng, e.lngLat.lat]).addTo(map)
+    }
+
+    // Place tour waypoint
+    if (activeTab.value === 'tours' && tourWpPlacing.value >= 0) {
+      const wi = tourWpPlacing.value
+      if (tourForm.value.waypoints[wi]) {
+        tourForm.value.waypoints[wi].lat = e.lngLat.lat
+        tourForm.value.waypoints[wi].lng = e.lngLat.lng
+        tourWpPlacing.value = -1
+        map.getCanvas().style.cursor = ''
+      }
     }
   })
 } // end initAdminMap
@@ -2122,7 +2430,43 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   display: flex; align-items: center; font-size: 16px;
   transition: color 0.2s; padding: 2px;
 }
+.pin-edit-btn { color: rgba(255,255,255,0.55); }
 .pin-edit-btn:hover { color: var(--accent); }
+
+/* ── Tour waypoint row ── */
+.tour-wp-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+}
+.tour-wp-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+
+/* ── Transport / Directory booking cards ── */
+.transport-booking-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.tb-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.tb-name { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.9); }
+.tb-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: rgba(255,255,255,0.6);
+}
+.tb-ico { font-size: 15px !important; color: var(--accent); flex-shrink: 0; }
+.tb-actions { display: flex; gap: 6px; margin-top: 4px; }
+
+/* Badge confirmed */
+.badge.confirmed { background: rgba(26,115,232,0.2); color: #1A73E8; }
+.badge.cancelled { background: rgba(244,67,54,0.2); color: #F44336; }
+.badge.approved  { background: rgba(76,175,80,0.2);  color: #4CAF50; }
+.badge.rejected  { background: rgba(244,67,54,0.2);  color: #F44336; }
 
 .spin-icon { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
