@@ -475,7 +475,9 @@
           <div class="widget-header">
             <h3><span class="material-symbols-outlined">settings</span> პარამეტრები</h3>
           </div>
-          <div class="widget-body">
+          <div class="widget-body" style="overflow-y:auto;max-height:calc(100vh - 180px)">
+
+            <!-- Account info -->
             <div class="settings-section">
               <div class="settings-label">ანგარიში</div>
               <div class="settings-row">
@@ -491,6 +493,48 @@
                 <span class="settings-val" style="color:var(--accent)">{{ currentUser.role }}</span>
               </div>
             </div>
+
+            <!-- Contact info editor -->
+            <div class="settings-section" style="margin-top:16px">
+              <div class="settings-label">კონტაქტის ინფორმაცია</div>
+              <div class="pm-field" style="margin-top:8px">
+                <label class="pm-label">აღწერა</label>
+                <input type="text" v-model="editSettings.contact_description" class="pm-input" placeholder="შეიყვანეთ ტექსტი..." />
+              </div>
+              <div class="pm-field">
+                <label class="pm-label">ელ-ფოსტა</label>
+                <input type="text" v-model="editSettings.contact_email" class="pm-input" placeholder="info@..." />
+              </div>
+              <div class="pm-field">
+                <label class="pm-label">ტელეფონი</label>
+                <input type="text" v-model="editSettings.contact_phone" class="pm-input" placeholder="+995..." />
+              </div>
+              <div class="pm-field">
+                <label class="pm-label">მისამართი</label>
+                <input type="text" v-model="editSettings.contact_address" class="pm-input" placeholder="მისამართი..." />
+              </div>
+            </div>
+
+            <!-- About text editor -->
+            <div class="settings-section" style="margin-top:16px">
+              <div class="settings-label">ჩვენს შესახებ</div>
+              <div class="pm-field" style="margin-top:8px">
+                <label class="pm-label">ტექსტი</label>
+                <textarea v-model="editSettings.about_text" class="pm-textarea" rows="5" placeholder="ჩვენს შესახებ ტექსტი..."></textarea>
+              </div>
+            </div>
+
+            <!-- Save button -->
+            <div v-if="settingsSaveMsg" :class="['pm-status', settingsSaveMsg === 'შენახულია!' ? 'success' : 'error']">
+              {{ settingsSaveMsg }}
+            </div>
+            <button class="pm-save-btn" style="width:100%;margin-top:12px" @click="saveSiteSettings" :disabled="settingsSaving">
+              <span class="material-symbols-outlined" v-if="settingsSaving" style="animation:spin 1s linear infinite">progress_activity</span>
+              <span class="material-symbols-outlined" v-else>save</span>
+              {{ settingsSaving ? 'ინახება...' : 'შენახვა' }}
+            </button>
+
+            <!-- System -->
             <div class="settings-section" style="margin-top:16px">
               <div class="settings-label">სისტემა</div>
               <div class="settings-row">
@@ -502,10 +546,12 @@
                 <span class="settings-val" style="color:#4CAF50">● Online</span>
               </div>
             </div>
-            <button class="pm-save-btn" style="width:100%;margin-top:18px" @click="logout">
+
+            <button class="pm-save-btn" style="width:100%;margin-top:12px;background:rgba(244,67,54,0.2);border:1px solid rgba(244,67,54,0.3);color:#F44336" @click="logout">
               <span class="material-symbols-outlined">logout</span>
               გასვლა
             </button>
+
           </div>
         </div>
       </transition>
@@ -566,6 +612,7 @@ async function doAdminLogin() {
     await nextTick()
     await nextTick()
     initAdminMap()
+    loadSiteSettings()
   } catch(e) {
     loginError.value = 'პაროლი ან მომხმარებელი არასწორია'
   } finally {
@@ -584,6 +631,43 @@ const galleryPreviewUrls = ref([])
 const activeTab = ref('map')
 const currentUser = ref({ username: 'Admin', role: 'Admin', email: '' })
 const showMapCtrl = ref(false)
+
+// ── Site Settings ──
+const editSettings = ref({
+  contact_description: '',
+  contact_email: '',
+  contact_phone: '',
+  contact_address: '',
+  about_text: ''
+})
+const settingsSaving = ref(false)
+const settingsSaveMsg = ref('')
+
+async function loadSiteSettings() {
+  try {
+    const s = await api.getSiteSettings()
+    editSettings.value = {
+      contact_description: s.contact_description || '',
+      contact_email: s.contact_email || '',
+      contact_phone: s.contact_phone || '',
+      contact_address: s.contact_address || '',
+      about_text: s.about_text || ''
+    }
+  } catch(e) { console.warn('settings load failed', e) }
+}
+
+async function saveSiteSettings() {
+  settingsSaving.value = true; settingsSaveMsg.value = ''
+  try {
+    await api.updateSiteSettings(editSettings.value)
+    settingsSaveMsg.value = 'შენახულია!'
+  } catch(e) {
+    settingsSaveMsg.value = 'შეცდომა: ' + e.message
+  } finally {
+    settingsSaving.value = false
+    setTimeout(() => { settingsSaveMsg.value = '' }, 3000)
+  }
+}
 
 // Location form state
 const locName     = ref('')
@@ -1112,6 +1196,7 @@ onMounted(async () => {
       await nextTick()
       await nextTick()
       initAdminMap()
+      loadSiteSettings()
       return
     }
   } catch(e) {}
@@ -1928,7 +2013,19 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .pm-input::placeholder { color: rgba(255,255,255,0.22); }
 .pm-input:disabled { opacity: 0.45; }
 .pm-select { cursor: pointer; }
-.pm-textarea { resize: vertical; min-height: 52px; }
+.pm-textarea {
+  resize: vertical; min-height: 52px;
+  width: 100%; box-sizing: border-box;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px; padding: 10px 12px;
+  color: #fff; font-family: inherit; font-size: 13px;
+  outline: none;
+}
+.pm-textarea:focus { border-color: var(--accent); }
+.pm-status { padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; margin-top: 6px; }
+.pm-status.success { background: rgba(76,175,80,0.15); color: #4CAF50; border: 1px solid rgba(76,175,80,0.25); }
+.pm-status.error   { background: rgba(244,67,54,0.15);  color: #F44336; border: 1px solid rgba(244,67,54,0.25); }
 .pm-file { color: rgba(255,255,255,0.5); font-size: 12px; }
 .pm-file-hidden { display: none; }
 .pm-upload-label {
@@ -2119,8 +2216,11 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 .settings-widget {
   position: absolute;
   top: 100px; right: 20px;
-  width: 280px;
+  width: 340px;
+  max-height: calc(100vh - 120px);
   z-index: 30;
+  display: flex;
+  flex-direction: column;
 }
 .settings-section { display: flex; flex-direction: column; gap: 6px; }
 .settings-label {

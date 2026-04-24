@@ -242,7 +242,7 @@
             <span class="material-symbols-outlined" style="color:var(--accent)">route</span>
             მარშრუტის დაგეგმვა
           </div>
-          <button class="rd-close" @click="showRoutePanel = false; clearRouteLayer()">
+          <button class="rd-close" @click="showRoutePanel = false">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -331,8 +331,14 @@
             მარშრუტის გამოთვლა
           </button>
 
+          <!-- Clear route -->
+          <button v-if="routeResult" class="rd-clear-btn" @click="clearRouteLayer(); routeResult = null">
+            <span class="material-symbols-outlined" style="font-size:14px">delete_sweep</span>
+            მარშრუტის გასუფთავება
+          </button>
+
           <!-- Result -->
-          <div v-if="routeResult" class="rd-result">
+          <div v-if="routeResult" class="rd-result" ref="routeResultEl">
             <div class="rd-result-hero">
               <div class="rd-res-item">
                 <span class="material-symbols-outlined">straighten</span>
@@ -546,15 +552,19 @@
         <span class="material-symbols-outlined" style="font-size:40px;color:var(--accent);margin-bottom:12px">contact_support</span>
         <h2 style="margin:0 0 8px">კონტაქტი</h2>
         <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0 0 16px">
-          დაგვიკავშირდით ნებისმიერ კითხვასთან ან წინადადებასთან დაკავშირებით.
+          {{ siteSettings.contact_description || 'დაგვიკავშირდით ნებისმიერ კითხვასთან ან წინადადებასთან დაკავშირებით.' }}
         </p>
-        <div class="info-modal-row">
+        <div class="info-modal-row" v-if="siteSettings.contact_email">
           <span class="material-symbols-outlined" style="color:var(--accent)">mail</span>
-          <span>info@racha629.ge</span>
+          <span>{{ siteSettings.contact_email }}</span>
         </div>
-        <div class="info-modal-row">
+        <div class="info-modal-row" v-if="siteSettings.contact_phone">
           <span class="material-symbols-outlined" style="color:var(--accent)">phone</span>
-          <span>+995 32 2 00 00 00</span>
+          <span>{{ siteSettings.contact_phone }}</span>
+        </div>
+        <div class="info-modal-row" v-if="siteSettings.contact_address">
+          <span class="material-symbols-outlined" style="color:var(--accent)">location_on</span>
+          <span>{{ siteSettings.contact_address }}</span>
         </div>
       </div>
     </div>
@@ -565,11 +575,8 @@
         <span class="material-symbols-outlined close-modal" @click="showAboutModal = false">close</span>
         <img :src="logoSrc" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px" alt="Logo" />
         <h2 style="margin:0 0 8px">ჩვენს შესახებ</h2>
-        <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0">
-          რაჭა 629 — ინტერაქტიული 3D რუკა, რომელიც წარმოაჩენს რაჭის
-          რეგიონის ღირსშესანიშნაობებს, სასტუმროებს, რესტორნებსა და
-          ბუნებრივ ობიექტებს. პროექტი შექმნილია რაჭის ტურიზმის
-          განვითარების მიზნით.
+        <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0;white-space:pre-line">
+          {{ siteSettings.about_text || 'რაჭა 629 — ინტერაქტიული 3D რუკა, რომელიც წარმოაჩენს რაჭის რეგიონის ღირსშესანიშნაობებს, სასტუმროებს, რესტორნებსა და ბუნებრივ ობიექტებს. პროექტი შექმნილია რაჭის ტურიზმის განვითარების მიზნით.' }}
         </p>
       </div>
     </div>
@@ -578,7 +585,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import mapboxgl from 'mapbox-gl'
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
@@ -619,6 +626,7 @@ const showRoutePanel      = ref(false)
 const routeWaypoints      = ref([{ name: '', lng: null, lat: null }, { name: '', lng: null, lat: null }])
 const routeMode           = ref('driving')
 const routeResult         = ref(null)
+const routeResultEl       = ref(null)
 const selectingWaypointIdx = ref(-1)
 const routeTab            = ref('plan')
 const selectedTransport   = ref('taxi')
@@ -955,6 +963,7 @@ const showAdSpaces  = ref(false)
 const showContactModal = ref(false)
 const showAboutModal   = ref(false)
 const existingPins  = ref([])
+const siteSettings  = ref({})
 
 const CATS = [
   { l:'ყველა',             v:'all',        i:'location_on'  },
@@ -1646,6 +1655,7 @@ onMounted(async () => {
   } catch(e) {}
 
   try { const u = await api.getMe(); if(u) isLoggedIn.value = true } catch(e) {}
+  try { siteSettings.value = await api.getSiteSettings() } catch(e) {}
 
   // ── Handle ?addRoute=lat,lng,name — open route panel with location as destination ──
   const addRouteParam = new URLSearchParams(window.location.search).get('addRoute')
@@ -1928,6 +1938,8 @@ async function calculateRoute() {
       ? `~${(3 + parseFloat(distKm) * 1.5).toFixed(0)} ₾`
       : null
     routeResult.value = { distance: `${distKm} კმ`, duration: durStr, cost: gelCost, rawDist: parseFloat(distKm) }
+    // Scroll result into view on mobile
+    nextTick(() => { routeResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) })
 
     clearRouteLayer()
 
@@ -3208,6 +3220,16 @@ body.dark-theme .clouds {
 .rd-calc-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; filter: none; }
 .rd-calc-btn .material-symbols-outlined { font-size: 18px !important; }
 
+/* Clear route button */
+.rd-clear-btn {
+  width: 100%; padding: 9px; background: rgba(244,67,54,0.12);
+  border: 1px solid rgba(244,67,54,0.25); border-radius: 10px; color: #F44336;
+  font-weight: 600; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  transition: all 0.2s;
+}
+.rd-clear-btn:hover { background: rgba(244,67,54,0.22); }
+
 /* Result card */
 .rd-result {
   background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
@@ -3424,12 +3446,14 @@ body.dark-theme .clouds {
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Top bar — leave right space for user button */
+  /* Top bar — centered, scrollable row */
   .top-bar {
     top: 10px;
-    left: 10px;
-    right: 66px; /* space for user-auth-wrap button */
-    transform: none;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    width: max-content;
+    max-width: calc(100vw - 110px); /* leave space for login button */
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
@@ -3444,49 +3468,79 @@ body.dark-theme .clouds {
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
   .icon-pill::after { display: none; }
 
-  /* User auth button — align with top bar */
-  .user-auth-wrap {
-    top: 10px;
-    right: 10px;
-  }
-  .user-auth-wrap .pill-btn {
-    width: 46px; height: 46px;
-  }
+  /* User auth button — top right */
+  .user-auth-wrap { top: 10px; right: 10px; }
+  .user-auth-wrap .pill-btn { width: 46px; height: 46px; }
 
   /* Controls — smaller, closer to edge */
   .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
 
-  /* Geocoder — below top bar, full width */
+  /* Geocoder — centered below top bar */
   .geocoder-center {
     top: 66px;
-    left: 10px; right: 10px;
-    transform: none;
-    width: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    width: calc(100vw - 20px);
+    max-width: 420px;
+  }
+  .geocoder-center .mapboxgl-ctrl-geocoder {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   /* Layer/weather panels — wider on mobile */
   .lc-panel { width: calc(100vw - 20px) !important; max-width: 340px; }
 
-  /* Route drawer — full screen on mobile */
-  .route-drawer { width: 100vw !important; }
+  /* Route drawer — bottom sheet on mobile */
+  .route-drawer {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: 62vh !important;
+    border-radius: 22px 22px 0 0 !important;
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.55) !important;
+  }
+  .route-drawer-enter-from,
+  .route-drawer-leave-to { transform: translateY(100%) !important; }
+  .route-drawer-enter-active,
+  .route-drawer-leave-active { transition: transform 0.35s cubic-bezier(0.2,0.8,0.2,1) !important; }
+
+  /* Drag handle hint */
+  .rd-head::before {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 2px;
+  }
+  .rd-head { position: relative; padding-top: 24px; }
 
   /* Bottom counter */
   .bottom-label { font-size: 10px; padding: 6px 12px; }
-
   .icon-pill-nav::after { display: none; }
 }
 
 @media (max-width: 480px) {
-  .top-bar { top: 8px; left: 8px; right: 8px; transform: none; }
-  /* Login button moves to left panel area on phones */
+  /* Top bar — centered, keep same approach */
+  .top-bar {
+    top: 8px;
+    max-width: calc(100vw - 60px);
+  }
+  /* Login button — bottom left on tiny phones */
   .user-auth-wrap {
     top: auto;
-    bottom: 120px;
+    bottom: 110px;
     right: auto;
     left: 8px;
   }
   .user-auth-wrap .pill-btn { width: 42px; height: 42px; }
-  .ctrl-panel { top: 64px; left: 8px; }
-  .geocoder-center { top: 58px; left: 8px; right: 8px; }
+  .ctrl-panel { top: 62px; left: 8px; }
+  .geocoder-center { top: 58px; width: calc(100vw - 16px); }
 }
 </style>

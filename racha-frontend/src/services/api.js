@@ -195,6 +195,27 @@ class ApiClient {
     })
     if (!res.ok) throw new Error(await res.text())
   }
+
+  // ── Site Settings ──
+  async getSiteSettings() {
+    try {
+      const res = await fetch(`${this.baseUrl}/settings`)
+      if (!res.ok) return {}
+      return await res.json()
+    } catch { return {} }
+  }
+
+  async updateSiteSettings(settings) {
+    const res = await fetch(`${this.baseUrl}/settings`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(settings)
+    })
+    if (!res.ok) throw new Error(await res.text())
+  }
 }
 
 export const api = new ApiClient()

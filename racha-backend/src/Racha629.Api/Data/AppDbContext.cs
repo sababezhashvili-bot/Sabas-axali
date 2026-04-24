@@ -14,6 +14,7 @@ namespace Racha629.Api.Data
         public DbSet<ActivityLog> ActivityLogs { get; set; }
         public DbSet<AdSpace> AdSpaces { get; set; }
         public DbSet<RentRequest> RentRequests { get; set; }
+        public DbSet<SiteSetting> SiteSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -136,5 +137,13 @@ namespace Racha629.Api.Data
         public AdSpace AdSpace { get; set; } // New: Navigation property for the ad space
         [System.Text.Json.Serialization.JsonIgnore]
         public User User { get; set; } // New: Navigation property for the user who made the request
+    }
+
+    // 8. საიტის პარამეტრები (Site Settings — key/value)
+    public class SiteSetting
+    {
+        public int Id { get; set; }
+        public string Key { get; set; } = "";
+        public string Value { get; set; } = "";
     }
 }
