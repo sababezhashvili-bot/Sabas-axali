@@ -284,11 +284,23 @@ class ApiClient {
   }
 
   // ── Directory ──
-  async submitDirectory(data) {
+  async submitDirectory(data, photoFile) {
+    const fd = new FormData()
+    fd.append('fullName',     data.fullName     ?? '')
+    fd.append('phone',        data.phone        ?? '')
+    fd.append('district',     data.district     ?? '')
+    fd.append('village',      data.village      ?? '')
+    fd.append('locationType', data.locationType ?? '')
+    fd.append('latitude',     data.latitude     ?? 0)
+    fd.append('longitude',    data.longitude    ?? 0)
+    fd.append('description',  data.description  ?? '')
+    fd.append('notes',        data.notes        ?? '')
+    if (photoFile) fd.append('photo', photoFile)
+
     const res = await fetch(`${this.baseUrl}/directory`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: fd
     })
     if (!res.ok) throw new Error(await res.text())
     return await res.json()

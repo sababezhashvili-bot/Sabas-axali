@@ -204,6 +204,7 @@ namespace Racha629.Api.Data
     {
         public int Id { get; set; }
         public string FullName { get; set; } = "";
+        public string Phone { get; set; } = "";
         public string District { get; set; } = ""; // ამბროლაური or ონი
         public string Village { get; set; } = "";
         public string LocationType { get; set; } = "";
@@ -212,5 +213,7 @@ namespace Racha629.Api.Data
         public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
         public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
         public string? Notes { get; set; }
+        public string? Description { get; set; }
+        public string? PhotoUrl { get; set; }
     }
 }
