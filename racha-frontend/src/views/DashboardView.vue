@@ -36,15 +36,15 @@
       <div class="dash-actions">
         <button class="dash-btn primary" @click="router.push('/')">
           <span class="material-symbols-outlined">map</span>
-          მთავარ რუკაზე
+          {{ t('dash.toMap') }}
         </button>
         <button v-if="isAdmin" class="dash-btn accent" @click="router.push('/admin')">
           <span class="material-symbols-outlined">admin_panel_settings</span>
-          ადმინ პანელი
+          {{ t('dash.adminPanel') }}
         </button>
         <button class="dash-btn danger" @click="api.logout()">
           <span class="material-symbols-outlined">logout</span>
-          გასვლა
+          {{ t('dash.logout') }}
         </button>
       </div>
     </div>
@@ -55,6 +55,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../services/api.js'
+import { t } from '../i18n.js'
 
 const router = useRouter()
 const user = ref({ username: '', email: '', role: '', createdAt: null })

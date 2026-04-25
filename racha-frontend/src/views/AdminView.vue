@@ -7,17 +7,17 @@
         <div class="alc-icon">
           <span class="material-symbols-outlined" style="font-size:32px;color:#4CAF50">admin_panel_settings</span>
         </div>
-        <div class="alc-title">ადმინ პანელი</div>
-        <div class="alc-sub">შეიყვანეთ სერთიფიკატები</div>
+        <div class="alc-title">{{ t('admin.title') }}</div>
+        <div class="alc-sub">{{ t('admin.credentials') }}</div>
         <div v-if="loginError" class="alc-error">{{ loginError }}</div>
-        <input type="text" v-model="adminLoginUser" class="alc-input" placeholder="მომხმარებელი"
+        <input type="text" v-model="adminLoginUser" class="alc-input" :placeholder="t('auth.username')"
           @keydown.enter="doAdminLogin" :disabled="loginLoading" />
-        <input type="password" v-model="adminLoginPass" class="alc-input" placeholder="პაროლი"
+        <input type="password" v-model="adminLoginPass" class="alc-input" :placeholder="t('auth.password')"
           @keydown.enter="doAdminLogin" :disabled="loginLoading" />
         <button class="alc-btn" @click="doAdminLogin" :disabled="loginLoading">
           <span v-if="loginLoading" class="material-symbols-outlined" style="font-size:18px;animation:spin 1s linear infinite">progress_activity</span>
           <span v-else class="material-symbols-outlined" style="font-size:18px">login</span>
-          {{ loginLoading ? 'შედის...' : 'შესვლა' }}
+          {{ loginLoading ? t('admin.loggingIn') : t('admin.login') }}
         </button>
       </div>
     </div>
@@ -69,10 +69,10 @@
       </div>
 
       <div class="nav-group bottom">
-        <button class="nav-btn Back" @click="router.push('/')" title="Back to Site">
+        <button class="nav-btn Back" @click="router.push('/')" :title="t('admin.backToSite')">
           <span class="material-symbols-outlined">arrow_back</span>
         </button>
-        <button class="nav-btn logout" @click="logout" title="Logout">
+        <button class="nav-btn logout" @click="logout" :title="t('admin.logout')">
           <span class="material-symbols-outlined">logout</span>
         </button>
       </div>
@@ -834,6 +834,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import mapboxgl from 'mapbox-gl'
 import { api } from '../services/api.js'
+import { t } from '../i18n.js'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
 

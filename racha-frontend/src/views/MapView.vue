@@ -14,26 +14,26 @@
       <div class="glass-modal">
         <span class="material-symbols-outlined close-modal" @click="closeAuth">close</span>
         <div v-show="authView==='login'">
-          <h2 style="margin-top:0">შესვლა</h2>
-          <input type="text" v-model="loginUser" class="glass-input" placeholder="მომხმარებელი">
-          <input type="password" v-model="loginPass" class="glass-input" placeholder="პაროლი">
-          <button class="glass-btn" @click="processLogin">შესვლა</button>
+          <h2 style="margin-top:0">{{ t('auth.login') }}</h2>
+          <input type="text" v-model="loginUser" class="glass-input" :placeholder="t('auth.username')">
+          <input type="password" v-model="loginPass" class="glass-input" :placeholder="t('auth.password')">
+          <button class="glass-btn" @click="processLogin">{{ t('auth.login') }}</button>
           <div style="margin-top:12px;font-size:11px;opacity:.7;display:flex;justify-content:space-between">
-            <span style="cursor:pointer" @click="authView='recover'">პაროლის აღდგენა</span>
-            <span style="cursor:pointer;color:var(--accent)" @click="authView='register'">რეგისტრაცია</span>
+            <span style="cursor:pointer" @click="authView='recover'">{{ t('auth.recovery') }}</span>
+            <span style="cursor:pointer;color:var(--accent)" @click="authView='register'">{{ t('auth.register') }}</span>
           </div>
         </div>
         <div v-show="authView==='register'">
-          <h2 style="margin-top:0">რეგისტრაცია</h2>
-          <input type="text" v-model="regUser" class="glass-input" placeholder="მომხმარებელი">
-          <input type="email" v-model="regEmail" class="glass-input" placeholder="ელ.ფოსტა">
-          <input type="password" v-model="regPass" class="glass-input" placeholder="პაროლი">
-          <button class="glass-btn" @click="processRegister">რეგისტრაცია</button>
+          <h2 style="margin-top:0">{{ t('auth.register') }}</h2>
+          <input type="text" v-model="regUser" class="glass-input" :placeholder="t('auth.username')">
+          <input type="email" v-model="regEmail" class="glass-input" :placeholder="t('auth.email')">
+          <input type="password" v-model="regPass" class="glass-input" :placeholder="t('auth.password')">
+          <button class="glass-btn" @click="processRegister">{{ t('auth.register') }}</button>
         </div>
         <div v-show="authView==='recover'">
-          <h2 style="margin-top:0">პაროლის აღდგენა</h2>
-          <input type="email" v-model="recEmail" class="glass-input" placeholder="ელ.ფოსტა">
-          <button class="glass-btn" @click="sendRecovery">გაგზავნა</button>
+          <h2 style="margin-top:0">{{ t('auth.recovery') }}</h2>
+          <input type="email" v-model="recEmail" class="glass-input" :placeholder="t('auth.email')">
+          <button class="glass-btn" @click="sendRecovery">{{ t('auth.send') }}</button>
         </div>
       </div>
     </div>
@@ -59,16 +59,16 @@
             <span class="material-symbols-outlined" style="font-size:11px">
               {{ selectedAd.status === 'Available' ? 'check_circle' : selectedAd.status === 'Rented' ? 'lock' : 'hourglass_empty' }}
             </span>
-            {{ selectedAd.status === 'Available' ? 'ხელმისაწვდომი' : selectedAd.status === 'Rented' ? 'გამოყენებული' : 'განხილვაში' }}
+            {{ selectedAd.status === 'Available' ? t('ad.available') : selectedAd.status === 'Rented' ? t('ad.rented') : t('ad.pending') }}
           </div>
 
           <!-- Name -->
           <div class="adm-name">{{ selectedAd.name }}</div>
-          <div class="adm-meta">{{ selectedAd.type }} · სარეკლამო სივრცე</div>
+          <div class="adm-meta">{{ selectedAd.type }} · {{ t('ad.space') }}</div>
 
           <!-- Price -->
-          <div class="adm-price">${{ selectedAd.priceMonthly }}<span style="font-size:14px;font-weight:400;opacity:0.5">/თვე</span></div>
-          <div class="adm-price-lbl">ყოველთვიური გადასახადი</div>
+          <div class="adm-price">${{ selectedAd.priceMonthly }}<span style="font-size:14px;font-weight:400;opacity:0.5">{{ t('ad.perMonth') }}</span></div>
+          <div class="adm-price-lbl">{{ t('ad.monthlyFee') }}</div>
 
           <!-- Available: rent form or success state -->
           <template v-if="selectedAd.status === 'Available'">
@@ -77,18 +77,18 @@
             <!-- Success -->
             <div v-if="rentSubmitted" class="adm-success">
               <span class="material-symbols-outlined" style="font-size:40px;color:#4CAF50">check_circle</span>
-              <div style="font-size:14px;font-weight:700;color:#fff;margin-top:6px">განაცხადი გაიგზავნა!</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">ადმინი მალე დაგიკავშირდებათ</div>
+              <div style="font-size:14px;font-weight:700;color:#fff;margin-top:6px">{{ t('ad.sent') }}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">{{ t('ad.adminContact') }}</div>
               <button class="adm-rent-btn" style="margin-top:14px" @click="showAdModal = false">
-                <span class="material-symbols-outlined" style="font-size:16px">close</span> დახურვა
+                <span class="material-symbols-outlined" style="font-size:16px">close</span> {{ t('ad.close') }}
               </button>
             </div>
 
             <!-- Form -->
             <template v-else>
-              <div class="adm-form-label">კრეატივის URL</div>
-              <input type="text" v-model="rentImage" class="adm-input" placeholder="https://... (სარეკლამო სურათი)" :disabled="rentLoading" />
-              <div class="adm-form-label">ხანგრძლივობა (თვე)</div>
+              <div class="adm-form-label">{{ t('ad.creativeUrl') }}</div>
+              <input type="text" v-model="rentImage" class="adm-input" placeholder="https://..." :disabled="rentLoading" />
+              <div class="adm-form-label">{{ t('ad.duration') }}</div>
               <input type="number" v-model="rentDuration" class="adm-input" min="1" max="24" placeholder="1" :disabled="rentLoading" />
               <div v-if="rentError" class="adm-error">
                 <span class="material-symbols-outlined" style="font-size:13px">error</span>
@@ -97,7 +97,7 @@
               <button class="adm-rent-btn" @click="submitRentRequest" :disabled="rentLoading">
                 <span class="material-symbols-outlined" style="font-size:16px;animation:spin 1s linear infinite" v-if="rentLoading">progress_activity</span>
                 <span class="material-symbols-outlined" style="font-size:16px" v-else>campaign</span>
-                {{ rentLoading ? 'იგზავნება...' : `განაცხადის გაგზავნა · $${(selectedAd.priceMonthly * (rentDuration || 1)).toFixed(0)}` }}
+                {{ rentLoading ? t('ad.sending') : `${t('ad.submitApp')}${(selectedAd.priceMonthly * (rentDuration || 1)).toFixed(0)}` }}
               </button>
             </template>
           </template>
@@ -107,11 +107,11 @@
             <div class="adm-divider"></div>
             <div v-if="selectedAd.status === 'Pending'" class="adm-info-msg pending">
               <span class="material-symbols-outlined" style="font-size:16px">hourglass_empty</span>
-              სარეკლამო სივრცეზე განხილვაშია განაცხადი
+              {{ t('ad.reviewPending') }}
             </div>
             <div v-if="selectedAd.status === 'Rented'" class="adm-info-msg rented">
               <span class="material-symbols-outlined" style="font-size:16px">lock</span>
-              სარეკლამო სივრცე დაკავებულია
+              {{ t('ad.occupied') }}
             </div>
             <img v-if="selectedAd.currentImageUrl" :src="selectedAd.currentImageUrl"
               style="width:100%;border-radius:12px;margin-top:4px;max-height:140px;object-fit:cover" />
@@ -143,7 +143,7 @@
 
       <!-- Weather Widget (Click-to-expand, Round) -->
       <div class="weather-wrap">
-        <button class="pill-btn" @click.stop="isWeatherOpen = !isWeatherOpen; isLayerWidgetOpen = false; showRoutePanel = false" :class="{ active: isWeatherOpen }" title="ამინდი" style="position:relative">
+        <button class="pill-btn" @click.stop="isWeatherOpen = !isWeatherOpen; isLayerWidgetOpen = false; showRoutePanel = false" :class="{ active: isWeatherOpen }" :title="t('ctrl.weather')" style="position:relative">
           <span class="material-symbols-outlined" :style="{ color: weatherIconColor }">{{ weatherIcon }}</span>
           <span class="weather-temp-badge">{{ parseInt(btnTemp) }}°</span>
         </button>
@@ -160,12 +160,12 @@
             <div class="wdp-divider"></div>
             <div class="wdp-row">
               <span class="material-symbols-outlined wdp-row-icon">water_drop</span>
-              <span>ტენიანობა</span>
+              <span>{{ t('ctrl.humidity') }}</span>
               <span class="wdp-val">{{ humidity }}</span>
             </div>
             <div class="wdp-row">
               <span class="material-symbols-outlined wdp-row-icon">altitude</span>
-              <span>სიმაღლე</span>
+              <span>{{ t('ctrl.elevation') }}</span>
               <span class="wdp-val">{{ elevation }}</span>
             </div>
           </div>
@@ -173,7 +173,7 @@
       </div>
 
       <!-- Layer Control -->
-      <button class="pill-btn" :class="{ active: isLayerWidgetOpen }" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen; isWeatherOpen = false; showRoutePanel = false" title="ფენები">
+      <button class="pill-btn" :class="{ active: isLayerWidgetOpen }" @click.stop="isLayerWidgetOpen = !isLayerWidgetOpen; isWeatherOpen = false; showRoutePanel = false" :title="t('ctrl.layers')">
         <span class="material-symbols-outlined">layers</span>
       </button>
       <transition name="weather-expand">
@@ -181,8 +181,8 @@
           <!-- Header -->
           <div class="lc-header">
             <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent)">layers</span>
-            <span class="lc-title">ფენები</span>
-            <label class="lc-toggle-wrap" title="ყველა ფენა">
+            <span class="lc-title">{{ t('ctrl.layers') }}</span>
+            <label class="lc-toggle-wrap" :title="t('ctrl.allLayers')">
               <input type="checkbox" v-model="showAllLayers" class="lc-toggle-input">
               <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
             </label>
@@ -191,19 +191,19 @@
           <!-- Rows -->
           <label class="lc-row">
             <span class="material-symbols-outlined lc-icon">holiday_village</span>
-            <span class="lc-label">სოფლები / ქალაქები</span>
+            <span class="lc-label">{{ t('ctrl.villages') }}</span>
             <input type="checkbox" v-model="showLabels" class="lc-toggle-input">
             <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
           </label>
           <label class="lc-row">
             <span class="material-symbols-outlined lc-icon">route</span>
-            <span class="lc-label">გზები</span>
+            <span class="lc-label">{{ t('ctrl.roads') }}</span>
             <input type="checkbox" v-model="showRoads" class="lc-toggle-input">
             <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
           </label>
           <label class="lc-row">
             <span class="material-symbols-outlined lc-icon">domain</span>
-            <span class="lc-label">3D შენობები</span>
+            <span class="lc-label">{{ t('ctrl.buildings3d') }}</span>
             <input type="checkbox" v-model="showBuildings" class="lc-toggle-input">
             <span class="lc-toggle-track"><span class="lc-toggle-thumb"></span></span>
           </label>
@@ -226,12 +226,12 @@
       </div>
 
       <!-- My Location Button -->
-      <button class="pill-btn" :class="{ active: myLocActive }" @click.stop="toggleMyLocation" title="ჩემი მდებარეობა">
+      <button class="pill-btn" :class="{ active: myLocActive }" @click.stop="toggleMyLocation" :title="t('ctrl.myLocation')">
         <span class="material-symbols-outlined">{{ myLocActive ? 'my_location' : 'location_searching' }}</span>
       </button>
 
       <!-- Route Planner Button -->
-      <button class="pill-btn" :class="{ active: showRoutePanel }" @click.stop="showRoutePanel = !showRoutePanel; isWeatherOpen = false; isLayerWidgetOpen = false" title="მარშრუტი">
+      <button class="pill-btn" :class="{ active: showRoutePanel }" @click.stop="showRoutePanel = !showRoutePanel; isWeatherOpen = false; isLayerWidgetOpen = false" :title="t('ctrl.route')">
         <span class="material-symbols-outlined">route</span>
       </button>
 
@@ -244,14 +244,14 @@
           <span class="material-symbols-outlined">{{ routeSteps[liveNavStep]?.icon || 'navigation' }}</span>
         </div>
         <div class="lnb-body">
-          <div class="lnb-instr">{{ routeSteps[liveNavStep]?.instruction || 'გაგრძელება...' }}</div>
+          <div class="lnb-instr">{{ routeSteps[liveNavStep]?.instruction || t('route.navContinue') }}</div>
           <div class="lnb-dist" v-if="routeSteps[liveNavStep]?.dist">{{ routeSteps[liveNavStep].dist }}</div>
         </div>
         <div class="lnb-meta" v-if="routeResult">
           <div class="lnb-eta">{{ routeResult.duration }}</div>
           <div class="lnb-km">{{ routeResult.distance }}</div>
         </div>
-        <button class="lnb-stop" @click="stopLiveNav" title="ნავიგაციის შეჩერება">
+        <button class="lnb-stop" @click="stopLiveNav" :title="t('route.stop')">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -272,10 +272,10 @@
             </button>
           </div>
           <div style="display:flex;gap:4px;align-items:center">
-            <button class="rd-close" @click="routePanelMinimized = !routePanelMinimized" :title="routePanelMinimized ? 'გაშლა' : 'ჩაკეცვა'">
+            <button class="rd-close" @click="routePanelMinimized = !routePanelMinimized" :title="routePanelMinimized ? t('route.expand') : t('route.collapse')">
               <span class="material-symbols-outlined">{{ routePanelMinimized ? 'expand_less' : 'expand_more' }}</span>
             </button>
-            <button class="rd-close" @click="showRoutePanel = false" title="დახურვა">
+            <button class="rd-close" @click="showRoutePanel = false" :title="t('route.close')">
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -295,8 +295,8 @@
                 @input="onWpInput(0)" @focus="activeInputIdx = 0" @blur="onInputBlur"
                 @keydown.enter.prevent="pickFirstSuggestion(0)"
                 @keydown.escape="routeSuggestions = []"
-                placeholder="საწყისი ადგილი..." class="rd-input-field" />
-              <button class="rd-gps-btn" :class="{ busy: gpsBusy }" @click.stop="useGPS" title="ჩემი მდებარეობა">
+                :placeholder="t('route.from')" class="rd-input-field" />
+              <button class="rd-gps-btn" :class="{ busy: gpsBusy }" @click.stop="useGPS" :title="t('route.myLocation')">
                 <span class="material-symbols-outlined" :style="gpsBusy ? 'animation:spin 1s linear infinite' : ''">
                   {{ gpsBusy ? 'progress_activity' : 'my_location' }}
                 </span>
@@ -315,7 +315,7 @@
                 <input type="text" v-model="routeWaypoints[mi+1].name"
                   @input="onWpInput(mi+1)" @focus="activeInputIdx = mi+1" @blur="onInputBlur"
                   @keydown.enter.prevent="pickFirstSuggestion(mi+1)"
-                  :placeholder="`გამავალი წ. ${mi+1}...`" class="rd-input-field" />
+                  :placeholder="`${t('route.waypoint')} ${mi+1}...`" class="rd-input-field" />
                 <button class="rd-del-wp-btn" @click.stop="removeRouteWaypoint(mi+1)">
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -334,16 +334,16 @@
                 @focus="activeInputIdx = routeWaypoints.length-1" @blur="onInputBlur"
                 @keydown.enter.prevent="pickFirstSuggestion(routeWaypoints.length-1)"
                 @keydown.escape="routeSuggestions = []"
-                placeholder="სად მიდიხართ?..." class="rd-input-field" />
+                :placeholder="t('route.to')" class="rd-input-field" />
             </div>
           </div>
 
           <!-- Actions: swap · add-stop · CALCULATE -->
           <div class="rd-input-actions">
-            <button class="rd-action-btn" @click.stop="swapWaypoints" title="შეცვლა">
+            <button class="rd-action-btn" @click.stop="swapWaypoints" :title="t('route.swap')">
               <span class="material-symbols-outlined">swap_vert</span>
             </button>
-            <button class="rd-action-btn" @click.stop="addWaypointToRoute" v-if="routeWaypoints.length < 5" title="შუა წ.">
+            <button class="rd-action-btn" @click.stop="addWaypointToRoute" v-if="routeWaypoints.length < 5" :title="t('route.addStop')">
               <span class="material-symbols-outlined">add_location_alt</span>
             </button>
             <!-- Inline Calculate button -->
@@ -353,7 +353,7 @@
               <span class="material-symbols-outlined" :style="routeLoading?'animation:spin 1s linear infinite':''">
                 {{ routeLoading ? 'progress_activity' : 'directions' }}
               </span>
-              {{ routeLoading ? 'ითვლება...' : 'გამოთვლა' }}
+              {{ routeLoading ? t('route.calculating') : t('route.calculate') }}
             </button>
           </div>
 
@@ -376,7 +376,7 @@
           <!-- Loading -->
           <div v-if="routeLoading" class="rd-loading">
             <div class="rd-spinner"></div>
-            <span>მარშრუტი ითვლება...</span>
+            <span>{{ t('route.calcRoute') }}</span>
           </div>
 
           <!-- Error -->
@@ -408,18 +408,18 @@
             <!-- Clear route -->
             <button class="rd-clear-btn" @click="clearRoute">
               <span class="material-symbols-outlined">delete_outline</span>
-              მარშრუტის გასუფთავება
+              {{ t('route.clear') }}
             </button>
 
             <!-- Step-by-step directions -->
             <div v-if="routeSteps.length" class="rd-steps">
               <div class="rd-steps-header">
                 <span class="material-symbols-outlined" style="font-size:14px">turn_right</span>
-                ბიჯ-ბიჯ მარშრუტი
+                {{ t('route.steps') }}
               </div>
               <div class="rd-step-endpoint">
                 <div class="rd-step-ep-dot" style="background:#34A853"></div>
-                <span>{{ routeWaypoints[0].name || 'საწყისი' }}</span>
+                <span>{{ routeWaypoints[0].name || t('route.from') }}</span>
               </div>
               <div v-for="(step, i) in routeSteps" :key="i"
                 class="rd-step" :class="{ current: liveNavActive && i === liveNavStep }">
@@ -433,7 +433,7 @@
               </div>
               <div class="rd-step-endpoint">
                 <div class="rd-step-ep-dot" style="background:#EA4335;border-radius:3px"></div>
-                <span>{{ routeWaypoints[routeWaypoints.length-1].name || 'დანიშნულება' }}</span>
+                <span>{{ routeWaypoints[routeWaypoints.length-1].name || t('route.to') }}</span>
               </div>
             </div>
           </template>
@@ -442,9 +442,9 @@
           <template v-if="!routeResult && !routeLoading && !routeError">
             <div class="rd-empty-hint">
               <span class="material-symbols-outlined" style="font-size:36px;opacity:.25">route</span>
-              <span>შეიყვანეთ საწყისი და დანიშნულება<br><small style="opacity:.55">ავტოდასრულება ამოქმედდება ბეჭდვის დროს</small></span>
+              <span>{{ t('route.enterPoints') }}</span>
             </div>
-            <div class="rd-quick-label">⚡ სწრაფი მარშრუტები</div>
+            <div class="rd-quick-label">{{ t('route.quickRoutes') }}</div>
             <div class="rd-quick-grid">
               <button v-for="sr in SUGGESTED_ROUTES" :key="sr.label"
                 class="rd-quick-btn" @click="applySuggestedRoute(sr)">
@@ -460,7 +460,7 @@
         <div class="rd-footer" v-if="routeResult && !routeLoading">
           <button class="rd-start-btn" :class="{ active: liveNavActive }" @click="toggleLiveNav">
             <span class="material-symbols-outlined">{{ liveNavActive ? 'stop_circle' : 'navigation' }}</span>
-            {{ liveNavActive ? 'ნავიგაციის შეჩერება' : 'Start — ნავიგაციის დაწყება' }}
+            {{ liveNavActive ? t('route.stop') : t('route.start') }}
           </button>
         </div>
 
@@ -468,31 +468,31 @@
         <div class="rd-taxi-card" v-if="routeResult && !routeLoading">
           <div class="rd-taxi-header">
             <span class="material-symbols-outlined" style="color:#FBBC04;font-size:18px">local_taxi</span>
-            <span class="rd-taxi-title">ტაქსი / ავტო სერვისი</span>
+            <span class="rd-taxi-title">{{ t('route.taxi') }}</span>
           </div>
-          <div class="rd-taxi-row" @click="openTransportBooking(routeWaypoints[0]?.name||'საწყისი', routeWaypoints[routeWaypoints.length-1]?.name||'დანიშნულება', routeResult.rawDist)" style="cursor:pointer">
+          <div class="rd-taxi-row" @click="openTransportBooking(routeWaypoints[0]?.name||t('route.from'), routeWaypoints[routeWaypoints.length-1]?.name||t('route.to'), routeResult.rawDist)" style="cursor:pointer">
             <span class="material-symbols-outlined rd-taxi-ico">local_taxi</span>
             <div class="rd-taxi-info">
-              <div class="rd-taxi-type">ლოკალური ტაქსი</div>
+              <div class="rd-taxi-type">{{ t('route.localTaxi') }}</div>
               <div class="rd-taxi-desc">{{ routeResult.distance }} · 20 ₾ + 2 ₾/კმ</div>
             </div>
             <div class="rd-taxi-price">{{ (20 + routeResult.rawDist * 2).toFixed(0) }} ₾</div>
           </div>
-          <div class="rd-taxi-row" @click="openTransportBooking(routeWaypoints[0]?.name||'საწყისი', routeWaypoints[routeWaypoints.length-1]?.name||'დანიშნულება', routeResult.rawDist)" style="cursor:pointer">
+          <div class="rd-taxi-row" @click="openTransportBooking(routeWaypoints[0]?.name||t('route.from'), routeWaypoints[routeWaypoints.length-1]?.name||t('route.to'), routeResult.rawDist)" style="cursor:pointer">
             <span class="material-symbols-outlined rd-taxi-ico">directions_car</span>
             <div class="rd-taxi-info">
-              <div class="rd-taxi-type">კომფორტი / მინივენი</div>
+              <div class="rd-taxi-type">{{ t('route.comfort') }}</div>
               <div class="rd-taxi-desc">{{ routeResult.distance }} · 30 ₾ + 2.5 ₾/კმ</div>
             </div>
             <div class="rd-taxi-price">{{ (30 + routeResult.rawDist * 2.5).toFixed(0) }} ₾</div>
           </div>
-          <button class="rd-taxi-book-btn" @click="openTransportBooking(routeWaypoints[0]?.name||'საწყისი', routeWaypoints[routeWaypoints.length-1]?.name||'დანიშნულება', routeResult.rawDist)">
+          <button class="rd-taxi-book-btn" @click="openTransportBooking(routeWaypoints[0]?.name||t('route.from'), routeWaypoints[routeWaypoints.length-1]?.name||t('route.to'), routeResult.rawDist)">
             <span class="material-symbols-outlined" style="font-size:15px">directions_car</span>
-            ტაქსის ჯავშნა
+            {{ t('route.bookTaxi') }}
           </button>
           <div class="rd-taxi-note">
             <span class="material-symbols-outlined" style="font-size:12px;opacity:.5">info</span>
-            ფასი სავარაუდოა · ოფიციალური დადასტურება ტელეფონით
+            {{ t('route.priceNote') }}
           </div>
         </div>
 
@@ -514,25 +514,29 @@
           active: c.v === 'all' ? (!pinsHidden && activeCat === 'all') : activeCat === c.v,
           'all-off': c.v === 'all' && pinsHidden
         }]"
-        :title="c.v === 'all' ? (pinsHidden ? 'ობიექტების ჩვენება' : 'ყველა ობიექტი / გამორთვა') : c.l"
+        :title="c.v === 'all' ? (pinsHidden ? t('top.showObjects') : t('top.allObjects')) : c.l"
         @click="filterCat(c.v)">
         <span class="material-symbols-outlined">{{ c.v === 'all' && pinsHidden ? 'visibility_off' : c.i }}</span>
       </button>
       <div class="icon-pill-divider"></div>
       <button :class="['icon-pill', 'icon-pill-nav', { active: showAdSpaces }]"
-        title="სარეკლამო ადგილები"
+        :title="t('top.ads')"
         @click="toggleAdSpaces">
         <span class="material-symbols-outlined">campaign</span>
       </button>
-      <button class="icon-pill icon-pill-nav" title="კონტაქტი" @click="showContactModal = true">
+      <button class="icon-pill icon-pill-nav" :title="t('top.contact')" @click="showContactModal = true">
         <span class="material-symbols-outlined">contact_support</span>
       </button>
-      <button class="icon-pill icon-pill-nav" title="ჩვენს შესახებ" @click="showAboutModal = true">
+      <button class="icon-pill icon-pill-nav" :title="t('top.about')" @click="showAboutModal = true">
         <span class="material-symbols-outlined">info</span>
       </button>
       <button :class="['icon-pill', 'icon-pill-znobari', { active: showZnobariPanel }]"
-        title="ცნობარის შევსება" @click="showZnobariPanel = !showZnobariPanel">
+        :title="t('top.directory')" @click="showZnobariPanel = !showZnobariPanel">
         <span class="material-symbols-outlined">contact_page</span>
+      </button>
+      <div class="icon-pill-divider"></div>
+      <button class="icon-pill lang-toggle" @click="setLang(lang === 'ka' ? 'en' : 'ka')" title="Language / ენა">
+        <span style="font-size:11px;font-weight:700;letter-spacing:0.5px">{{ t('lang.switch') }}</span>
       </button>
     </div>
 
@@ -546,7 +550,7 @@
     <!-- Mobile FAB: ცნობარი (only on small screens) -->
     <button :class="['znobari-fab', { active: showZnobariPanel }]"
       @click="showZnobariPanel = !showZnobariPanel"
-      title="ცნობარის შევსება">
+      :title="t('top.directory')">
       <span class="material-symbols-outlined">contact_page</span>
     </button>
 
@@ -589,9 +593,9 @@
         <img v-if="siteSettings.contact_cover_url" :src="siteSettings.contact_cover_url"
           style="width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:14px" />
         <span v-else class="material-symbols-outlined" style="font-size:40px;color:var(--accent);margin-bottom:12px">contact_support</span>
-        <h2 style="margin:0 0 8px">კონტაქტი</h2>
+        <h2 style="margin:0 0 8px">{{ t('modal.contact') }}</h2>
         <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0 0 16px">
-          {{ siteSettings.contact_description || 'დაგვიკავშირდით ნებისმიერ კითხვასთან ან წინადადებასთან დაკავშირებით.' }}
+          {{ siteSettings.contact_description || t('modal.contactDesc') }}
         </p>
         <div class="info-modal-row" v-if="siteSettings.contact_email">
           <span class="material-symbols-outlined" style="color:var(--accent)">mail</span>
@@ -615,9 +619,9 @@
         <img v-if="siteSettings.about_cover_url" :src="siteSettings.about_cover_url"
           style="width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:14px" />
         <img v-else :src="logoSrc" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px" alt="Logo" />
-        <h2 style="margin:0 0 8px">ჩვენს შესახებ</h2>
+        <h2 style="margin:0 0 8px">{{ t('modal.about') }}</h2>
         <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0;white-space:pre-line">
-          {{ siteSettings.about_text || 'რაჭა 629 — ინტერაქტიული 3D რუკა, რომელიც წარმოაჩენს რაჭის რეგიონის ღირსშესანიშნაობებს, სასტუმროებს, რესტორნებსა და ბუნებრივ ობიექტებს. პროექტი შექმნილია რაჭის ტურიზმის განვითარების მიზნით.' }}
+          {{ siteSettings.about_text || t('modal.aboutDefault') }}
         </p>
       </div>
     </div>
@@ -628,10 +632,10 @@
         <div class="znobari-head">
           <div class="znobari-title">
             <span class="material-symbols-outlined" style="color:#F44336;font-size:20px">contact_page</span>
-            ცნობარის შევსება
+            {{ t('dir.title') }}
           </div>
           <div style="display:flex;gap:4px;align-items:center">
-            <button class="znobari-close" @click="znobariPanelMinimized = !znobariPanelMinimized" :title="znobariPanelMinimized ? 'გაშლა' : 'ჩაკეცვა'">
+            <button class="znobari-close" @click="znobariPanelMinimized = !znobariPanelMinimized" :title="znobariPanelMinimized ? t('dir.expand') : t('dir.collapse')">
               <span class="material-symbols-outlined">{{ znobariPanelMinimized ? 'expand_less' : 'expand_more' }}</span>
             </button>
             <button class="znobari-close" @click="showZnobariPanel = false">
@@ -644,10 +648,10 @@
           <!-- Success state -->
           <div v-if="znobariDone" class="znobari-success">
             <span class="material-symbols-outlined" style="font-size:40px;color:#4CAF50">check_circle</span>
-            <div style="font-size:15px;font-weight:600;margin-top:10px">გმადლობთ!</div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">თქვენი ინფორმაცია მიღებულია. ადმინი განიხილავს და დაამატებს რუკაზე.</div>
+            <div style="font-size:15px;font-weight:600;margin-top:10px">{{ t('dir.successTitle') }}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">{{ t('dir.successMsg') }}</div>
             <button class="znobari-submit" style="margin-top:16px;background:rgba(76,175,80,0.2);border-color:rgba(76,175,80,0.4)" @click="znobariDone=false;resetZnobari()">
-              კიდევ ერთი
+              {{ t('dir.another') }}
             </button>
           </div>
 
@@ -660,7 +664,7 @@
                 <input
                   v-model="znobariSearch"
                   class="zn-search-input"
-                  placeholder="სოფლის / ადგილის ძიება..."
+                  :placeholder="t('dir.searchPlace')"
                   @input="triggerZnobariSearch"
                 />
                 <span v-if="znobariSearchLoading" class="material-symbols-outlined spin-anim" style="font-size:15px;color:rgba(255,255,255,0.4)">progress_activity</span>
@@ -680,32 +684,32 @@
             <!-- 1. სახელი და გვარი -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">1</span> სახელი და გვარი
+                <span class="zn-num">1</span> {{ t('dir.fullName') }}
               </label>
-              <input v-model="znobari.fullName" class="zn-input" placeholder="მაგ. გიორგი ბერიძე" />
+              <input v-model="znobari.fullName" class="zn-input" :placeholder="t('dir.fullNameEx')" />
             </div>
 
             <!-- 2. ტელეფონი -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">2</span> ტელეფონის ნომერი
+                <span class="zn-num">2</span> {{ t('dir.phone') }}
               </label>
-              <input v-model="znobari.phone" class="zn-input" placeholder="+995 5XX XXX XXX" type="tel" />
+              <input v-model="znobari.phone" class="zn-input" :placeholder="t('dir.phonePlaceholder')" type="tel" />
             </div>
 
             <!-- 3. რაიონი → სოფელი -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">3</span> რაიონი და სოფელი
+                <span class="zn-num">3</span> {{ t('dir.districtVillage') }}
               </label>
               <div class="zn-row">
                 <select v-model="znobari.district" class="zn-input zn-select" @change="znobari.village = ''">
-                  <option value="">— რაიონი —</option>
+                  <option value="">{{ t('dir.selectDistrict') }}</option>
                   <option value="ამბროლაური">ამბროლაური</option>
                   <option value="ონი">ონი</option>
                 </select>
                 <select v-model="znobari.village" class="zn-input zn-select" :disabled="!znobari.district">
-                  <option value="">— სოფელი —</option>
+                  <option value="">{{ t('dir.selectVillage') }}</option>
                   <option v-for="v in znobariVillages" :key="v" :value="v">{{ v }}</option>
                 </select>
               </div>
@@ -714,7 +718,7 @@
             <!-- 4. ობიექტის ტიპი -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">4</span> ობიექტის ტიპი
+                <span class="zn-num">4</span> {{ t('dir.objectType') }}
               </label>
               <div class="zn-type-grid">
                 <button v-for="lt in LOCATION_TYPES" :key="lt.v"
@@ -729,30 +733,30 @@
             <!-- 5. ადგილმდებარეობა რუკაზე -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">5</span> ადგილმდებარეობა რუკაზე
+                <span class="zn-num">5</span> {{ t('dir.location') }}
               </label>
               <div class="zn-coord-wrap">
                 <div :class="['zn-coord-box', { active: znobariPlacing, filled: znobari.lat !== null }]">
                   <span class="material-symbols-outlined" style="font-size:16px">
                     {{ znobari.lat !== null ? 'location_on' : 'my_location' }}
                   </span>
-                  <span>{{ znobari.lat !== null ? `${znobari.lat.toFixed(5)}, ${znobari.lng.toFixed(5)}` : 'კოორდინატი არ არის' }}</span>
+                  <span>{{ znobari.lat !== null ? `${znobari.lat.toFixed(5)}, ${znobari.lng.toFixed(5)}` : t('dir.noCoords') }}</span>
                 </div>
                 <button :class="['zn-place-btn', { active: znobariPlacing }]" @click="toggleZnobariPlacing">
                   <span class="material-symbols-outlined">{{ znobariPlacing ? 'cancel' : 'add_location_alt' }}</span>
-                  {{ znobariPlacing ? 'გაუქმება' : 'რუკაზე მონიშნვა' }}
+                  {{ znobariPlacing ? t('dir.cancelMark') : t('dir.markOnMap') }}
                 </button>
               </div>
               <div v-if="znobariPlacing" class="zn-hint">
                 <span class="material-symbols-outlined" style="font-size:13px;color:#FBBC04">touch_app</span>
-                რუკაზე დააჭირეთ ობიექტის ადგილმდებარეობაზე
+                {{ t('dir.mapHint') }}
               </div>
             </div>
 
             <!-- 6. ფოტოს ატვირთვა -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">6</span> ფოტოს ატვირთვა <span style="color:rgba(255,255,255,0.3);font-weight:400">(არასავალდებულო)</span>
+                <span class="zn-num">6</span> {{ t('dir.photo') }} <span style="color:rgba(255,255,255,0.3);font-weight:400">{{ t('dir.photoOptional') }}</span>
               </label>
               <label class="zn-photo-label">
                 <input type="file" accept="image/*" class="zn-photo-input" @change="onZnobariPhoto" />
@@ -764,7 +768,7 @@
                 </div>
                 <div v-else class="zn-photo-placeholder">
                   <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.3)">add_photo_alternate</span>
-                  <span style="font-size:11px;color:rgba(255,255,255,0.35)">ფოტოს ასარჩევად დააჭირეთ</span>
+                  <span style="font-size:11px;color:rgba(255,255,255,0.35)">{{ t('dir.photoClick') }}</span>
                 </div>
               </label>
             </div>
@@ -772,10 +776,10 @@
             <!-- 7. მოკლე აღწერა -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">7</span> მოკლე აღწერა <span style="color:rgba(255,255,255,0.3);font-weight:400">(არასავალდებულო)</span>
+                <span class="zn-num">7</span> {{ t('dir.description') }} <span style="color:rgba(255,255,255,0.3);font-weight:400">{{ t('dir.photoOptional') }}</span>
               </label>
               <textarea v-model="znobari.description" class="zn-input zn-textarea"
-                placeholder="მოკლე ინფორმაცია ობიექტის შესახებ..." rows="3" />
+                :placeholder="t('dir.descPlaceholder')" rows="3" />
             </div>
 
             <!-- Error -->
@@ -786,7 +790,7 @@
               <span class="material-symbols-outlined" :class="{ 'spin-anim': znobariLoading }">
                 {{ znobariLoading ? 'progress_activity' : 'send' }}
               </span>
-              {{ znobariLoading ? 'იგზავნება...' : 'ცნობარის გაგზავნა' }}
+              {{ znobariLoading ? t('dir.submitting') : t('dir.submit') }}
             </button>
           </template>
         </div>
@@ -798,7 +802,7 @@
       <div class="glass-modal" style="max-width:400px;width:90%">
         <span class="material-symbols-outlined close-modal" @click="showTransportModal = false">close</span>
         <span class="material-symbols-outlined" style="font-size:36px;color:#FBBC04;margin-bottom:10px">local_taxi</span>
-        <h2 style="margin:0 0 4px;font-size:18px">ტრანსპორტის ჯავშანი</h2>
+        <h2 style="margin:0 0 4px;font-size:18px">{{ t('transport.title') }}</h2>
         <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px">
           {{ transportBooking.from }} → {{ transportBooking.to }} · {{ transportBooking.dist.toFixed(1) }} კმ
         </div>
@@ -808,14 +812,14 @@
           <button :class="['tb-v-btn', { active: transportBooking.type === 'taxi' }]" @click="transportBooking.type = 'taxi'">
             <span class="material-symbols-outlined">local_taxi</span>
             <div>
-              <div class="tb-v-name">ლოკალური ტაქსი</div>
+              <div class="tb-v-name">{{ t('transport.localTaxi') }}</div>
               <div class="tb-v-price">{{ (20 + transportBooking.dist * 2).toFixed(0) }} ₾</div>
             </div>
           </button>
           <button :class="['tb-v-btn', { active: transportBooking.type === 'comfort' }]" @click="transportBooking.type = 'comfort'">
             <span class="material-symbols-outlined">directions_car</span>
             <div>
-              <div class="tb-v-name">კომფორტი</div>
+              <div class="tb-v-name">{{ t('transport.comfort') }}</div>
               <div class="tb-v-price">{{ (30 + transportBooking.dist * 2.5).toFixed(0) }} ₾</div>
             </div>
           </button>
@@ -828,12 +832,12 @@
               ? (30 + transportBooking.dist * 2.5).toFixed(0)
               : (20 + transportBooking.dist * 2).toFixed(0) }} ₾
           </span>
-          <span style="font-size:11px;color:rgba(255,255,255,0.4);margin-left:auto">სავარაუდო ფასი</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.4);margin-left:auto">{{ t('transport.estPrice') }}</span>
         </div>
 
-        <input v-model="transportBooking.name" class="zn-input" placeholder="სახელი და გვარი *" style="margin-bottom:10px" />
-        <input v-model="transportBooking.phone" class="zn-input" placeholder="ტელეფონი *" style="margin-bottom:10px" />
-        <textarea v-model="transportBooking.notes" class="zn-input" rows="2" placeholder="შენიშვნა (არასავალდებულო)" style="margin-bottom:14px;resize:none"></textarea>
+        <input v-model="transportBooking.name" class="zn-input" :placeholder="t('transport.fullName')" style="margin-bottom:10px" />
+        <input v-model="transportBooking.phone" class="zn-input" :placeholder="t('transport.phone')" style="margin-bottom:10px" />
+        <textarea v-model="transportBooking.notes" class="zn-input" rows="2" :placeholder="t('transport.note')" style="margin-bottom:14px;resize:none"></textarea>
 
         <div v-if="transportError" class="zn-error">{{ transportError }}</div>
 
@@ -841,12 +845,12 @@
           <span class="material-symbols-outlined" :class="{ 'spin-anim': transportLoading }">
             {{ transportLoading ? 'progress_activity' : 'directions_car' }}
           </span>
-          {{ transportLoading ? 'ეგზავნება...' : 'ჯავშნის გაგზავნა' }}
+          {{ transportLoading ? t('transport.booking') : t('transport.book') }}
         </button>
 
         <div v-if="transportDone" class="znobari-success" style="margin-top:12px">
           <span class="material-symbols-outlined" style="font-size:28px;color:#4CAF50">check_circle</span>
-          <div style="font-size:13px;margin-top:6px">ჯავშანი მიღებულია! ადმინი დაგიკავშირდებათ.</div>
+          <div style="font-size:13px;margin-top:6px">{{ t('transport.success') }}</div>
         </div>
       </div>
     </div>
@@ -860,6 +864,7 @@ import { useRouter } from 'vue-router'
 import mapboxgl from 'mapbox-gl'
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
 import { api } from '../services/api.js'
+import { t, lang, setLang } from '../i18n.js'
 import logoSrc from '../assets/1.png'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
@@ -923,11 +928,11 @@ let lastUserLng      = null
 let lastUserHeading  = null
 let interactionTimer = null
 
-const ROUTE_MODES = [
-  { val: 'driving', icon: 'directions_car',  label: 'ავტო'  },
-  { val: 'walking', icon: 'directions_walk', label: 'ფეხით' },
-  { val: 'cycling', icon: 'directions_bike', label: 'ველო'  },
-]
+const ROUTE_MODES = computed(() => [
+  { val: 'driving', icon: 'directions_car',  label: t('route.mode.driving') },
+  { val: 'walking', icon: 'directions_walk', label: t('route.mode.walking') },
+  { val: 'cycling', icon: 'directions_bike', label: t('route.mode.cycling') },
+])
 
 // Cache confirmed API times per mode — prevents stale duration showing on mode switch
 const cachedModeTimes = ref({ driving: null, cycling: null, walking: null })
@@ -1075,14 +1080,14 @@ const znobariSearchResults = ref([])
 const znobariSearchLoading = ref(false)
 const znobari = ref({ fullName: '', phone: '', district: '', village: '', locationType: '', lat: null, lng: null, description: '' })
 
-const LOCATION_TYPES = [
-  { v: 'landmark',    l: 'ღირსშ.',    icon: 'landscape'        },
-  { v: 'waterfall',   l: 'ჩანჩქ.',    icon: 'water'            },
-  { v: 'hotel',       l: 'სასტ.',     icon: 'hotel'            },
-  { v: 'restaurant',  l: 'კვება',     icon: 'restaurant'       },
-  { v: 'church',      l: 'ეკლ.',      icon: 'church'           },
-  { v: 'other',       l: 'სხვა',      icon: 'location_on'      },
-]
+const LOCATION_TYPES = computed(() => [
+  { v: 'landmark',    l: t('cat.landmark'),    icon: 'landscape'   },
+  { v: 'waterfall',   l: t('cat.waterfall'),   icon: 'water'       },
+  { v: 'hotel',       l: t('cat.hotel'),       icon: 'hotel'       },
+  { v: 'restaurant',  l: t('cat.restaurant'),  icon: 'restaurant'  },
+  { v: 'church',      l: lang.value === 'en' ? 'Church' : 'ეკლ.',  icon: 'church' },
+  { v: 'other',       l: lang.value === 'en' ? 'Other'  : 'სხვა',  icon: 'location_on' },
+])
 
 const DISTRICT_VILLAGES = {
   // ამბროლაურის მუნიციპალიტეტი — ოფიციალური სოფლები
@@ -1196,7 +1201,7 @@ function openTransportBooking(from, to, dist) {
 
 async function bookTransport() {
   const b = transportBooking.value
-  if (!b.name.trim() || !b.phone.trim()) { transportError.value = 'სახელი და ტელეფონი სავალდებულოა'; return }
+  if (!b.name.trim() || !b.phone.trim()) { transportError.value = t('transport.fullName').replace(' *', '') + ' / ' + t('transport.phone').replace(' *', ''); return }
   transportError.value = ''
   transportLoading.value = true
   try {
@@ -1403,13 +1408,13 @@ const showAboutModal   = ref(false)
 const existingPins  = ref([])
 const siteSettings  = ref({})
 
-const CATS = [
-  { l:'ყველა',             v:'all',        i:'location_on'  },
-  { l:'ჩანჩქერები',        v:'waterfall',  i:'water'        },
-  { l:'ღირსშ.',            v:'landmark',   i:'landscape'    },
-  { l:'სასტუმრო',         v:'hotel',      i:'hotel'        },
-  { l:'რესტორანი',        v:'restaurant', i:'restaurant'   },
-]
+const CATS = computed(() => [
+  { l: t('cat.all'),        v:'all',        i:'location_on'  },
+  { l: t('cat.waterfall'),  v:'waterfall',  i:'water'        },
+  { l: t('cat.landmark'),   v:'landmark',   i:'landscape'    },
+  { l: t('cat.hotel'),      v:'hotel',      i:'hotel'        },
+  { l: t('cat.restaurant'), v:'restaurant', i:'restaurant'   },
+])
 
 watch(activeCat, (newCat) => {
   markers.forEach(m => {
@@ -1944,6 +1949,7 @@ onMounted(async () => {
           properties: {
             id: l.id,
             name: l.nameGeo || l.name || '',
+            nameEng: l.nameEng || l.nameGeo || l.name || '',
             description: l.typeGeo || l.description || '',
             category: (l.category || 'landmark').toLowerCase()
           }
@@ -2007,14 +2013,16 @@ onMounted(async () => {
             const coords = e.features[0].geometry.coordinates.slice()
             const cfg = CAT_CFG[props.category] || CAT_CFG.default
             const locId = props.id
+            const displayName = lang.value === 'en' ? (props.nameEng || props.name) : props.name
+            const catLabel = t(`cat.${props.category}.full`) || cfg.label
             popup.setLngLat(coords).setHTML(`
               <div class="popup-inner">
                 <div class="popup-accent-bar" style="background:${cfg.color}"></div>
-                <div class="popup-cat" style="color:${cfg.color}">${cfg.label}</div>
-                <h3 class="popup-title">${props.name}</h3>
+                <div class="popup-cat" style="color:${cfg.color}">${catLabel}</div>
+                <h3 class="popup-title">${displayName}</h3>
                 ${props.description ? `<p class="popup-desc">${props.description}</p>` : ''}
                 <button class="popup-detail-btn" style="border-color:${cfg.color}33;color:${cfg.color}" onclick="window.__rachaNavToLocation(${locId})">
-                  <span style="font-size:13px;vertical-align:middle">სრულად ნახვა</span>
+                  <span style="font-size:13px;vertical-align:middle">${t('loc.viewOnMap')}</span>
                   <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span>
                 </button>
               </div>`).addTo(map)
@@ -2070,7 +2078,7 @@ onMounted(async () => {
       if (wp) {
         wp.lng = parseFloat(e.lngLat.lng.toFixed(6))
         wp.lat = parseFloat(e.lngLat.lat.toFixed(6))
-        wp.name = idx === 0 ? 'საწყისი' : idx === routeWaypoints.value.length - 1 ? 'დანიშნულება' : `წ. ${idx+1}`
+        wp.name = idx === 0 ? t('route.from') : idx === routeWaypoints.value.length - 1 ? t('route.to') : `${t('route.waypoint')} ${idx+1}`
       }
       selectingWaypointIdx.value = -1
       return
@@ -2095,6 +2103,21 @@ onMounted(async () => {
 
   // Keep cursor in sync with znobariPlacing
   watch(znobariPlacing, v => { if (map) map.getCanvas().style.cursor = v ? 'crosshair' : '' })
+
+  // Map label language switching
+  watch(lang, (newLang) => {
+    if (!map || !map.isStyleLoaded()) return
+    const labelField = newLang === 'en'
+      ? ['coalesce', ['get', 'name_en'], ['get', 'name']]
+      : ['coalesce', ['get', 'name_ka'], ['get', 'name']]
+    try {
+      map.getStyle().layers.forEach(layer => {
+        if (layer.type !== 'symbol') return
+        const tf = map.getLayoutProperty(layer.id, 'text-field')
+        if (tf) map.setLayoutProperty(layer.id, 'text-field', labelField)
+      })
+    } catch(e) { /* style not ready */ }
+  })
 
   try {
     const gc = new MapboxGeocoder({
@@ -2370,11 +2393,11 @@ async function fetchSuggestions(q) {
   const results = []
   // 1. Local pins
   ;(existingPins.value || [])
-    .filter(p => (p.nameGeo || p.name || '').toLowerCase().includes(q.toLowerCase()))
+    .filter(p => ((lang.value === 'en' ? (p.nameEng || p.nameGeo) : p.nameGeo) || p.name || '').toLowerCase().includes(q.toLowerCase()))
     .slice(0, 4)
     .forEach(p => results.push({
       id: `pin-${p.id}`,
-      name: p.nameGeo || p.name || '',
+      name: (lang.value === 'en' ? (p.nameEng || p.nameGeo) : p.nameGeo) || p.name || '',
       sub: p.typeGeo || '',
       icon: CAT_ICONS_MAP[(p.category||'').toLowerCase()] || 'place',
       lat: parseFloat(p.latitude), lng: parseFloat(p.longitude)
@@ -2733,7 +2756,7 @@ async function calculateRoute() {
       geometry: { type: 'Point', coordinates: [wp.lng, wp.lat] },
       properties: {
         label: i === 0 ? 'A' : i === valid.length-1 ? 'B' : String.fromCharCode(65+i),
-        name:  wp.name || (i === 0 ? 'საწყისი' : i === valid.length-1 ? 'დანიშნულება' : `${i+1}`),
+        name:  wp.name || (i === 0 ? t('route.from') : i === valid.length-1 ? t('route.to') : `${i+1}`),
         color: i === 0 ? '#34A853' : i === valid.length-1 ? '#EA4335' : '#4285F4',
       }
     }))
@@ -4869,9 +4892,9 @@ body.dark-theme .clouds {
   .rd-start-btn { padding: 13px; font-size: 14px; }
 }
 
-/* ── Mobile FAB for ცნობარი ── */
-.znobari-fab {
-  display: none;
+/* ── Mobile FAB for ცნობარი: hidden on desktop, shown by mobile media query ── */
+@media (min-width: 769px) {
+  .znobari-fab { display: none !important; }
 }
 
 /* ── Minimize: panels collapse to header only ── */

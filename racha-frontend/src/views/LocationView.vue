@@ -4,20 +4,20 @@
     <!-- Back Button -->
     <button class="loc-back" @click="router.back()">
       <span class="material-symbols-outlined">arrow_back</span>
-      <span>უკან</span>
+      <span>{{ t('loc.back') }}</span>
     </button>
 
     <!-- Loading -->
     <div v-if="loading" class="loc-loading">
       <div class="loc-spinner"></div>
-      <span>იტვირთება...</span>
+      <span>{{ t('loc.loading') }}</span>
     </div>
 
     <!-- Error -->
     <div v-else-if="error" class="loc-error">
       <span class="material-symbols-outlined" style="font-size:48px;color:#F44336">error_outline</span>
       <p>{{ error }}</p>
-      <button class="loc-btn" @click="router.push('/')">მთავარ გვერდზე</button>
+      <button class="loc-btn" @click="router.push('/')">{{ t('loc.goMain') }}</button>
     </div>
 
     <!-- Content -->
@@ -31,7 +31,7 @@
             <span class="material-symbols-outlined" style="font-size:15px">{{ catIcon }}</span>
             {{ catLabel }}
           </div>
-          <h1 class="loc-title">{{ location.nameGeo || location.name }}</h1>
+          <h1 class="loc-title">{{ lang === 'en' ? (location.nameEng || location.nameGeo || location.name) : (location.nameGeo || location.nameEng || location.name) }}</h1>
           <div class="loc-coords">
             <span class="material-symbols-outlined" style="font-size:14px">location_on</span>
             {{ parseFloat(location.latitude).toFixed(4) }}°N, {{ parseFloat(location.longitude).toFixed(4) }}°E
@@ -50,7 +50,7 @@
         <div class="loc-card" v-if="location.description || location.descriptionGeo || location.typeGeo">
           <div class="loc-card-header">
             <span class="material-symbols-outlined" style="font-size:18px;color:var(--accent)">description</span>
-            აღწერა
+            {{ t('loc.description') }}
           </div>
           <p class="loc-desc-text">{{ location.descriptionGeo || location.description || location.typeGeo }}</p>
         </div>
@@ -59,19 +59,19 @@
         <div class="loc-card">
           <div class="loc-card-header">
             <span class="material-symbols-outlined" style="font-size:18px;color:var(--accent)">info</span>
-            ინფორმაცია
+            {{ t('loc.info') }}
           </div>
           <div class="loc-info-grid">
             <div class="loc-info-item">
-              <div class="loc-info-label">კატეგორია</div>
+              <div class="loc-info-label">{{ t('loc.category') }}</div>
               <div class="loc-info-val" :style="{ color: catColor }">{{ catLabel }}</div>
             </div>
             <div class="loc-info-item">
-              <div class="loc-info-label">განედი (Lat)</div>
+              <div class="loc-info-label">{{ t('loc.lat') }}</div>
               <div class="loc-info-val">{{ parseFloat(location.latitude).toFixed(6) }}°N</div>
             </div>
             <div class="loc-info-item">
-              <div class="loc-info-label">გრძედი (Lng)</div>
+              <div class="loc-info-label">{{ t('loc.lng') }}</div>
               <div class="loc-info-val">{{ parseFloat(location.longitude).toFixed(6) }}°E</div>
             </div>
             <div class="loc-info-item" v-if="location.id">
@@ -85,7 +85,7 @@
         <div class="loc-card" v-if="galleryUrls.length > 0">
           <div class="loc-card-header">
             <span class="material-symbols-outlined" style="font-size:18px;color:var(--accent)">photo_library</span>
-            გალერეა
+            {{ t('loc.gallery') }}
           </div>
           <div class="loc-gallery">
             <template v-for="(url, i) in galleryUrls" :key="i">
@@ -131,13 +131,13 @@
         <div class="loc-card">
           <div class="loc-card-header">
             <span class="material-symbols-outlined" style="font-size:18px;color:var(--accent)">map</span>
-            რუკაზე
+            {{ t('loc.onMap') }}
           </div>
           <div ref="miniMapEl" class="loc-mini-map"></div>
           <div class="loc-map-actions">
             <button class="loc-route-btn" @click="addToRoute">
               <span class="material-symbols-outlined" style="font-size:16px">add_location</span>
-              მარშრუტში დამატება
+              {{ t('loc.addToRoute') }}
             </button>
             <a :href="`https://www.google.com/maps?q=${location.latitude},${location.longitude}`"
                target="_blank" rel="noopener" class="loc-gmaps-link">
@@ -150,7 +150,7 @@
         <!-- Navigate to main map -->
         <button class="loc-btn loc-map-btn" @click="router.push('/')">
           <span class="material-symbols-outlined">explore</span>
-          მთავარ რუკაზე ნახვა
+          {{ t('loc.viewOnMap') }}
         </button>
 
       </div>
@@ -164,6 +164,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import mapboxgl from 'mapbox-gl'
 import { api } from '../services/api.js'
+import { t, lang } from '../i18n.js'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 const route  = useRoute()
