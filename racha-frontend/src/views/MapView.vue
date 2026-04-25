@@ -259,7 +259,7 @@
 
     <!-- Route Sidebar — Google Maps style, glassmorphism -->
     <transition name="route-drawer">
-      <div v-if="showRoutePanel" class="route-drawer" @click.stop>
+      <div v-if="showRoutePanel" :class="['route-drawer', { minimized: routePanelMinimized }]" @click.stop>
 
         <!-- ── HEADER: mode pills + close ── -->
         <div class="rd-head">
@@ -271,9 +271,14 @@
               <span class="rd-mode-pill-lbl">{{ m.label }}</span>
             </button>
           </div>
-          <button class="rd-close" @click="showRoutePanel = false" title="დახურვა">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="rd-close" @click="routePanelMinimized = !routePanelMinimized" :title="routePanelMinimized ? 'გაშლა' : 'ჩაკეცვა'">
+              <span class="material-symbols-outlined">{{ routePanelMinimized ? 'expand_less' : 'expand_more' }}</span>
+            </button>
+            <button class="rd-close" @click="showRoutePanel = false" title="დახურვა">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <!-- ── INPUTS ── -->
@@ -538,6 +543,13 @@
       </button>
     </div>
 
+    <!-- Mobile FAB: ცნობარი (only on small screens) -->
+    <button :class="['znobari-fab', { active: showZnobariPanel }]"
+      @click="showZnobariPanel = !showZnobariPanel"
+      title="ცნობარის შევსება">
+      <span class="material-symbols-outlined">contact_page</span>
+    </button>
+
     <!-- Floating search bar centered at top -->
     <div ref="geocoderEl" class="geocoder-center"></div>
 
@@ -574,7 +586,9 @@
     <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
       <div class="glass-modal info-modal">
         <span class="material-symbols-outlined close-modal" @click="showContactModal = false">close</span>
-        <span class="material-symbols-outlined" style="font-size:40px;color:var(--accent);margin-bottom:12px">contact_support</span>
+        <img v-if="siteSettings.contact_cover_url" :src="siteSettings.contact_cover_url"
+          style="width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:14px" />
+        <span v-else class="material-symbols-outlined" style="font-size:40px;color:var(--accent);margin-bottom:12px">contact_support</span>
         <h2 style="margin:0 0 8px">კონტაქტი</h2>
         <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0 0 16px">
           {{ siteSettings.contact_description || 'დაგვიკავშირდით ნებისმიერ კითხვასთან ან წინადადებასთან დაკავშირებით.' }}
@@ -598,7 +612,9 @@
     <div v-if="showAboutModal" class="modal-overlay" @click.self="showAboutModal = false">
       <div class="glass-modal info-modal">
         <span class="material-symbols-outlined close-modal" @click="showAboutModal = false">close</span>
-        <img :src="logoSrc" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px" alt="Logo" />
+        <img v-if="siteSettings.about_cover_url" :src="siteSettings.about_cover_url"
+          style="width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:14px" />
+        <img v-else :src="logoSrc" style="width:60px;height:60px;object-fit:contain;margin-bottom:12px" alt="Logo" />
         <h2 style="margin:0 0 8px">ჩვენს შესახებ</h2>
         <p style="color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6;margin:0;white-space:pre-line">
           {{ siteSettings.about_text || 'რაჭა 629 — ინტერაქტიული 3D რუკა, რომელიც წარმოაჩენს რაჭის რეგიონის ღირსშესანიშნაობებს, სასტუმროებს, რესტორნებსა და ბუნებრივ ობიექტებს. პროექტი შექმნილია რაჭის ტურიზმის განვითარების მიზნით.' }}
@@ -608,15 +624,20 @@
 
     <!-- ── ცნობარის პანელი (Directory Form) ── -->
     <transition name="znobari-slide">
-      <div v-if="showZnobariPanel" class="znobari-panel" @click.stop>
+      <div v-if="showZnobariPanel" :class="['znobari-panel', { minimized: znobariPanelMinimized }]" @click.stop>
         <div class="znobari-head">
           <div class="znobari-title">
             <span class="material-symbols-outlined" style="color:#F44336;font-size:20px">contact_page</span>
             ცნობარის შევსება
           </div>
-          <button class="znobari-close" @click="showZnobariPanel = false">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button class="znobari-close" @click="znobariPanelMinimized = !znobariPanelMinimized" :title="znobariPanelMinimized ? 'გაშლა' : 'ჩაკეცვა'">
+              <span class="material-symbols-outlined">{{ znobariPanelMinimized ? 'expand_less' : 'expand_more' }}</span>
+            </button>
+            <button class="znobari-close" @click="showZnobariPanel = false">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <div class="znobari-body">
@@ -717,7 +738,7 @@
                   </span>
                   <span>{{ znobari.lat !== null ? `${znobari.lat.toFixed(5)}, ${znobari.lng.toFixed(5)}` : 'კოორდინატი არ არის' }}</span>
                 </div>
-                <button :class="['zn-place-btn', { active: znobariPlacing }]" @click="znobariPlacing = !znobariPlacing">
+                <button :class="['zn-place-btn', { active: znobariPlacing }]" @click="toggleZnobariPlacing">
                   <span class="material-symbols-outlined">{{ znobariPlacing ? 'cancel' : 'add_location_alt' }}</span>
                   {{ znobariPlacing ? 'გაუქმება' : 'რუკაზე მონიშნვა' }}
                 </button>
@@ -1035,8 +1056,15 @@ function selectSubRegion(r) {
 }
 
 // ── ცნობარი (Directory Submission) ──
-const showZnobariPanel = ref(false)
-const znobariPlacing   = ref(false)
+const showZnobariPanel      = ref(false)
+const znobariPlacing        = ref(false)
+const znobariPanelMinimized = ref(false)
+const routePanelMinimized   = ref(false)
+
+function toggleZnobariPlacing() {
+  znobariPlacing.value = !znobariPlacing.value
+  znobariPanelMinimized.value = znobariPlacing.value
+}
 const znobariDone      = ref(false)
 const znobariLoading   = ref(false)
 const znobariError     = ref('')
@@ -2053,6 +2081,7 @@ onMounted(async () => {
       znobari.value.lat = parseFloat(e.lngLat.lat.toFixed(6))
       znobari.value.lng = parseFloat(e.lngLat.lng.toFixed(6))
       znobariPlacing.value = false
+      znobariPanelMinimized.value = false
       map.getCanvas().style.cursor = ''
       // Add/move a marker to show the chosen spot
       if (window.__znobariMarker) window.__znobariMarker.remove()
@@ -4731,6 +4760,46 @@ body.dark-theme .clouds {
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
   .icon-pill::after { display: none; }
 
+  /* Hide zcnobari from top-bar on mobile — replaced by FAB */
+  .icon-pill-znobari { display: none !important; }
+
+  /* Mobile FAB */
+  .znobari-fab {
+    display: flex;
+    align-items: center; justify-content: center;
+    position: fixed;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: rgba(244,67,54,0.22);
+    border: 1.5px solid rgba(244,67,54,0.5);
+    color: #F44336;
+    z-index: 9998;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.45);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .znobari-fab.active { background: rgba(244,67,54,0.38); }
+  .znobari-fab .material-symbols-outlined { font-size: 22px !important; }
+
+  /* Bottom panels: add safe-area padding */
+  .znobari-panel {
+    top: auto !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    border-radius: 22px 22px 0 0 !important;
+    max-height: 88vh !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-left: none !important; border-right: none !important; border-bottom: none !important;
+  }
+  .znobari-panel.minimized { border-radius: 22px 22px 0 0 !important; }
+
+  /* Route drawer on mobile — add safe-area */
+  .route-drawer { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
   /* User auth button — top right */
   .user-auth-wrap { top: 10px; right: 10px; }
   .user-auth-wrap .pill-btn { width: 46px; height: 46px; }
@@ -4799,6 +4868,21 @@ body.dark-theme .clouds {
   .rd-footer { padding: 10px 12px 12px; }
   .rd-start-btn { padding: 13px; font-size: 14px; }
 }
+
+/* ── Mobile FAB for ცნობარი ── */
+.znobari-fab {
+  display: none;
+}
+
+/* ── Minimize: panels collapse to header only ── */
+.znobari-panel.minimized .znobari-body { display: none; }
+.znobari-panel.minimized { border-radius: 20px; }
+
+.route-drawer.minimized .rd-inputs-wrap,
+.route-drawer.minimized .rd-body,
+.route-drawer.minimized .rd-footer,
+.route-drawer.minimized .rd-taxi-card { display: none; }
+.route-drawer.minimized { height: auto !important; }
 
 /* ── ცნობარი panel ── */
 .icon-pill-znobari {

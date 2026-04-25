@@ -252,17 +252,22 @@
 
       <!-- WIDGET: Pin Management (Top Right) -->
       <transition name="fade-slide">
-        <div v-if="activeTab === 'map'" class="glass-widget pin-manager">
+        <div v-if="activeTab === 'map'" :class="['glass-widget pin-manager', { 'widget-minimized': pinManagerMinimized }]">
           <div class="widget-header">
             <h3>
               <span class="material-symbols-outlined">{{ editingPin ? 'edit_location_alt' : 'add_location' }}</span>
               {{ editingPin ? 'პინის რედაქტირება' : 'ლოკაციის დამატება' }}
             </h3>
-            <button v-if="editingPin" class="icon-btn sm" @click="cancelEdit" title="გაუქმება">
-              <span class="material-symbols-outlined">close</span>
-            </button>
+            <div style="display:flex;gap:4px;align-items:center">
+              <button class="icon-btn sm" @click="pinManagerMinimized = !pinManagerMinimized" :title="pinManagerMinimized ? 'გაშლა' : 'ჩაკეცვა'">
+                <span class="material-symbols-outlined">{{ pinManagerMinimized ? 'expand_less' : 'expand_more' }}</span>
+              </button>
+              <button v-if="editingPin" class="icon-btn sm" @click="cancelEdit" title="გაუქმება">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
           </div>
-          <div class="widget-body">
+          <div class="widget-body" v-show="!pinManagerMinimized">
 
             <!-- ── Category Filter Bar ── -->
             <div class="pin-filter-bar">
@@ -297,7 +302,7 @@
                       :placeholder="isPlacingPin ? 'რუკაზე დააჭირეთ...' : 'არჩეული არ არის'"
                       :style="isPlacingPin ? { borderColor: 'var(--accent)', color: '#4CAF50' } : {}">
                     <button class="pm-place-btn" :class="{ active: isPlacingPin }"
-                      @click="isPlacingPin = !isPlacingPin" :title="isPlacingPin ? 'გაუქმება' : 'ლოკაციის დაყენება'">
+                      @click="togglePlacingPin" :title="isPlacingPin ? 'გაუქმება' : 'ლოკაციის დაყენება'">
                       <span class="material-symbols-outlined">{{ isPlacingPin ? 'location_on' : 'add_location_alt' }}</span>
                     </button>
                   </div>
@@ -507,6 +512,18 @@
             <div class="settings-section" style="margin-top:16px">
               <div class="settings-label">კონტაქტის ინფორმაცია</div>
               <div class="pm-field" style="margin-top:8px">
+                <label class="pm-label">Cover ფოტო</label>
+                <div class="settings-img-wrap">
+                  <img v-if="editSettings.contact_cover_url" :src="editSettings.contact_cover_url" class="settings-img-preview" />
+                  <label class="pm-upload-label">
+                    <span class="material-symbols-outlined">upload</span>
+                    {{ contactCoverUploading ? 'იტვირთება...' : 'ატვირთვა' }}
+                    <input type="file" accept="image/*" class="pm-file-hidden" :disabled="contactCoverUploading"
+                      @change="uploadContactCover" />
+                  </label>
+                </div>
+              </div>
+              <div class="pm-field">
                 <label class="pm-label">აღწერა</label>
                 <input type="text" v-model="editSettings.contact_description" class="pm-input" placeholder="შეიყვანეთ ტექსტი..." />
               </div>
@@ -528,6 +545,18 @@
             <div class="settings-section" style="margin-top:16px">
               <div class="settings-label">ჩვენს შესახებ</div>
               <div class="pm-field" style="margin-top:8px">
+                <label class="pm-label">Cover ფოტო</label>
+                <div class="settings-img-wrap">
+                  <img v-if="editSettings.about_cover_url" :src="editSettings.about_cover_url" class="settings-img-preview" />
+                  <label class="pm-upload-label">
+                    <span class="material-symbols-outlined">upload</span>
+                    {{ aboutCoverUploading ? 'იტვირთება...' : 'ატვირთვა' }}
+                    <input type="file" accept="image/*" class="pm-file-hidden" :disabled="aboutCoverUploading"
+                      @change="uploadAboutCover" />
+                  </label>
+                </div>
+              </div>
+              <div class="pm-field">
                 <label class="pm-label">ტექსტი</label>
                 <textarea v-model="editSettings.about_text" class="pm-textarea" rows="5" placeholder="ჩვენს შესახებ ტექსტი..."></textarea>
               </div>
@@ -857,22 +886,58 @@ const editSettings = ref({
   contact_email: '',
   contact_phone: '',
   contact_address: '',
-  about_text: ''
+  contact_cover_url: '',
+  about_text: '',
+  about_cover_url: ''
 })
-const settingsSaving = ref(false)
-const settingsSaveMsg = ref('')
+const settingsSaving        = ref(false)
+const settingsSaveMsg       = ref('')
+const contactCoverUploading = ref(false)
+const aboutCoverUploading   = ref(false)
 
 async function loadSiteSettings() {
   try {
     const s = await api.getSiteSettings()
     editSettings.value = {
       contact_description: s.contact_description || '',
-      contact_email: s.contact_email || '',
-      contact_phone: s.contact_phone || '',
-      contact_address: s.contact_address || '',
-      about_text: s.about_text || ''
+      contact_email:       s.contact_email       || '',
+      contact_phone:       s.contact_phone       || '',
+      contact_address:     s.contact_address     || '',
+      contact_cover_url:   s.contact_cover_url   || '',
+      about_text:          s.about_text          || '',
+      about_cover_url:     s.about_cover_url     || ''
     }
   } catch(e) { console.warn('settings load failed', e) }
+}
+
+async function uploadContactCover(e) {
+  const file = e.target.files[0]; if (!file) return
+  contactCoverUploading.value = true
+  try {
+    const fd = new FormData(); fd.append('image', file); fd.append('key', 'contact_cover_url')
+    const res = await fetch(`${api.baseUrl}/settings/upload`, {
+      method: 'POST', headers: { Authorization: `Bearer ${api.token}` }, body: fd
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const { url } = await res.json()
+    editSettings.value.contact_cover_url = url
+  } catch(err) { alert('ატვირთვა ვერ მოხდა: ' + err.message) }
+  finally { contactCoverUploading.value = false; e.target.value = '' }
+}
+
+async function uploadAboutCover(e) {
+  const file = e.target.files[0]; if (!file) return
+  aboutCoverUploading.value = true
+  try {
+    const fd = new FormData(); fd.append('image', file); fd.append('key', 'about_cover_url')
+    const res = await fetch(`${api.baseUrl}/settings/upload`, {
+      method: 'POST', headers: { Authorization: `Bearer ${api.token}` }, body: fd
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const { url } = await res.json()
+    editSettings.value.about_cover_url = url
+  } catch(err) { alert('ატვირთვა ვერ მოხდა: ' + err.message) }
+  finally { aboutCoverUploading.value = false; e.target.value = '' }
 }
 
 async function saveSiteSettings() {
@@ -914,7 +979,13 @@ function onGalleryChange(e) {
 // Pin edit / filter / place
 const editingPin   = ref(null)   // pin object being edited, or null
 const pinFilter    = ref('all')  // 'all' | 'landmark' | 'waterfall' | 'hotel' | 'restaurant'
-const isPlacingPin = ref(false)  // when true, map click sets coords
+const isPlacingPin      = ref(false)
+const pinManagerMinimized = ref(false)
+
+function togglePlacingPin() {
+  isPlacingPin.value = !isPlacingPin.value
+  pinManagerMinimized.value = isPlacingPin.value
+}
 const savingPin    = ref(false)
 
 const PIN_FILTERS = [
@@ -1717,6 +1788,8 @@ async function initAdminMap() {
       const lat = e.lngLat.lat
       const lng = e.lngLat.lng
       locCoords.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+      isPlacingPin.value = false
+      pinManagerMinimized.value = false
       // Temporary dot marker so user can see where they clicked
       if (marker) marker.remove()
       const el = createAdminPin(locCategory.value)
@@ -1982,6 +2055,26 @@ onUnmounted(() => {
 .widget-header.compact { padding-bottom: 5px; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .widget-header.compact h3 { font-size: 11px; margin: 0; }
 .widget-body.row { display: flex; gap: 8px; }
+
+/* Minimized widget */
+.widget-minimized { min-height: unset !important; }
+
+/* Settings image upload */
+.settings-img-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.settings-img-preview {
+  width: 72px; height: 48px; object-fit: cover;
+  border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+}
+.pm-upload-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; padding: 7px 12px;
+  color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.18s;
+}
+.pm-upload-label:hover { background: rgba(255,255,255,0.12); }
+.pm-upload-label .material-symbols-outlined { font-size: 16px !important; }
+.pm-file-hidden { display: none; }
 
 .icon-toggle {
     width: 36px; height: 36px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
