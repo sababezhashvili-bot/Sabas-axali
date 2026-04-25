@@ -8,13 +8,10 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── CORS ──────────────────────────────────────────────────────────────────
-var allowedOrigins = builder.Configuration["Cors:AllowedOrigins"]
-    ?? "https://sabas-axali.vercel.app,http://localhost:5173";
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins(allowedOrigins.Split(',', StringSplitOptions.TrimEntries))
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
