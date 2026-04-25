@@ -47,16 +47,16 @@ namespace Racha629.Api.Controllers
 
             var sub = new DirectorySubmission
             {
-                FullName    = dto.FullName,
-                Phone       = dto.Phone ?? "",
-                District    = dto.District ?? "",
-                Village     = dto.Village ?? "",
+                FullName     = dto.FullName,
+                Phone        = dto.Phone ?? "",
+                District     = dto.District ?? "",
+                Village      = dto.Village ?? "",
                 LocationType = dto.LocationType ?? "",
-                Latitude    = dto.Latitude,
-                Longitude   = dto.Longitude,
-                Notes       = dto.Notes,
-                Description = dto.Description,
-                PhotoUrl    = photoUrl
+                Latitude     = dto.GetLatitude(),
+                Longitude    = dto.GetLongitude(),
+                Notes        = dto.Notes,
+                Description  = dto.Description,
+                PhotoUrl     = photoUrl
             };
 
             _ctx.DirectorySubmissions.Add(sub);
@@ -119,10 +119,19 @@ namespace Racha629.Api.Controllers
         public string? District { get; set; }
         public string? Village { get; set; }
         public string? LocationType { get; set; }
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        // Stored as string so FormData decimal dots always parse correctly
+        public string? Latitude { get; set; }
+        public string? Longitude { get; set; }
         public string? Notes { get; set; }
         public string? Description { get; set; }
         public IFormFile? Photo { get; set; }
+
+        public double GetLatitude() => double.TryParse(Latitude,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+        public double GetLongitude() => double.TryParse(Longitude,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
     }
 }

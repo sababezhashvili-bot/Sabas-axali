@@ -291,18 +291,22 @@ class ApiClient {
     fd.append('district',     data.district     ?? '')
     fd.append('village',      data.village      ?? '')
     fd.append('locationType', data.locationType ?? '')
-    fd.append('latitude',     data.latitude     ?? 0)
-    fd.append('longitude',    data.longitude    ?? 0)
+    fd.append('latitude',     String(data.latitude  ?? 0))
+    fd.append('longitude',    String(data.longitude ?? 0))
     fd.append('description',  data.description  ?? '')
     fd.append('notes',        data.notes        ?? '')
     if (photoFile) fd.append('photo', photoFile)
 
+    // Public endpoint — do NOT send Authorization header so ASP.NET doesn't
+    // attempt (and fail) JWT validation on an unauthenticated submission.
     const res = await fetch(`${this.baseUrl}/directory`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.token}` },
       body: fd
     })
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) {
+      const txt = await res.text()
+      throw new Error(txt || `Server error ${res.status}`)
+    }
     return await res.json()
   }
 
