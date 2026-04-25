@@ -1,3 +1,5 @@
+using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,24 +13,50 @@ namespace Racha629.Api.Controllers
     public class DirectoryController : ControllerBase
     {
         private readonly AppDbContext _ctx;
-        public DirectoryController(AppDbContext ctx) { _ctx = ctx; }
+        private readonly Cloudinary _cloudinary;
 
-        // POST submit (public)
+        public DirectoryController(AppDbContext ctx, Cloudinary cloudinary)
+        {
+            _ctx = ctx;
+            _cloudinary = cloudinary;
+        }
+
+        // POST submit (public) — multipart/form-data
         [HttpPost]
-        public async Task<IActionResult> Submit([FromBody] DirectorySubmissionDto dto)
+        public async Task<IActionResult> Submit([FromForm] DirectorySubmissionDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.FullName))
                 return BadRequest("სახელი სავალდებულოა");
 
+            string? photoUrl = null;
+
+            if (dto.Photo != null && dto.Photo.Length > 0)
+            {
+                using var stream = dto.Photo.OpenReadStream();
+                var uploadParams = new ImageUploadParams
+                {
+                    File = new FileDescription(dto.Photo.FileName, stream),
+                    Folder = "racha629/directory",
+                    Transformation = new Transformation().Quality("auto").FetchFormat("auto")
+                };
+                var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                if (uploadResult.Error != null)
+                    return BadRequest($"ფოტოს ატვირთვა ვერ მოხერხდა: {uploadResult.Error.Message}");
+                photoUrl = uploadResult.SecureUrl?.ToString();
+            }
+
             var sub = new DirectorySubmission
             {
-                FullName = dto.FullName,
-                District = dto.District,
-                Village = dto.Village,
-                LocationType = dto.LocationType,
-                Latitude = dto.Latitude,
-                Longitude = dto.Longitude,
-                Notes = dto.Notes
+                FullName    = dto.FullName,
+                Phone       = dto.Phone ?? "",
+                District    = dto.District ?? "",
+                Village     = dto.Village ?? "",
+                LocationType = dto.LocationType ?? "",
+                Latitude    = dto.Latitude,
+                Longitude   = dto.Longitude,
+                Notes       = dto.Notes,
+                Description = dto.Description,
+                PhotoUrl    = photoUrl
             };
 
             _ctx.DirectorySubmissions.Add(sub);
@@ -87,11 +115,14 @@ namespace Racha629.Api.Controllers
     public class DirectorySubmissionDto
     {
         public string FullName { get; set; } = "";
-        public string District { get; set; } = "";
-        public string Village { get; set; } = "";
-        public string LocationType { get; set; } = "";
+        public string? Phone { get; set; }
+        public string? District { get; set; }
+        public string? Village { get; set; }
+        public string? LocationType { get; set; }
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public string? Notes { get; set; }
+        public string? Description { get; set; }
+        public IFormFile? Photo { get; set; }
     }
 }

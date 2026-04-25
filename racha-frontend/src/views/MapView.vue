@@ -631,6 +631,31 @@
           </div>
 
           <template v-else>
+
+            <!-- ── ადგილის ძიება (Geocoder search) ── -->
+            <div class="zn-search-wrap">
+              <div class="zn-search-row">
+                <span class="material-symbols-outlined" style="font-size:16px;color:rgba(255,255,255,0.4)">search</span>
+                <input
+                  v-model="znobariSearch"
+                  class="zn-search-input"
+                  placeholder="სოფლის / ადგილის ძიება..."
+                  @input="triggerZnobariSearch"
+                />
+                <span v-if="znobariSearchLoading" class="material-symbols-outlined spin-anim" style="font-size:15px;color:rgba(255,255,255,0.4)">progress_activity</span>
+              </div>
+              <div v-if="znobariSearchResults.length" class="zn-search-results">
+                <button
+                  v-for="r in znobariSearchResults" :key="r.id"
+                  class="zn-search-result"
+                  @click="flyToZnobariResult(r)"
+                >
+                  <span class="material-symbols-outlined" style="font-size:14px;flex-shrink:0">location_on</span>
+                  <span>{{ r.place_name }}</span>
+                </button>
+              </div>
+            </div>
+
             <!-- 1. სახელი და გვარი -->
             <div class="zn-field">
               <label class="zn-label">
@@ -639,10 +664,18 @@
               <input v-model="znobari.fullName" class="zn-input" placeholder="მაგ. გიორგი ბერიძე" />
             </div>
 
-            <!-- 2. რაიონი → სოფელი -->
+            <!-- 2. ტელეფონი -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">2</span> რაიონი და სოფელი
+                <span class="zn-num">2</span> ტელეფონის ნომერი
+              </label>
+              <input v-model="znobari.phone" class="zn-input" placeholder="+995 5XX XXX XXX" type="tel" />
+            </div>
+
+            <!-- 3. რაიონი → სოფელი -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">3</span> რაიონი და სოფელი
               </label>
               <div class="zn-row">
                 <select v-model="znobari.district" class="zn-input zn-select" @change="znobari.village = ''">
@@ -657,10 +690,10 @@
               </div>
             </div>
 
-            <!-- 3. ობიექტის ტიპი -->
+            <!-- 4. ობიექტის ტიპი -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">3</span> ობიექტის ტიპი
+                <span class="zn-num">4</span> ობიექტის ტიპი
               </label>
               <div class="zn-type-grid">
                 <button v-for="lt in LOCATION_TYPES" :key="lt.v"
@@ -672,10 +705,10 @@
               </div>
             </div>
 
-            <!-- 4. პინ მანიშნებელი -->
+            <!-- 5. ადგილმდებარეობა რუკაზე -->
             <div class="zn-field">
               <label class="zn-label">
-                <span class="zn-num">4</span> ადგილმდებარეობა რუკაზე
+                <span class="zn-num">5</span> ადგილმდებარეობა რუკაზე
               </label>
               <div class="zn-coord-wrap">
                 <div :class="['zn-coord-box', { active: znobariPlacing, filled: znobari.lat !== null }]">
@@ -693,6 +726,35 @@
                 <span class="material-symbols-outlined" style="font-size:13px;color:#FBBC04">touch_app</span>
                 რუკაზე დააჭირეთ ობიექტის ადგილმდებარეობაზე
               </div>
+            </div>
+
+            <!-- 6. ფოტოს ატვირთვა -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">6</span> ფოტოს ატვირთვა <span style="color:rgba(255,255,255,0.3);font-weight:400">(არასავალდებულო)</span>
+              </label>
+              <label class="zn-photo-label">
+                <input type="file" accept="image/*" class="zn-photo-input" @change="onZnobariPhoto" />
+                <div v-if="znobariPhotoPreview" class="zn-photo-preview">
+                  <img :src="znobariPhotoPreview" alt="preview" />
+                  <button class="zn-photo-remove" @click.prevent="znobariPhotoFile=null;znobariPhotoPreview=null">
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+                <div v-else class="zn-photo-placeholder">
+                  <span class="material-symbols-outlined" style="font-size:24px;color:rgba(255,255,255,0.3)">add_photo_alternate</span>
+                  <span style="font-size:11px;color:rgba(255,255,255,0.35)">ფოტოს ასარჩევად დააჭირეთ</span>
+                </div>
+              </label>
+            </div>
+
+            <!-- 7. მოკლე აღწერა -->
+            <div class="zn-field">
+              <label class="zn-label">
+                <span class="zn-num">7</span> მოკლე აღწერა <span style="color:rgba(255,255,255,0.3);font-weight:400">(არასავალდებულო)</span>
+              </label>
+              <textarea v-model="znobari.description" class="zn-input zn-textarea"
+                placeholder="მოკლე ინფორმაცია ობიექტის შესახებ..." rows="3" />
             </div>
 
             <!-- Error -->
@@ -978,7 +1040,12 @@ const znobariPlacing   = ref(false)
 const znobariDone      = ref(false)
 const znobariLoading   = ref(false)
 const znobariError     = ref('')
-const znobari = ref({ fullName: '', district: '', village: '', locationType: '', lat: null, lng: null })
+const znobariPhotoFile    = ref(null)
+const znobariPhotoPreview = ref(null)
+const znobariSearch        = ref('')
+const znobariSearchResults = ref([])
+const znobariSearchLoading = ref(false)
+const znobari = ref({ fullName: '', phone: '', district: '', village: '', locationType: '', lat: null, lng: null, description: '' })
 
 const LOCATION_TYPES = [
   { v: 'landmark',    l: 'ღირსშ.',    icon: 'landscape'        },
@@ -991,42 +1058,88 @@ const LOCATION_TYPES = [
 
 const DISTRICT_VILLAGES = {
   'ამბროლაური': [
-    'ამბროლაური', 'ხიდიკარი', 'ჭყვიში', 'ცხვარიჭამია', 'ნიჯგორი', 'სკანდა',
-    'ჩხარი', 'ბარა', 'მათხოჯი', 'ნიკორწმინდა', 'ბუგეული', 'ხვამლი',
-    'ჭრება', 'ლეგვა', 'ავნევი', 'ღვარდი', 'მოსია', 'ჯონეთი', 'ბოლქვა'
+    'ამბროლაური','ხიდიკარი','ჭყვიში','ცხვარიჭამია','ნიჯგორი','სკანდა',
+    'ჩხარი','ბარა','მათხოჯი','ნიკორწმინდა','ბუგეული','ხვამლი',
+    'ჭრება','ლეგვა','ავნევი','ღვარდი','მოსია','ჯონეთი','ბოლქვა',
+    'ბოლო','მელაური','ღვარდი','სადმელი','კვიტა','ჩხარი','ქვაბი',
+    'ჩხოლი','ლაგვანა','ხვამლი','ბუჯი','ციხეჯვარი','ათოეთი','ბუგეული',
+    'წესი','ჩვილოსი','ქვათახევი','ასკანა','ჩხოლი','ჩრდილი','ნიგვზი'
   ],
   'ონი': [
-    'ონი', 'ეწერი', 'ჭიორა', 'გლოლა', 'ჩხოლთა', 'ბარი', 'ნახი',
-    'სიონი', 'სადმელი', 'ხელე', 'წედისი', 'ღება', 'ჭიდება', 'ნარეკვავი'
+    'ონი','ეწერი','ჭიორა','გლოლა','ჩხოლთა','ბარი','ნახი',
+    'სიონი','სადმელი','ხელე','წედისი','ღება','ჭიდება','ნარეკვავი',
+    'ქვედა სიონი','ზედა სიონი','კვაცხუტი','ბუგი','ხიდეგი','ბოლო',
+    'ჩხოლი','ჩხარი','ბარი','ჭინჭვი','ჯოისუბანი','ავლევი','ხოტევი'
   ]
 }
 
-const znobariVillages = computed(() =>
-  znobari.value.district ? (DISTRICT_VILLAGES[znobari.value.district] || []) : []
-)
+const znobariVillages = computed(() => {
+  const list = znobari.value.district ? (DISTRICT_VILLAGES[znobari.value.district] || []) : []
+  return [...new Set(list)] // deduplicate
+})
 
 function resetZnobari() {
-  znobari.value = { fullName: '', district: '', village: '', locationType: '', lat: null, lng: null }
-  znobariError.value = ''
-  znobariPlacing.value = false
+  znobari.value = { fullName: '', phone: '', district: '', village: '', locationType: '', lat: null, lng: null, description: '' }
+  znobariError.value    = ''
+  znobariPlacing.value  = false
+  znobariPhotoFile.value    = null
+  znobariPhotoPreview.value = null
+  znobariSearch.value   = ''
+  znobariSearchResults.value = []
+}
+
+function onZnobariPhoto(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  znobariPhotoFile.value = file
+  const reader = new FileReader()
+  reader.onload = ev => { znobariPhotoPreview.value = ev.target.result }
+  reader.readAsDataURL(file)
+}
+
+let _znobariSearchTimer = null
+function triggerZnobariSearch() {
+  clearTimeout(_znobariSearchTimer)
+  if (!znobariSearch.value.trim()) { znobariSearchResults.value = []; return }
+  _znobariSearchTimer = setTimeout(doZnobariSearch, 400)
+}
+
+async function doZnobariSearch() {
+  const q = znobariSearch.value.trim()
+  if (!q) return
+  znobariSearchLoading.value = true
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=ge&language=ka&limit=5&access_token=${mapboxgl.accessToken}`
+    const res  = await fetch(url)
+    const data = await res.json()
+    znobariSearchResults.value = data.features || []
+  } catch { znobariSearchResults.value = [] }
+  finally { znobariSearchLoading.value = false }
+}
+
+function flyToZnobariResult(feature) {
+  const [lng, lat] = feature.center
+  if (map) map.flyTo({ center: [lng, lat], zoom: 14, duration: 2000, essential: true })
+  znobariSearch.value = feature.text || feature.place_name || ''
+  znobariSearchResults.value = []
 }
 
 async function submitZnobari() {
   const z = znobari.value
-  if (!z.fullName.trim())   { znobariError.value = 'სახელი სავალდებულოა';      return }
-  if (!z.district)          { znobariError.value = 'რაიონი სავალდებულოა';      return }
-  if (!z.village)           { znobariError.value = 'სოფელი სავალდებულოა';      return }
+  if (!z.fullName.trim())   { znobariError.value = 'სახელი სავალდებულოა';       return }
+  if (!z.district)          { znobariError.value = 'რაიონი სავალდებულოა';       return }
+  if (!z.village)           { znobariError.value = 'სოფელი სავალდებულოა';       return }
   if (!z.locationType)      { znobariError.value = 'ობიექტის ტიპი სავალდებულო'; return }
-  if (z.lat === null)       { znobariError.value = 'მონიშნეთ ლოკაცია რუკაზე'; return }
+  if (z.lat === null)       { znobariError.value = 'მონიშნეთ ლოკაცია რუკაზე';  return }
   znobariError.value = ''
   znobariLoading.value = true
   try {
     await api.submitDirectory({
-      fullName: z.fullName, district: z.district, village: z.village,
-      locationType: z.locationType, latitude: z.lat, longitude: z.lng
-    })
+      fullName: z.fullName, phone: z.phone, district: z.district, village: z.village,
+      locationType: z.locationType, latitude: z.lat, longitude: z.lng,
+      description: z.description
+    }, znobariPhotoFile.value)
     znobariDone.value = true
-    // Remove temp placement marker if any
     if (window.__znobariMarker) { window.__znobariMarker.remove(); window.__znobariMarker = null }
   } catch(e) {
     znobariError.value = e.message || 'შეცდომა, სცადეთ თავიდან'
@@ -4760,9 +4873,80 @@ body.dark-theme .clouds {
   outline: none; transition: border-color 0.2s;
 }
 .zn-input:focus { border-color: rgba(244,67,54,0.5); }
-.zn-select { appearance: none; cursor: pointer; }
+.zn-select {
+  appearance: none; cursor: pointer;
+  color: rgba(255,255,255,0.9) !important;
+  background-color: #1a1f2e !important;
+}
+.zn-select option {
+  background: #1a1f2e;
+  color: rgba(255,255,255,0.9);
+}
+.zn-select:disabled { opacity: 0.45; cursor: not-allowed; }
+.zn-textarea { resize: vertical; min-height: 72px; }
 .zn-row { display: flex; gap: 8px; }
 .zn-row .zn-input { flex: 1; }
+
+/* ── Znobari search ── */
+.zn-search-wrap {
+  position: relative;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  overflow: visible;
+}
+.zn-search-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+}
+.zn-search-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: rgba(255,255,255,0.9); font-size: 13px; font-family: inherit;
+}
+.zn-search-input::placeholder { color: rgba(255,255,255,0.3); }
+.zn-search-results {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: rgba(12,16,26,0.97);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  z-index: 10001;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+}
+.zn-search-result {
+  width: 100%; display: flex; align-items: flex-start; gap: 8px;
+  padding: 9px 12px; background: none; border: none;
+  color: rgba(255,255,255,0.75); font-size: 12px; font-family: inherit;
+  cursor: pointer; text-align: left; transition: background 0.15s;
+}
+.zn-search-result:hover { background: rgba(244,67,54,0.12); color: #fff; }
+.zn-search-result + .zn-search-result { border-top: 1px solid rgba(255,255,255,0.06); }
+
+/* ── Znobari photo ── */
+.zn-photo-label { display: block; cursor: pointer; }
+.zn-photo-input { display: none; }
+.zn-photo-placeholder {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 18px;
+  border: 1.5px dashed rgba(255,255,255,0.15);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+.zn-photo-label:hover .zn-photo-placeholder { border-color: rgba(244,67,54,0.4); }
+.zn-photo-preview {
+  position: relative; border-radius: 10px; overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.zn-photo-preview img {
+  width: 100%; max-height: 160px; object-fit: cover; display: block;
+}
+.zn-photo-remove {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(0,0,0,0.65); border: none; border-radius: 50%;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #fff;
+}
+.zn-photo-remove .material-symbols-outlined { font-size: 14px !important; }
 
 .zn-type-grid {
   display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
@@ -4867,8 +5051,10 @@ body.dark-theme .clouds {
   .znobari-panel {
     top: auto; bottom: 0; right: 0; left: 0;
     width: 100%; border-radius: 22px 22px 0 0;
-    max-height: 80vh; border-left: none; border-right: none; border-bottom: none;
+    max-height: 85vh; border-left: none; border-right: none; border-bottom: none;
   }
+  /* Ensure znobari button is never cut by flex */
+  .icon-pill-znobari { flex-shrink: 0 !important; }
 }
 
 @media (max-width: 480px) {

@@ -722,6 +722,10 @@
                 <span class="tb-name">{{ s.fullName }}</span>
                 <span :class="['badge', s.status.toLowerCase()]">{{ s.status }}</span>
               </div>
+              <div class="tb-row" v-if="s.phone">
+                <span class="material-symbols-outlined tb-ico">phone</span>
+                <a :href="'tel:'+s.phone" style="color:inherit;text-decoration:none">{{ s.phone }}</a>
+              </div>
               <div class="tb-row">
                 <span class="material-symbols-outlined tb-ico">location_city</span>
                 {{ s.district }} · {{ s.village }}
@@ -731,10 +735,29 @@
               </div>
               <div class="tb-row">
                 <span class="material-symbols-outlined tb-ico">my_location</span>
-                {{ s.latitude.toFixed(5) }}, {{ s.longitude.toFixed(5) }}
+                <span style="font-family:monospace;font-size:11px">{{ s.latitude?.toFixed(5) }}, {{ s.longitude?.toFixed(5) }}</span>
+                <a
+                  :href="`https://www.google.com/maps?q=${s.latitude},${s.longitude}`"
+                  target="_blank"
+                  style="margin-left:auto;color:#4CAF50;font-size:11px;display:flex;align-items:center;gap:2px;text-decoration:none"
+                >
+                  <span class="material-symbols-outlined" style="font-size:13px">open_in_new</span>რუკა
+                </a>
+              </div>
+              <div class="tb-row" v-if="s.description">
+                <span class="material-symbols-outlined tb-ico">description</span>
+                <span style="font-size:12px;color:rgba(255,255,255,0.65);white-space:pre-wrap">{{ s.description }}</span>
               </div>
               <div class="tb-row" v-if="s.notes">
                 <span class="material-symbols-outlined tb-ico">notes</span>{{ s.notes }}
+              </div>
+              <div v-if="s.photoUrl" style="margin:6px 0;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
+                <a :href="s.photoUrl" target="_blank">
+                  <img :src="s.photoUrl" alt="photo" style="width:100%;max-height:160px;object-fit:cover;display:block" />
+                </a>
+              </div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px">
+                {{ new Date(s.submittedAt).toLocaleString('ka-GE') }}
               </div>
               <div class="tb-actions">
                 <button v-if="s.status === 'Pending'" class="icon-btn approve" @click="updateDirectory(s.id,'Approved')" title="დამტკიცება">

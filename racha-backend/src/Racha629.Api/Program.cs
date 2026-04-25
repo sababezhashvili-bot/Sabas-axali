@@ -93,6 +93,7 @@ using (var scope = app.Services.CreateScope())
             CREATE TABLE IF NOT EXISTS ""DirectorySubmissions"" (
                 ""Id"" SERIAL PRIMARY KEY,
                 ""FullName"" TEXT NOT NULL DEFAULT '',
+                ""Phone"" TEXT NOT NULL DEFAULT '',
                 ""District"" TEXT NOT NULL DEFAULT '',
                 ""Village"" TEXT NOT NULL DEFAULT '',
                 ""LocationType"" TEXT NOT NULL DEFAULT '',
@@ -100,8 +101,13 @@ using (var scope = app.Services.CreateScope())
                 ""Longitude"" DOUBLE PRECISION NOT NULL DEFAULT 0,
                 ""Status"" TEXT NOT NULL DEFAULT 'Pending',
                 ""SubmittedAt"" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                ""Notes"" TEXT
+                ""Notes"" TEXT,
+                ""Description"" TEXT,
+                ""PhotoUrl"" TEXT
             );
+            ALTER TABLE IF EXISTS ""DirectorySubmissions"" ADD COLUMN IF NOT EXISTS ""Phone"" TEXT NOT NULL DEFAULT '';
+            ALTER TABLE IF EXISTS ""DirectorySubmissions"" ADD COLUMN IF NOT EXISTS ""Description"" TEXT;
+            ALTER TABLE IF EXISTS ""DirectorySubmissions"" ADD COLUMN IF NOT EXISTS ""PhotoUrl"" TEXT;
         ");
         Console.WriteLine("✅ New tables ensured.");
     }
