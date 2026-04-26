@@ -193,6 +193,20 @@ const tr = {
     'admin.system': 'სისტემა',
     'admin.account': 'ანგარიში',
 
+    // ── Landmark subcategories ────────────────────────────────
+    'sub.waterfall':      'ჩანჩქერი',
+    'sub.lake':           'ტბა',
+    'sub.river':          'მდინარე',
+    'sub.mountain':       'მთა / ხედი',
+    'sub.forest':         'ტყე',
+    'sub.canyon':         'კანიონი',
+    'sub.church':         'ეკლ. / მონ.',
+    'sub.fortress':       'ციხე / კოშ.',
+    'sub.museum':         'მუზეუმი',
+    'sub.archaeological': 'არქეოლ.',
+    'sub.village':        'სოფელი',
+    'sub.architecture':   'არქიტ.',
+
     // ── Dashboard ────────────────────────────────────────────
     'dash.toMap': 'მთავარ რუკაზე',
     'dash.adminPanel': 'ადმინ პანელი',
@@ -383,6 +397,20 @@ const tr = {
     'admin.version': 'Version',
     'admin.system': 'System',
     'admin.account': 'Account',
+
+    // ── Landmark subcategories ────────────────────────────────
+    'sub.waterfall':      'Waterfall',
+    'sub.lake':           'Lake',
+    'sub.river':          'River',
+    'sub.mountain':       'Mountain',
+    'sub.forest':         'Forest',
+    'sub.canyon':         'Canyon',
+    'sub.church':         'Church',
+    'sub.fortress':       'Fortress',
+    'sub.museum':         'Museum',
+    'sub.archaeological': 'Archaeolog.',
+    'sub.village':        'Village',
+    'sub.architecture':   'Architect.',
 
     // ── Dashboard ────────────────────────────────────────────
     'dash.toMap': 'Go to Map',

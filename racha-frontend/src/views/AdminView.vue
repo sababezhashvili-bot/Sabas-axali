@@ -289,9 +289,20 @@
                 <div class="pm-field">
                   <label class="pm-label">კატეგორია</label>
                   <select v-model="locCategory" class="pm-input pm-select" :disabled="savingPin">
-                    <option value="landmark">🏔️ ღირსშ.</option>
-                    <option value="waterfall">🌊 ჩანჩქ.</option>
-                    <option value="hotel">🏨 სასტ.</option>
+                    <option value="landmark">🏔️ ღირსშ. (ზოგადი)</option>
+                    <option value="waterfall">🌊 ჩანჩქერი</option>
+                    <option value="lake">🏞️ ტბა</option>
+                    <option value="river">🌊 მდინარე</option>
+                    <option value="mountain">⛰️ მთა / ხედი</option>
+                    <option value="forest">🌲 ტყე</option>
+                    <option value="canyon">🏜️ კანიონი</option>
+                    <option value="church">⛪ ეკლ. / მონ.</option>
+                    <option value="fortress">🏰 ციხე / კოშ.</option>
+                    <option value="museum">🏛️ მუზეუმი</option>
+                    <option value="archaeological">🔍 არქეოლ.</option>
+                    <option value="village">🏡 ტრად. სოფელი</option>
+                    <option value="architecture">🏗️ არქიტ.</option>
+                    <option value="hotel">🏨 სასტუმრო</option>
                     <option value="restaurant">🍽️ კვება</option>
                   </select>
                 </div>
@@ -990,15 +1001,30 @@ function togglePlacingPin() {
 const savingPin    = ref(false)
 
 const PIN_FILTERS = [
-  { key: 'all',        label: 'ყველა' },
-  { key: 'landmark',   label: '🏔️ ღირსშ.',  color: '#4CAF50' },
-  { key: 'waterfall',  label: '🌊 ჩანჩქ.',  color: '#6699cc' },
-  { key: 'hotel',      label: '🏨 სასტ.',   color: '#F44336' },
-  { key: 'restaurant', label: '🍽️ კვება',   color: '#FFD700' },
+  { key: 'all',            label: 'ყველა' },
+  { key: 'landmark',       label: '🏔️ ღირსშ.',    color: '#4CAF50' },
+  { key: 'waterfall',      label: '🌊 ჩანჩქ.',    color: '#6699cc' },
+  { key: 'lake',           label: '🏞️ ტბა',       color: '#42A5F5' },
+  { key: 'river',          label: '🌊 მდინ.',      color: '#26C6DA' },
+  { key: 'mountain',       label: '⛰️ მთა',        color: '#78909C' },
+  { key: 'forest',         label: '🌲 ტყე',        color: '#66BB6A' },
+  { key: 'canyon',         label: '🏜️ კანიონი',   color: '#A1887F' },
+  { key: 'church',         label: '⛪ ეკლ.',       color: '#FFA726' },
+  { key: 'fortress',       label: '🏰 ციხე',       color: '#8D6E63' },
+  { key: 'museum',         label: '🏛️ მუზ.',       color: '#AB47BC' },
+  { key: 'archaeological', label: '🔍 არქ.',       color: '#FFCA28' },
+  { key: 'village',        label: '🏡 სოფ.',       color: '#AED581' },
+  { key: 'architecture',   label: '🏗️ არქიტ.',    color: '#90A4AE' },
+  { key: 'hotel',          label: '🏨 სასტ.',      color: '#F44336' },
+  { key: 'restaurant',     label: '🍽️ კვება',     color: '#FFD700' },
 ]
 
 const catLabelMap = {
-  landmark: 'ღირსშესანიშნაობა', waterfall: 'ჩანჩქერი',
+  landmark: 'ღირსშ. (ზოგ.)', waterfall: 'ჩანჩქერი',
+  lake: 'ტბა', river: 'მდინარე', mountain: 'მთა',
+  forest: 'ტყე', canyon: 'კანიონი', church: 'ეკლ./მონ.',
+  fortress: 'ციხე', museum: 'მუზეუმი', archaeological: 'არქეოლ.',
+  village: 'სოფელი', architecture: 'არქიტ.',
   hotel: 'სასტუმრო', restaurant: 'რესტორანი'
 }
 
@@ -1136,8 +1162,7 @@ async function loadLogs() {
 
 // --- Pin: placement marker element (HTML marker used only for coord-picking cursor) ---
 function createAdminPin(category = 'landmark') {
-  const colors = { landmark: '#4CAF50', waterfall: '#6699cc', hotel: '#F44336', restaurant: '#FFD700' }
-  const color = colors[category] || '#4CAF50'
+  const color = PIN_CAT_COLORS[category] || '#4CAF50'
   const el = document.createElement('div')
   el.style.cssText = `
     width: 14px; height: 14px; border-radius: 50%;
@@ -1150,8 +1175,19 @@ function createAdminPin(category = 'landmark') {
 
 // ── GL Pin Layers (static, WebGL-rendered, no jitter) ──
 const PIN_CAT_COLOR_EXPR = ['match', ['get', 'category'],
-  'landmark',   '#4CAF50',
-  'waterfall',  '#6699cc',
+  'landmark',       '#4CAF50',
+  'waterfall',      '#6699cc',
+  'lake',           '#42A5F5',
+  'river',          '#26C6DA',
+  'mountain',       '#78909C',
+  'forest',         '#66BB6A',
+  'canyon',         '#A1887F',
+  'church',         '#FFA726',
+  'fortress',       '#8D6E63',
+  'museum',         '#AB47BC',
+  'archaeological', '#FFCA28',
+  'village',        '#AED581',
+  'architecture',   '#90A4AE',
   'hotel',      '#F44336',
   'restaurant', '#FFD700',
   '#4CAF50'
@@ -1507,6 +1543,10 @@ async function deleteDirectory(id) {
 const existingPins = ref([])
 const PIN_CAT_COLORS = {
   landmark: '#4CAF50', waterfall: '#6699cc',
+  lake: '#42A5F5', river: '#26C6DA', mountain: '#78909C',
+  forest: '#66BB6A', canyon: '#A1887F', church: '#FFA726',
+  fortress: '#8D6E63', museum: '#AB47BC', archaeological: '#FFCA28',
+  village: '#AED581', architecture: '#90A4AE',
   hotel: '#F44336', restaurant: '#FFD700'
 }
 
@@ -2718,6 +2758,7 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 @media (max-width: 600px) {
   /* Sidebar → horizontal scrollable bottom bar */
   .glass-sidebar {
+    position: fixed;
     top: auto;
     left: 0; right: 0; bottom: 0;
     width: 100%;
@@ -2732,11 +2773,12 @@ tr:hover td { background: rgba(255,255,255,0.03); }
     overflow-y: hidden;
     scrollbar-width: none;
     gap: 2px;
+    z-index: 9999;
   }
   .glass-sidebar::-webkit-scrollbar { display: none; }
   .nav-brand { display: none; }
   .nav-group { flex-direction: row; width: auto; gap: 2px; flex-shrink: 0; }
-  .nav-group.bottom { margin-top: 0; margin-left: auto; }
+  .nav-group.bottom { margin-top: 0; }
   .nav-btn { margin-bottom: 0; width: 44px; height: 44px; flex-shrink: 0; }
 
   /* Header — full width from top */

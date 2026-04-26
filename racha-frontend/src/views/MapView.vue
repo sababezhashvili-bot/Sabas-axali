@@ -518,11 +518,13 @@
       <button v-for="c in CATS" :key="c.v"
         :class="['icon-pill', {
           active: c.v === 'all' ? (!pinsHidden && activeCat === 'all') : activeCat === c.v,
-          'all-off': c.v === 'all' && pinsHidden
+          'all-off': c.v === 'all' && pinsHidden,
+          'has-sub': c.hasSub
         }]"
         :title="c.v === 'all' ? (pinsHidden ? t('top.showObjects') : t('top.allObjects')) : c.l"
         @click="filterCat(c.v)">
         <span class="material-symbols-outlined">{{ c.v === 'all' && pinsHidden ? 'visibility_off' : c.i }}</span>
+        <span v-if="c.hasSub" class="pill-sub-arrow">{{ showLandmarkDropdown ? '▴' : '▾' }}</span>
       </button>
       <div class="icon-pill-divider"></div>
       <button :class="['icon-pill', 'icon-pill-nav', { active: showAdSpaces }]"
@@ -541,6 +543,20 @@
         <span class="material-symbols-outlined">contact_page</span>
       </button>
     </div>
+
+    <!-- Landmark subcategory dropdown -->
+    <transition name="lm-drop">
+      <div v-if="showLandmarkDropdown && activeCat === 'landmark'" class="landmark-dropdown">
+        <button
+          v-for="sub in LANDMARK_SUBS" :key="sub.v"
+          :class="['lm-sub-btn', { active: activeLandmarkSubcat === sub.v }]"
+          @click="filterLandmarkSub(sub.v)"
+          :title="sub.l">
+          <span class="material-symbols-outlined">{{ sub.icon }}</span>
+          <span class="lm-sub-label">{{ sub.l }}</span>
+        </button>
+      </div>
+    </transition>
 
     <!-- User Profile + Language toggle (stacked top-right) -->
     <div class="user-auth-wrap">
@@ -1079,12 +1095,21 @@ const znobariSearchLoading = ref(false)
 const znobari = ref({ fullName: '', phone: '', district: '', village: '', locationType: '', lat: null, lng: null, description: '' })
 
 const LOCATION_TYPES = computed(() => [
-  { v: 'landmark',    l: t('cat.landmark'),    icon: 'landscape'   },
-  { v: 'waterfall',   l: t('cat.waterfall'),   icon: 'water'       },
-  { v: 'hotel',       l: t('cat.hotel'),       icon: 'hotel'       },
-  { v: 'restaurant',  l: t('cat.restaurant'),  icon: 'restaurant'  },
-  { v: 'church',      l: lang.value === 'en' ? 'Church' : 'ეკლ.',  icon: 'church' },
-  { v: 'other',       l: lang.value === 'en' ? 'Other'  : 'სხვა',  icon: 'location_on' },
+  { v: 'landmark',       l: t('cat.landmark'),       icon: 'landscape'       },
+  { v: 'waterfall',      l: t('sub.waterfall'),      icon: 'water'           },
+  { v: 'lake',           l: t('sub.lake'),            icon: 'water_full'      },
+  { v: 'river',          l: t('sub.river'),           icon: 'waves'           },
+  { v: 'mountain',       l: t('sub.mountain'),        icon: 'terrain'         },
+  { v: 'forest',         l: t('sub.forest'),          icon: 'forest'          },
+  { v: 'canyon',         l: t('sub.canyon'),          icon: 'landscape'       },
+  { v: 'church',         l: t('sub.church'),          icon: 'church'          },
+  { v: 'fortress',       l: t('sub.fortress'),        icon: 'castle'          },
+  { v: 'museum',         l: t('sub.museum'),          icon: 'museum'          },
+  { v: 'archaeological', l: t('sub.archaeological'),  icon: 'travel_explore'  },
+  { v: 'village',        l: t('sub.village'),         icon: 'holiday_village' },
+  { v: 'architecture',   l: t('sub.architecture'),    icon: 'architecture'    },
+  { v: 'hotel',          l: t('cat.hotel'),           icon: 'hotel'           },
+  { v: 'restaurant',     l: t('cat.restaurant'),      icon: 'restaurant'      },
 ])
 
 const DISTRICT_VILLAGES = {
@@ -1406,10 +1431,33 @@ const showAboutModal   = ref(false)
 const existingPins  = ref([])
 const siteSettings  = ref({})
 
+// ── Landmark subcategory definitions ─────────────────────────────────────────
+const LANDMARK_SUB_KEYS = ['waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture']
+
+const LANDMARK_SUBS = computed(() => [
+  { v: 'waterfall',      l: t('sub.waterfall'),      icon: 'water'           },
+  { v: 'lake',           l: t('sub.lake'),            icon: 'water_full'      },
+  { v: 'river',          l: t('sub.river'),           icon: 'waves'           },
+  { v: 'mountain',       l: t('sub.mountain'),        icon: 'terrain'         },
+  { v: 'forest',         l: t('sub.forest'),          icon: 'forest'          },
+  { v: 'canyon',         l: t('sub.canyon'),          icon: 'landscape'       },
+  { v: 'church',         l: t('sub.church'),          icon: 'church'          },
+  { v: 'fortress',       l: t('sub.fortress'),        icon: 'castle'          },
+  { v: 'museum',         l: t('sub.museum'),          icon: 'museum'          },
+  { v: 'archaeological', l: t('sub.archaeological'),  icon: 'travel_explore'  },
+  { v: 'village',        l: t('sub.village'),         icon: 'holiday_village' },
+  { v: 'architecture',   l: t('sub.architecture'),    icon: 'architecture'    },
+])
+
+// All categories that belong to the "landmark" parent group
+const LANDMARK_CATS = ['landmark', ...LANDMARK_SUB_KEYS]
+
+const activeLandmarkSubcat = ref('')
+const showLandmarkDropdown = ref(false)
+
 const CATS = computed(() => [
   { l: t('cat.all'),        v:'all',        i:'location_on'  },
-  { l: t('cat.waterfall'),  v:'waterfall',  i:'water'        },
-  { l: t('cat.landmark'),   v:'landmark',   i:'landscape'    },
+  { l: t('cat.landmark'),   v:'landmark',   i:'landscape', hasSub: true },
   { l: t('cat.hotel'),      v:'hotel',      i:'hotel'        },
   { l: t('cat.restaurant'), v:'restaurant', i:'restaurant'   },
 ])
@@ -1432,10 +1480,21 @@ let adm1HoveredId = null
 
 // ─── CATEGORY CONFIG ──────────────────────────────────────────────────────────
 const CAT_CFG = {
-  waterfall:  { color: '#6699cc', label: '🌊 Waterfall',  icon: 'water'      },
-  landmark:   { color: '#4CAF50', label: '🏔️ Landmark',   icon: 'landscape'  },
-  hotel:      { color: '#F44336', label: '🏨 Hotel',       icon: 'hotel'      },
-  restaurant: { color: '#FFD700', label: '🍽️ Restaurant', icon: 'restaurant' },
+  landmark:       { color: '#4CAF50', label: '🏔️ Landmark',      icon: 'landscape'       },
+  waterfall:      { color: '#6699cc', label: '🌊 Waterfall',      icon: 'water'           },
+  lake:           { color: '#42A5F5', label: '🏞️ Lake',           icon: 'water_full'      },
+  river:          { color: '#26C6DA', label: '🌊 River',          icon: 'waves'           },
+  mountain:       { color: '#78909C', label: '⛰️ Mountain',       icon: 'terrain'         },
+  forest:         { color: '#66BB6A', label: '🌲 Forest',         icon: 'forest'          },
+  canyon:         { color: '#A1887F', label: '🏜️ Canyon',         icon: 'landscape'       },
+  church:         { color: '#FFA726', label: '⛪ Church',         icon: 'church'          },
+  fortress:       { color: '#8D6E63', label: '🏰 Fortress',       icon: 'castle'          },
+  museum:         { color: '#AB47BC', label: '🏛️ Museum',         icon: 'museum'          },
+  archaeological: { color: '#FFCA28', label: '🔍 Archaeological', icon: 'travel_explore'  },
+  village:        { color: '#AED581', label: '🏡 Village',        icon: 'holiday_village' },
+  architecture:   { color: '#90A4AE', label: '🏗️ Architecture',  icon: 'architecture'    },
+  hotel:          { color: '#F44336', label: '🏨 Hotel',          icon: 'hotel'           },
+  restaurant:     { color: '#FFD700', label: '🍽️ Restaurant',    icon: 'restaurant'      },
   default:    { color: '#4CAF50', label: '📍 Place',       icon: 'place'      }
 }
 
@@ -1954,10 +2013,21 @@ onMounted(async () => {
         }))
 
         const CAT_DEFS = [
-          { key: 'landmark',   color: '#4CAF50' },
-          { key: 'waterfall',  color: '#6699cc' },
-          { key: 'hotel',      color: '#F44336' },
-          { key: 'restaurant', color: '#FFD700' },
+          { key: 'landmark',       color: '#4CAF50' },
+          { key: 'waterfall',      color: '#6699cc' },
+          { key: 'lake',           color: '#42A5F5' },
+          { key: 'river',          color: '#26C6DA' },
+          { key: 'mountain',       color: '#78909C' },
+          { key: 'forest',         color: '#66BB6A' },
+          { key: 'canyon',         color: '#A1887F' },
+          { key: 'church',         color: '#FFA726' },
+          { key: 'fortress',       color: '#8D6E63' },
+          { key: 'museum',         color: '#AB47BC' },
+          { key: 'archaeological', color: '#FFCA28' },
+          { key: 'village',        color: '#AED581' },
+          { key: 'architecture',   color: '#90A4AE' },
+          { key: 'hotel',          color: '#F44336' },
+          { key: 'restaurant',     color: '#FFD700' },
         ]
 
         for (const cat of CAT_DEFS) {
@@ -1999,8 +2069,8 @@ onMounted(async () => {
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 8,
-              'circle-stroke-width': 2, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
+              'circle-radius': 6,
+              'circle-stroke-width': 1.5, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
             }
           })
 
@@ -2092,6 +2162,7 @@ onMounted(async () => {
         wp.name = idx === 0 ? t('route.from') : idx === routeWaypoints.value.length - 1 ? t('route.to') : `${t('route.waypoint')} ${idx+1}`
       }
       selectingWaypointIdx.value = -1
+      routePanelMinimized.value = false
       return
     }
 
@@ -2249,7 +2320,7 @@ function resetRegion() {
 
 // ─── FILTER ───────────────────────────────────────────────────────────────────
 const AD_LAYERS = ['ads-clusters', 'ads-cluster-count', 'ads-points', 'ads-points-icon']
-const ALL_PIN_CATS = ['landmark', 'waterfall', 'hotel', 'restaurant']
+const ALL_PIN_CATS = [...LANDMARK_CATS, 'hotel', 'restaurant']
 
 function setAdVisibility(visible) {
   showAdSpaces.value = visible
@@ -2262,7 +2333,19 @@ function setAdVisibility(visible) {
 function setPinCatVisibility(cat) {
   if (!map) return
   ALL_PIN_CATS.forEach(c => {
-    const visible = (cat === 'all' || cat === c)
+    let visible
+    if (cat === 'all') {
+      visible = true
+    } else if (cat === 'none') {
+      visible = false
+    } else if (cat === 'landmark') {
+      visible = LANDMARK_CATS.includes(c)
+    } else if (cat.startsWith('sub:')) {
+      const sub = cat.slice(4)
+      visible = c === sub
+    } else {
+      visible = c === cat
+    }
     ;[`pins-${c}-clusters`, `pins-${c}-count`, `pins-${c}-points`].forEach(id => {
       if (map.getLayer(id)) try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none') } catch(e) {}
     })
@@ -2271,13 +2354,13 @@ function setPinCatVisibility(cat) {
 
 function filterCat(cat) {
   if (cat === 'all') {
+    showLandmarkDropdown.value = false
+    activeLandmarkSubcat.value = ''
     if (!pinsHidden.value && activeCat.value === 'all') {
-      // Already showing all → hide all pins
       pinsHidden.value = true
       markers.forEach(m => { m.el.style.display = 'none' })
       setPinCatVisibility('none')
     } else {
-      // Pins hidden or filtered → show all
       pinsHidden.value = false
       activeCat.value = 'all'
       markers.forEach(m => { if (m.isInside) m.el.style.display = 'block' })
@@ -2286,7 +2369,22 @@ function filterCat(cat) {
     }
     return
   }
-  // Specific category: toggle off if already active
+  if (cat === 'landmark') {
+    if (activeCat.value === 'landmark') {
+      showLandmarkDropdown.value = !showLandmarkDropdown.value
+    } else {
+      pinsHidden.value = false
+      activeCat.value = 'landmark'
+      activeLandmarkSubcat.value = ''
+      showLandmarkDropdown.value = true
+      setAdVisibility(false)
+      setPinCatVisibility('landmark')
+    }
+    return
+  }
+  // hotel / restaurant
+  showLandmarkDropdown.value = false
+  activeLandmarkSubcat.value = ''
   pinsHidden.value = false
   if (activeCat.value === cat) {
     activeCat.value = 'all'
@@ -2297,6 +2395,17 @@ function filterCat(cat) {
   activeCat.value = cat
   setAdVisibility(false)
   setPinCatVisibility(cat)
+}
+
+function filterLandmarkSub(subcat) {
+  if (activeLandmarkSubcat.value === subcat) {
+    activeLandmarkSubcat.value = ''
+    setPinCatVisibility('landmark')
+  } else {
+    activeLandmarkSubcat.value = subcat
+    setPinCatVisibility('sub:' + subcat)
+  }
+  showLandmarkDropdown.value = false
 }
 
 // ─── AD SPACES TOGGLE ─────────────────────────────────────────────────────────
@@ -2638,7 +2747,6 @@ function addWaypointToRoute() {
 }
 function startPickFromMap(idx) {
   selectingWaypointIdx.value = selectingWaypointIdx.value === idx ? -1 : idx
-  if (selectingWaypointIdx.value >= 0) routePanelMinimized.value = true
 }
 function removeRouteWaypoint(i) {
   if (routeWaypoints.value.length <= 2) return
@@ -3456,7 +3564,7 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
 
 /* ── User Profile Container ── */
 .user-auth-wrap {
-  position: absolute; top: 25px; right: 25px;
+  position: fixed; top: 25px; right: 25px;
   z-index: 100;
 }
 .user-auth-wrap .pill-btn {
@@ -4944,6 +5052,62 @@ body.dark-theme .clouds {
 .route-drawer.minimized .rd-taxi-card { display: none; }
 .route-drawer.minimized { height: auto !important; }
 
+/* ── Landmark sub-arrow on pill ── */
+.icon-pill.has-sub {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0; padding: 0; height: auto; min-height: 38px; padding: 4px 2px;
+}
+.pill-sub-arrow {
+  font-size: 7px; line-height: 1; color: rgba(255,255,255,0.5);
+  margin-top: -2px;
+}
+.icon-pill.has-sub.active .pill-sub-arrow { color: var(--accent); }
+
+/* ── Landmark dropdown row ── */
+.landmark-dropdown {
+  position: absolute;
+  top: 66px; left: 50%; transform: translateX(-50%);
+  z-index: 24;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  justify-content: center;
+  background: rgba(8,8,18,0.72);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 8px 10px;
+  max-width: calc(100vw - 120px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.lm-sub-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.7);
+  cursor: pointer; transition: all 0.18s;
+  min-width: 52px;
+}
+.lm-sub-btn .material-symbols-outlined { font-size: 18px !important; }
+.lm-sub-label { font-size: 9px; font-weight: 600; letter-spacing: 0.2px; text-align: center; white-space: nowrap; }
+.lm-sub-btn:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.25); }
+.lm-sub-btn.active {
+  background: rgba(76,175,80,0.25);
+  border-color: rgba(76,175,80,0.5);
+  color: #4CAF50;
+}
+/* transition */
+.lm-drop-enter-active, .lm-drop-leave-active { transition: opacity 0.18s, transform 0.18s; }
+.lm-drop-enter-from, .lm-drop-leave-to { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+
+@media (max-width: 768px) {
+  .landmark-dropdown { top: 54px; max-width: calc(100vw - 20px); gap: 4px; padding: 6px 8px; }
+  .lm-sub-btn { min-width: 44px; padding: 5px 6px; }
+  .lm-sub-btn .material-symbols-outlined { font-size: 15px !important; }
+  .lm-sub-label { font-size: 8px; }
+}
+
 /* ── ცნობარი panel ── */
 .icon-pill-znobari {
   background: rgba(244,67,54,0.18) !important;
@@ -5202,8 +5366,12 @@ body.dark-theme .clouds {
 @media (max-width: 480px) {
   .top-bar {
     top: 8px;
-    max-width: calc(100vw - 66px);
+    max-width: calc(100vw - 96px);
+    gap: 3px;
+    padding: 4px 6px;
   }
+  .icon-pill { width: 28px; height: 28px; }
+  .icon-pill .material-symbols-outlined { font-size: 15px !important; }
   .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 38px; height: 38px; }
