@@ -301,6 +301,9 @@
                   {{ gpsBusy ? 'progress_activity' : 'my_location' }}
                 </span>
               </button>
+              <button class="rd-pin-pick-btn" :class="{ active: selectingWaypointIdx === 0 }" @click.stop="startPickFromMap(0)" title="პინიდან არჩევა">
+                <span class="material-symbols-outlined">location_on</span>
+              </button>
             </div>
           </div>
 
@@ -335,6 +338,9 @@
                 @keydown.enter.prevent="pickFirstSuggestion(routeWaypoints.length-1)"
                 @keydown.escape="routeSuggestions = []"
                 :placeholder="t('route.to')" class="rd-input-field" />
+              <button class="rd-pin-pick-btn" :class="{ active: selectingWaypointIdx === routeWaypoints.length-1 }" @click.stop="startPickFromMap(routeWaypoints.length-1)" title="პინიდან არჩევა">
+                <span class="material-symbols-outlined">location_on</span>
+              </button>
             </div>
           </div>
 
@@ -508,7 +514,7 @@
     </transition>
 
     <!-- Top Bar — round icon-only buttons -->
-    <div class="top-bar">
+    <div class="top-bar" :class="{ 'nav-banner-active': liveNavActive }">
       <button v-for="c in CATS" :key="c.v"
         :class="['icon-pill', {
           active: c.v === 'all' ? (!pinsHidden && activeCat === 'all') : activeCat === c.v,
@@ -534,28 +540,20 @@
         :title="t('top.directory')" @click="showZnobariPanel = !showZnobariPanel">
         <span class="material-symbols-outlined">contact_page</span>
       </button>
-      <div class="icon-pill-divider"></div>
-      <button class="icon-pill lang-toggle" @click="setLang(lang === 'ka' ? 'en' : 'ka')" title="Language / ენა">
-        <span style="font-size:11px;font-weight:700;letter-spacing:0.5px">{{ t('lang.switch') }}</span>
-      </button>
     </div>
 
-    <!-- User Profile Relocated to Top Right -->
+    <!-- User Profile + Language toggle (stacked top-right) -->
     <div class="user-auth-wrap">
       <button class="pill-btn" @click="toggleAuth">
         <span class="material-symbols-outlined">person</span>
       </button>
+      <button class="pill-btn lang-pill" @click="setLang(lang === 'ka' ? 'en' : 'ka')" title="Language / ენა">
+        <span class="material-symbols-outlined">language</span>
+      </button>
     </div>
 
-    <!-- Mobile FAB: ცნობარი (only on small screens) -->
-    <button :class="['znobari-fab', { active: showZnobariPanel }]"
-      @click="showZnobariPanel = !showZnobariPanel"
-      :title="t('top.directory')">
-      <span class="material-symbols-outlined">contact_page</span>
-    </button>
-
     <!-- Floating search bar centered at top -->
-    <div ref="geocoderEl" class="geocoder-center"></div>
+    <div ref="geocoderEl" class="geocoder-center" :class="{ 'nav-banner-active': liveNavActive }"></div>
 
     <!-- Bottom cluster: Logo + Region selector + Population -->
     <div class="bottom-cluster">
@@ -2008,9 +2006,22 @@ onMounted(async () => {
 
           // Click → popup with detail link
           map.on('click', `${srcId}-points`, (e) => {
-            e.originalEvent.stopPropagation()
             const props = e.features[0].properties
             const coords = e.features[0].geometry.coordinates.slice()
+            // Intercept pin click when selecting waypoint from map
+            if (selectingWaypointIdx.value >= 0) {
+              const wp = routeWaypoints.value[selectingWaypointIdx.value]
+              if (wp) {
+                wp.lng = parseFloat(coords[0])
+                wp.lat = parseFloat(coords[1])
+                wp.name = lang.value === 'en' ? (props.nameEng || props.name) : props.name
+              }
+              selectingWaypointIdx.value = -1
+              routePanelMinimized.value = false
+              e.originalEvent.stopPropagation()
+              return
+            }
+            e.originalEvent.stopPropagation()
             const cfg = CAT_CFG[props.category] || CAT_CFG.default
             const locId = props.id
             const displayName = lang.value === 'en' ? (props.nameEng || props.name) : props.name
@@ -2624,6 +2635,10 @@ function setRouteMode(mode) {
 function addWaypointToRoute() {
   if (routeWaypoints.value.length >= 5) return
   routeWaypoints.value.splice(routeWaypoints.value.length - 1, 0, { name: '', lng: null, lat: null })
+}
+function startPickFromMap(idx) {
+  selectingWaypointIdx.value = selectingWaypointIdx.value === idx ? -1 : idx
+  if (selectingWaypointIdx.value >= 0) routePanelMinimized.value = true
 }
 function removeRouteWaypoint(i) {
   if (routeWaypoints.value.length <= 2) return
@@ -4783,28 +4798,8 @@ body.dark-theme .clouds {
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
   .icon-pill::after { display: none; }
 
-  /* Hide zcnobari from top-bar on mobile — replaced by FAB */
-  .icon-pill-znobari { display: none !important; }
-
-  /* Mobile FAB */
-  .znobari-fab {
-    display: flex;
-    align-items: center; justify-content: center;
-    position: fixed;
-    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-    right: 16px;
-    width: 52px; height: 52px;
-    border-radius: 50%;
-    background: rgba(244,67,54,0.22);
-    border: 1.5px solid rgba(244,67,54,0.5);
-    color: #F44336;
-    z-index: 9998;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.45);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .znobari-fab.active { background: rgba(244,67,54,0.38); }
-  .znobari-fab .material-symbols-outlined { font-size: 22px !important; }
+  /* Znobari stays in top-bar on mobile; ensure never cut by flex */
+  .icon-pill-znobari { flex-shrink: 0 !important; }
 
   /* Bottom panels: add safe-area padding */
   .znobari-panel {
@@ -4814,7 +4809,7 @@ body.dark-theme .clouds {
     left: 0 !important;
     width: 100% !important;
     border-radius: 22px 22px 0 0 !important;
-    max-height: 88vh !important;
+    max-height: calc(100vh - 130px) !important;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     border-left: none !important; border-right: none !important; border-bottom: none !important;
   }
@@ -4823,9 +4818,10 @@ body.dark-theme .clouds {
   /* Route drawer on mobile — add safe-area */
   .route-drawer { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-  /* User auth button — top right */
-  .user-auth-wrap { top: 10px; right: 10px; }
-  .user-auth-wrap .pill-btn { width: 46px; height: 46px; }
+  /* User auth + lang buttons — top right stacked */
+  .user-auth-wrap { top: 10px; right: 10px; gap: 6px; }
+  .user-auth-wrap .pill-btn,
+  .user-auth-wrap .lang-pill { width: 42px; height: 42px; }
 
   /* Controls — below the geocoder bar (geocoder top:66px + ~50px height) */
   .ctrl-panel { top: 130px; left: 10px; gap: 8px; }
@@ -4892,10 +4888,51 @@ body.dark-theme .clouds {
   .rd-start-btn { padding: 13px; font-size: 14px; }
 }
 
-/* ── Mobile FAB for ცნობარი: hidden on desktop, shown by mobile media query ── */
-@media (min-width: 769px) {
-  .znobari-fab { display: none !important; }
+/* ── Language pill (below login button in user-auth-wrap) ── */
+.user-auth-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
 }
+.lang-pill {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.lang-pill:hover {
+  background: rgba(255,255,255,0.15);
+  transform: scale(1.05);
+}
+.lang-pill .material-symbols-outlined { font-size: 22px !important; }
+
+/* ── Nav-banner-active: push top-bar and geocoder down when live nav is on ── */
+.top-bar.nav-banner-active { top: 80px !important; }
+.geocoder-center.nav-banner-active { top: 148px !important; }
+@media (max-width: 768px) {
+  .top-bar.nav-banner-active { top: 68px !important; }
+  .geocoder-center.nav-banner-active { top: 126px !important; }
+}
+
+/* ── Route pick-from-pin button ── */
+.rd-pin-pick-btn {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.18s;
+}
+.rd-pin-pick-btn:hover { background: rgba(255,255,255,0.1); color: var(--accent); border-color: var(--accent); }
+.rd-pin-pick-btn.active { background: rgba(251,188,4,0.2); color: var(--accent); border-color: var(--accent); animation: pulse-ring 1.2s ease-in-out infinite; }
+.rd-pin-pick-btn .material-symbols-outlined { font-size: 15px !important; }
 
 /* ── Minimize: panels collapse to header only ── */
 .znobari-panel.minimized .znobari-body { display: none; }
@@ -5157,31 +5194,19 @@ body.dark-theme .clouds {
 .rd-taxi-book-btn:hover { background: rgba(251,188,4,0.28); }
 .rd-taxi-book-btn .material-symbols-outlined { font-size: 15px !important; }
 
-/* ── ცნობარი on mobile ── */
+/* ── Znobari on mobile: also bump up the ctrl-panel so it's not behind the open panel ── */
 @media (max-width: 768px) {
-  .znobari-panel {
-    top: auto; bottom: 0; right: 0; left: 0;
-    width: 100%; border-radius: 22px 22px 0 0;
-    max-height: 85vh; border-left: none; border-right: none; border-bottom: none;
-  }
-  /* Ensure znobari button is never cut by flex */
-  .icon-pill-znobari { flex-shrink: 0 !important; }
+  .znobari-panel.minimized { max-height: none !important; }
 }
 
 @media (max-width: 480px) {
-  /* Top bar — centered, keep same approach */
   .top-bar {
     top: 8px;
-    max-width: calc(100vw - 60px);
+    max-width: calc(100vw - 66px);
   }
-  /* Login button — bottom left on tiny phones */
-  .user-auth-wrap {
-    top: auto;
-    bottom: 110px;
-    right: auto;
-    left: 8px;
-  }
-  .user-auth-wrap .pill-btn { width: 42px; height: 42px; }
+  .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
+  .user-auth-wrap .pill-btn,
+  .user-auth-wrap .lang-pill { width: 38px; height: 38px; }
   .ctrl-panel { top: 118px; left: 8px; }
   .geocoder-center { top: 58px; width: calc(100vw - 16px); }
 }

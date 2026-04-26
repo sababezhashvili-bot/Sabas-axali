@@ -2004,22 +2004,26 @@ onUnmounted(() => {
   width: 320px;
   max-height: calc(100vh - 140px);
   overflow-y: auto;
+  z-index: 10;
 }
 .ad-manager {
   position: absolute; right: 0; top: 0;
   width: 320px;
   max-height: calc(100vh - 140px);
   overflow-y: auto;
+  z-index: 10;
 }
 .logs-widget {
   position: absolute; right: 0; bottom: 0;
   width: 320px; height: 250px;
+  z-index: 10;
 }
 .stats-widget {
   position: absolute; left: 0; bottom: 0;
-  background: rgba(0,0,0,0.6); /* Slightly darker */
+  background: rgba(0,0,0,0.6);
   flex-direction: row; padding: 15px 25px; gap: 20px;
   height: auto; align-items: center;
+  z-index: 2;
 }
 
 /* User Management Panel (Center Overlay) */
@@ -2712,23 +2716,28 @@ tr:hover td { background: rgba(255,255,255,0.03); }
    MOBILE RESPONSIVE — Admin Panel
 ══════════════════════════════════════════ */
 @media (max-width: 600px) {
-  /* Sidebar → horizontal bottom bar */
+  /* Sidebar → horizontal scrollable bottom bar */
   .glass-sidebar {
     top: auto;
     left: 0; right: 0; bottom: 0;
     width: 100%;
     height: 58px;
     flex-direction: row;
-    justify-content: space-around;
-    padding: 0 8px;
+    justify-content: flex-start;
+    padding: 0 4px;
     border-radius: 0;
     border-top: 1px solid rgba(255,255,255,0.1);
     border-left: none; border-right: none; border-bottom: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    gap: 2px;
   }
+  .glass-sidebar::-webkit-scrollbar { display: none; }
   .nav-brand { display: none; }
-  .nav-group { flex-direction: row; width: auto; gap: 0; }
-  .nav-group.bottom { margin-top: 0; }
-  .nav-btn { margin-bottom: 0; width: 40px; height: 40px; }
+  .nav-group { flex-direction: row; width: auto; gap: 2px; flex-shrink: 0; }
+  .nav-group.bottom { margin-top: 0; margin-left: auto; }
+  .nav-btn { margin-bottom: 0; width: 44px; height: 44px; flex-shrink: 0; }
 
   /* Header — full width from top */
   .glass-header {
@@ -2763,5 +2772,19 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   /* Form rows — single column */
   .pm-row { grid-template-columns: 1fr; }
   .pm-form { gap: 8px; }
+
+  /* Stats widget on mobile — compact bar above bottom nav */
+  .stats-widget {
+    left: 0; right: 0; bottom: 0;
+    padding: 8px 16px;
+    border-radius: 0;
+    gap: 16px;
+    z-index: 1;
+  }
+
+  /* Users/content panels — full coverage */
+  .users-panel, .tours-panel, .directory-panel, .transport-panel {
+    border-radius: 12px;
+  }
 }
 </style>
