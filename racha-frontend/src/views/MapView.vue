@@ -251,8 +251,11 @@
           <div class="lnb-eta">{{ routeResult.duration }}</div>
           <div class="lnb-km">{{ routeResult.distance }}</div>
         </div>
+        <button class="lnb-cancel" @click="clearRoute" title="მარშრუტის გაუქმება">
+          <span class="material-symbols-outlined">delete_outline</span>
+        </button>
         <button class="lnb-stop" @click="stopLiveNav" :title="t('route.stop')">
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined">pause</span>
         </button>
       </div>
     </transition>
@@ -2049,8 +2052,10 @@ onMounted(async () => {
             filter: ['has', 'point_count'],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': ['step', ['get', 'point_count'], 18, 5, 24, 15, 30],
-              'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.92
+              'circle-radius': ['step', ['get', 'point_count'], 13, 5, 17, 15, 22],
+              'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 0.92, 13.2, 0],
+              'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 0.92, 13.2, 0]
             }
           })
 
@@ -2063,7 +2068,10 @@ onMounted(async () => {
               'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
               'text-size': 13, 'text-allow-overlap': true
             },
-            paint: { 'text-color': '#ffffff' }
+            paint: {
+              'text-color': '#ffffff',
+              'text-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 1, 13.2, 0]
+            }
           })
 
           // Glow halo behind individual dot
@@ -2072,9 +2080,9 @@ onMounted(async () => {
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 14,
-              'circle-blur': 1,
-              'circle-opacity': 0.32,
+              'circle-radius': 18,
+              'circle-blur': 1.1,
+              'circle-opacity': 0.55,
               'circle-stroke-width': 0
             }
           })
@@ -2085,8 +2093,8 @@ onMounted(async () => {
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 5,
-              'circle-stroke-width': 1.5, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
+              'circle-radius': 3.5,
+              'circle-stroke-width': 1, 'circle-stroke-color': '#000000', 'circle-opacity': 1
             }
           })
 
@@ -2957,6 +2965,8 @@ function toggleLiveNav() {
     routeError.value = 'ჯერ გამოთვალეთ მარშრუტი'
     return
   }
+  // Collapse route panel so the live-nav banner is fully visible
+  showRoutePanel.value = false
   // If location dot is already tracking, just enable nav mode (no new watchPosition)
   if (myLocActive.value && lastUserLat !== null) {
     liveNavActive.value = true
@@ -3588,7 +3598,15 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   opacity: 0.7;
 }
 .mapboxgl-ctrl-geocoder--icon-close:hover { opacity: 1; }
-.mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
+.mapboxgl-ctrl-geocoder--pin-right {
+  display: flex !important;
+  align-items: center;
+  position: absolute !important;
+  right: 0 !important; top: 0 !important; bottom: 0 !important;
+  padding-right: 6px;
+  pointer-events: auto;
+}
+.mapboxgl-ctrl-geocoder--icon-loading { display: none !important; }
 
 /* ── User Profile Container — same top line as left buttons ── */
 .user-auth-wrap {
@@ -4924,6 +4942,15 @@ body.dark-theme .clouds {
 }
 .lnb-stop:hover { background: rgba(255,255,255,0.38); }
 .lnb-stop .material-symbols-outlined { font-size: 18px !important; }
+.lnb-cancel {
+  background: rgba(244,67,54,0.25); border: 1px solid rgba(244,67,54,0.45);
+  border-radius: 50%;
+  width: 38px; height: 38px; cursor: pointer; color: #ff8a80;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: background 0.18s;
+}
+.lnb-cancel:hover { background: rgba(244,67,54,0.45); }
+.lnb-cancel .material-symbols-outlined { font-size: 18px !important; }
 /* Slide in from top */
 .nav-banner-enter-active, .nav-banner-leave-active { transition: transform 0.3s cubic-bezier(0.2,0.8,0.2,1), opacity 0.3s; }
 .nav-banner-enter-from, .nav-banner-leave-to { transform: translateY(-100%); opacity: 0; }
