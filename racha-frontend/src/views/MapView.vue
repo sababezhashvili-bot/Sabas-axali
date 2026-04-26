@@ -569,7 +569,8 @@
     </div>
 
     <!-- Floating search bar centered at top -->
-    <div ref="geocoderEl" class="geocoder-center" :class="{ 'nav-banner-active': liveNavActive }"></div>
+    <div ref="geocoderEl" class="geocoder-center"
+      :class="{ 'nav-banner-active': liveNavActive, 'lm-drop-open': showLandmarkDropdown && activeCat === 'landmark' }"></div>
 
     <!-- Bottom cluster: Logo + Region selector + Population -->
     <div class="bottom-cluster">
@@ -3498,6 +3499,7 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
   left: 50%; transform: translateX(-50%);
   z-index: 10006;
   pointer-events: auto;
+  transition: top 0.2s ease;
 }
 
 /* ── Geocoder (compact glassmorphism) ── */
@@ -5022,9 +5024,12 @@ body.dark-theme .clouds {
 /* ── Nav-banner-active: push top-bar and geocoder down when live nav is on ── */
 .top-bar.nav-banner-active { top: 80px !important; }
 .geocoder-center.nav-banner-active { top: 148px !important; }
+/* ── Push geocoder below landmark dropdown when it opens ── */
+.geocoder-center.lm-drop-open { top: 170px !important; transition: top 0.2s ease; }
 @media (max-width: 768px) {
   .top-bar.nav-banner-active { top: 68px !important; }
   .geocoder-center.nav-banner-active { top: 126px !important; }
+  .geocoder-center.lm-drop-open { top: 160px !important; }
 }
 
 /* ── Route pick-from-pin button ── */
@@ -5055,24 +5060,27 @@ body.dark-theme .clouds {
 
 /* ── Landmark sub-arrow on pill ── */
 .icon-pill.has-sub {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
-  gap: 1px;
-  padding: 3px 4px;
-  height: auto;
-  min-height: 0;
+  /* Keep circle shape — same fixed size as sibling pills */
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0; padding: 0;
+  width: 40px; height: 40px; /* explicit — never auto */
+  overflow: hidden;
 }
 .pill-sub-arrow {
-  font-size: 7px; line-height: 1; color: rgba(255,255,255,0.5);
-  display: block;
+  font-size: 6px; line-height: 1; color: rgba(255,255,255,0.45);
+  margin-top: 1px; display: block; flex-shrink: 0;
 }
+.icon-pill.has-sub .material-symbols-outlined { font-size: 18px !important; }
 .icon-pill.has-sub.active .pill-sub-arrow { color: var(--accent); }
+/* Mobile: match sibling pill sizes */
 @media (max-width: 768px) {
-  .icon-pill.has-sub { width: 34px; height: 34px; padding: 2px 3px; }
-  .pill-sub-arrow { font-size: 6px; }
+  .icon-pill.has-sub { width: 34px !important; height: 34px !important; }
+  .icon-pill.has-sub .material-symbols-outlined { font-size: 16px !important; }
+  .pill-sub-arrow { font-size: 5px; }
 }
 @media (max-width: 480px) {
-  .icon-pill.has-sub { width: 30px; height: 30px; padding: 1px 2px; }
+  .icon-pill.has-sub { width: 30px !important; height: 30px !important; }
+  .icon-pill.has-sub .material-symbols-outlined { font-size: 14px !important; }
 }
 
 /* ── Landmark dropdown row ── */
