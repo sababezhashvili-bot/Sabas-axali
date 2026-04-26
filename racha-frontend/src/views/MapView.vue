@@ -560,6 +560,13 @@
 
     <!-- User Profile + Language toggle (stacked top-right) -->
     <div class="user-auth-wrap">
+      <!-- contact/about visible only on mobile (hidden on desktop where they live in top-bar) -->
+      <button class="pill-btn mobile-nav-btn" @click="showContactModal = true" :title="t('top.contact')">
+        <span class="material-symbols-outlined">contact_support</span>
+      </button>
+      <button class="pill-btn mobile-nav-btn" @click="showAboutModal = true" :title="t('top.about')">
+        <span class="material-symbols-outlined">info</span>
+      </button>
       <button class="pill-btn" @click="toggleAuth">
         <span class="material-symbols-outlined">person</span>
       </button>
@@ -568,7 +575,7 @@
       </button>
     </div>
 
-    <!-- Bottom cluster: Search + Region + Logo -->
+    <!-- Bottom cluster: Search + Region -->
     <div class="bottom-cluster">
       <!-- Search bar (suggestions open upward) -->
       <div ref="geocoderEl" class="geocoder-bottom"></div>
@@ -595,10 +602,10 @@
           <span class="material-symbols-outlined dropdown-chevron" :class="{ open: isRegionDropdownOpen }">expand_more</span>
         </div>
       </div>
-
-      <!-- Logo -->
-      <img :src="logoSrc" class="bl-logo" alt="SARO Logo" />
     </div>
+
+    <!-- Logo — fixed bottom-left corner -->
+    <img :src="logoSrc" class="corner-logo" alt="SARO Logo" />
 
     <!-- Contact Modal -->
     <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
@@ -3136,7 +3143,7 @@ body.light-theme .glass-input {
 }
 body.light-theme .glass-input::placeholder { color: rgba(255,255,255,0.4) !important; }
 
-body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(255,255,255,0.2)) !important; opacity: 0.9 !important; }
+body.light-theme .corner-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(255,255,255,0.2)) !important; opacity: 0.9 !important; }
 
 .map-container {
   position: absolute; inset: 0;
@@ -3646,41 +3653,47 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
 }
 .popup-detail-btn:hover { background: rgba(255,255,255,0.12); filter: brightness(1.1); }
 
-/* ── Bottom Cluster — Logo + Region + Population ── */
+/* ── Bottom Cluster — Search + Region ── */
 .bottom-cluster {
-  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   z-index: 9999;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  width: 260px;
   pointer-events: none;
 }
 
-.bl-logo {
-  height: 22px; width: auto;
-  max-width: 180px;
+/* ── Logo — fixed bottom-left corner ── */
+.corner-logo {
+  position: fixed; bottom: 18px; left: 18px;
+  height: 20px; width: auto; max-width: 150px;
   object-fit: contain;
   filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
-  opacity: 0.88;
+  opacity: 0.82;
+  z-index: 9998;
+  pointer-events: none;
 }
 
 /* Region chip at bottom */
 .region-bottom-wrap {
   position: relative;
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: column; align-items: stretch;
   pointer-events: auto;
   cursor: pointer;
 }
 .region-chip-bottom {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 5px;
   background: rgba(8,8,18,0.48);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 50px;
-  padding: 3px 11px; color: #fff;
+  padding: 5px 14px; color: #fff;
   box-shadow: 0 3px 12px rgba(0,0,0,0.25);
   transition: all 0.2s;
   user-select: none;
   cursor: pointer;
+  width: 100%;
+  justify-content: center;
 }
 .region-chip-bottom:hover {
   background: rgba(255,255,255,0.09);
@@ -3694,8 +3707,8 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
 
 /* Dropdown opens upward */
 .region-dropdown-up {
-  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  min-width: 220px;
+  position: absolute; bottom: calc(100% + 6px); left: 0; right: 0;
+  min-width: 100%;
   background: rgba(8,8,20,0.92);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px);
@@ -3703,7 +3716,7 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 -16px 48px rgba(0,0,0,0.5);
-  z-index: 10001;
+  z-index: 10010;
   pointer-events: auto;
 }
 
@@ -4894,25 +4907,30 @@ body.dark-theme .clouds {
 /* ═══════════════════════════════════════════════
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
+/* mobile-nav-btn: contact/about in auth-wrap — hidden on desktop, shown on mobile */
+.mobile-nav-btn { display: none !important; }
+
 @media (max-width: 768px) {
-  /* Top bar — fixed, LEFT-aligned so it never overlaps right-side auth buttons */
+  /* Top bar — centered on mobile */
   .top-bar {
-    position: fixed;           /* escape map overflow:hidden */
+    position: fixed;
     top: 10px;
-    left: 10px;                /* left edge of screen */
-    transform: none;           /* NOT centered */
+    left: 50%;
+    transform: translateX(-50%);
     right: auto;
     width: fit-content;
-    max-width: calc(100vw - 96px); /* leave 96px on right for auth buttons */
+    max-width: calc(100vw - 100px);
     overflow: visible;
     border-radius: 50px;
     padding: 5px 8px;
     gap: 4px;
     z-index: 9999;
   }
-  /* Hide ads / contact / about on mobile — keeps bar short */
+  /* Keep ads/divider hidden; contact/about appear in auth-wrap instead */
   .icon-pill-nav { display: none !important; }
   .icon-pill-divider { display: none !important; }
+  /* Show contact/about in auth-wrap on mobile */
+  .mobile-nav-btn { display: flex !important; }
 
   .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
@@ -4946,11 +4964,9 @@ body.dark-theme .clouds {
   /* Controls — below top bar */
   .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
 
-  /* Geocoder — bottom cluster search bar */
-  .geocoder-bottom {
-    width: calc(100vw - 20px);
-    max-width: 420px;
-  }
+  /* Bottom cluster + geocoder — full width on mobile */
+  .bottom-cluster { width: calc(100vw - 20px); max-width: 420px; }
+  .geocoder-bottom { width: 100%; }
   .geocoder-bottom .mapboxgl-ctrl-geocoder {
     width: 100% !important;
     max-width: 100% !important;
@@ -5395,8 +5411,9 @@ body.dark-theme .clouds {
 @media (max-width: 480px) {
   .top-bar {
     top: 8px;
-    left: 8px;
-    max-width: calc(100vw - 84px);
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 100px);
     gap: 3px;
     padding: 4px 6px;
   }
@@ -5406,6 +5423,7 @@ body.dark-theme .clouds {
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
   .ctrl-panel { top: 60px; left: 8px; }
-  .geocoder-bottom { width: calc(100vw - 20px); max-width: 400px; }
+  .bottom-cluster { width: calc(100vw - 20px); max-width: 400px; }
+  .geocoder-bottom { width: 100%; }
 }
 </style>
