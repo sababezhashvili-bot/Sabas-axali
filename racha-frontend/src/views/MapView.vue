@@ -532,10 +532,10 @@
         @click="toggleAdSpaces">
         <span class="material-symbols-outlined">campaign</span>
       </button>
-      <button class="icon-pill icon-pill-nav" :title="t('top.contact')" @click="showContactModal = true">
+      <button class="icon-pill icon-pill-nav icon-pill-contact" :title="t('top.contact')" @click="showContactModal = true">
         <span class="material-symbols-outlined">contact_support</span>
       </button>
-      <button class="icon-pill icon-pill-nav" :title="t('top.about')" @click="showAboutModal = true">
+      <button class="icon-pill icon-pill-nav icon-pill-about" :title="t('top.about')" @click="showAboutModal = true">
         <span class="material-symbols-outlined">info</span>
       </button>
       <button :class="['icon-pill', 'icon-pill-znobari', { active: showZnobariPanel }]"
@@ -560,13 +560,6 @@
 
     <!-- User Profile + Language toggle (stacked top-right) -->
     <div class="user-auth-wrap">
-      <!-- contact/about visible only on mobile (hidden on desktop where they live in top-bar) -->
-      <button class="pill-btn mobile-nav-btn" @click="showContactModal = true" :title="t('top.contact')">
-        <span class="material-symbols-outlined">contact_support</span>
-      </button>
-      <button class="pill-btn mobile-nav-btn" @click="showAboutModal = true" :title="t('top.about')">
-        <span class="material-symbols-outlined">info</span>
-      </button>
       <button class="pill-btn" @click="toggleAuth">
         <span class="material-symbols-outlined">person</span>
       </button>
@@ -3662,9 +3655,9 @@ body.light-theme .corner-logo { filter: brightness(6) drop-shadow(0 1px 10px rgb
   pointer-events: none;
 }
 
-/* ── Logo — fixed bottom-left corner ── */
+/* ── Logo — fixed top-left corner ── */
 .corner-logo {
-  position: fixed; bottom: 18px; left: 18px;
+  position: fixed; top: 14px; left: 14px;
   height: 20px; width: auto; max-width: 150px;
   object-fit: contain;
   filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
@@ -4907,9 +4900,6 @@ body.dark-theme .clouds {
 /* ═══════════════════════════════════════════════
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
-/* mobile-nav-btn: contact/about in auth-wrap — hidden on desktop, shown on mobile */
-.mobile-nav-btn { display: none !important; }
-
 @media (max-width: 768px) {
   /* Top bar — centered on mobile */
   .top-bar {
@@ -4926,11 +4916,12 @@ body.dark-theme .clouds {
     gap: 4px;
     z-index: 9999;
   }
-  /* Keep ads/divider hidden; contact/about appear in auth-wrap instead */
+  /* Hide ads pill and divider; show contact/about in bar before znobari */
   .icon-pill-nav { display: none !important; }
   .icon-pill-divider { display: none !important; }
-  /* Show contact/about in auth-wrap on mobile */
-  .mobile-nav-btn { display: flex !important; }
+  .icon-pill-contact, .icon-pill-about { display: flex !important; }
+  /* Logo: top area too crowded on mobile — move to bottom-left */
+  .corner-logo { top: auto; bottom: 18px; left: 14px; }
 
   .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
@@ -5095,8 +5086,8 @@ body.dark-theme .clouds {
   .pill-sub-arrow { font-size: 5px; }
 }
 @media (max-width: 480px) {
-  .icon-pill.has-sub { width: 36px !important; height: 36px !important; }
-  .icon-pill.has-sub .material-symbols-outlined { font-size: 17px !important; }
+  .icon-pill.has-sub { width: 32px !important; height: 32px !important; }
+  .icon-pill.has-sub .material-symbols-outlined { font-size: 16px !important; }
 }
 
 /* ── Landmark dropdown row ── */
@@ -5411,14 +5402,15 @@ body.dark-theme .clouds {
 @media (max-width: 480px) {
   .top-bar {
     top: 8px;
-    left: 50%;
+    /* shift slightly left of center to leave room for right-side auth buttons */
+    left: calc(50% - 22px);
     transform: translateX(-50%);
-    max-width: calc(100vw - 100px);
+    max-width: calc(100vw - 96px);
     gap: 3px;
     padding: 4px 6px;
   }
-  .icon-pill { width: 36px; height: 36px; }
-  .icon-pill .material-symbols-outlined { font-size: 17px !important; }
+  .icon-pill { width: 32px; height: 32px; }
+  .icon-pill .material-symbols-outlined { font-size: 16px !important; }
   .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
