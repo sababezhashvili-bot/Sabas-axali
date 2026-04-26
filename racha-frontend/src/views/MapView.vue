@@ -599,8 +599,8 @@
 
     <!-- Logo — fixed bottom-left -->
     <img :src="logoSrc" class="corner-logo" alt="SARO Logo" />
-    <!-- Tagline — fixed bottom-right -->
-    <div class="corner-tagline">საქართველოს რეგიონული ობიექტები</div>
+    <!-- Text logo — fixed bottom-right -->
+    <img :src="logo2Src" class="corner-logo-2" alt="SARO Text" />
 
     <!-- Contact Modal -->
     <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
@@ -882,6 +882,7 @@ import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
 import { api } from '../services/api.js'
 import { t, lang, setLang } from '../i18n.js'
 import logoSrc from '../assets/1.png'
+import logo2Src from '../assets/saro2.png'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
@@ -3668,18 +3669,15 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   z-index: 9998;
   pointer-events: none;
 }
-/* ── Tagline — fixed bottom-right ── */
-.corner-tagline {
+/* ── Text logo — fixed bottom-right, same height as left logo ── */
+.corner-logo-2 {
   position: fixed; bottom: 18px; right: 18px;
-  font-family: 'BPG Arial', 'Sylfaen', sans-serif;
-  font-size: 11px; font-weight: 400;
-  color: rgba(255,255,255,0.55);
-  text-align: right;
-  letter-spacing: 0.3px;
-  line-height: 1.4;
+  height: 20px; width: auto; max-width: 220px;
+  object-fit: contain;
+  filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
+  opacity: 0.82;
   z-index: 9998;
   pointer-events: none;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
 
 /* Region chip at bottom */
@@ -5438,6 +5436,6 @@ body.dark-theme .clouds {
   .bottom-cluster { left: 10px; bottom: 48px; width: calc(100vw - 20px); max-width: 380px; }
   .geocoder-bottom { width: 100%; }
   .corner-logo { bottom: 12px; left: 10px; height: 16px; }
-  .corner-tagline { bottom: 12px; right: 10px; font-size: 9px; }
+  .corner-logo-2 { bottom: 12px; right: 10px; height: 16px; }
 }
 </style>
