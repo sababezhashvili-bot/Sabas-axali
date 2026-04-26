@@ -2248,6 +2248,16 @@ onMounted(async () => {
         easing: t => { const ts = t-1; return ts*ts*ts+1 },
         essential: true
       })
+      // Dismiss mobile keyboard after result selected
+      const input = geocoderEl.value?.querySelector('input')
+      if (input) { input.blur(); input.blur() }
+    })
+    // Also dismiss keyboard when user hits Enter/Go on mobile
+    geocoderEl.value.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const input = geocoderEl.value?.querySelector('input')
+        if (input) setTimeout(() => input.blur(), 100)
+      }
     })
     geocoderEl.value.appendChild(gc.onAdd(map))
   } catch(e) {}
@@ -2569,6 +2579,7 @@ function pickFirstSuggestion(idx) {
   if (routeSuggestions.value.length) {
     activeInputIdx.value = idx
     pickSuggestion(routeSuggestions.value[0])
+    dismissKeyboard()
   }
 }
 
@@ -2993,18 +3004,25 @@ function toggleAuth() {
     else { showAuth.value=true; authView.value='login' }
   })
 }
+function dismissKeyboard() {
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur()
+  }
+}
 function closeAuth() { showAuth.value = false }
 async function processLogin() {
   if (!loginUser.value||!loginPass.value) return alert('შეავსეთ ველები')
+  dismissKeyboard()
   try { const u=await api.login(loginUser.value,loginPass.value); closeAuth(); router.push(u.role==='SuperAdmin'||u.role==='Admin'?'/admin':'/dashboard') }
   catch(e) { alert('Error: '+e.message) }
 }
 async function processRegister() {
   if (!regUser.value||!regEmail.value||!regPass.value) return alert('შეავსეთ ყველა ველი')
+  dismissKeyboard()
   try { await api.register(regUser.value,regEmail.value,regPass.value); const u=await api.login(regUser.value,regPass.value); closeAuth(); router.push(u.role==='SuperAdmin'||u.role==='Admin'?'/admin':'/dashboard') }
   catch(e) { alert('Error: '+e.message) }
 }
-function sendRecovery() { alert('Link sent!'); authView.value='login' }
+function sendRecovery() { dismissKeyboard(); alert('Link sent!'); authView.value='login' }
 </script>
 
 <style>
