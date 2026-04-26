@@ -2043,58 +2043,61 @@ onMounted(async () => {
           map.addSource(srcId, {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: catFeatures },
-            cluster: true, clusterMaxZoom: 13, clusterRadius: 55
+            cluster: true, clusterMaxZoom: 14, clusterRadius: 40
           })
 
-          // Cluster bubble — category colour
+          // Cluster bubble — smooth continuous radius scaling (Radio Garden style)
           map.addLayer({
             id: `${srcId}-clusters`, type: 'circle', source: srcId,
             filter: ['has', 'point_count'],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': ['step', ['get', 'point_count'], 13, 5, 17, 15, 22],
-              'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
-              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 0.92, 13.2, 0],
-              'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 0.92, 13.2, 0]
+              // r scales: 2 pins→5, 5→8, 15→13, 50→18, 150+→22
+              'circle-radius': ['interpolate', ['linear'], ['get', 'point_count'],
+                2, 5,  5, 8,  15, 13,  50, 18,  150, 22],
+              'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.88, 14.2, 0],
+              'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.88, 14.2, 0]
             }
           })
 
-          // Cluster count
+          // Cluster count label
           map.addLayer({
             id: `${srcId}-count`, type: 'symbol', source: srcId,
             filter: ['has', 'point_count'],
             layout: {
               'text-field': '{point_count_abbreviated}',
               'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-              'text-size': 13, 'text-allow-overlap': true
+              'text-size': 11, 'text-allow-overlap': true
             },
             paint: {
               'text-color': '#ffffff',
-              'text-opacity': ['interpolate', ['linear'], ['zoom'], 11.5, 1, 13.2, 0]
+              'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 1, 14.2, 0]
             }
           })
 
-          // Glow halo behind individual dot
+          // Soft glow behind individual dot
           map.addLayer({
             id: `${srcId}-glow`, type: 'circle', source: srcId,
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 18,
-              'circle-blur': 1.1,
-              'circle-opacity': 0.55,
+              'circle-radius': 9,
+              'circle-blur': 1.2,
+              'circle-opacity': 0.4,
               'circle-stroke-width': 0
             }
           })
 
-          // Individual dot
+          // Individual dot — tiny Radio-Garden-style pin
           map.addLayer({
             id: `${srcId}-points`, type: 'circle', source: srcId,
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 3.5,
-              'circle-stroke-width': 1, 'circle-stroke-color': '#000000', 'circle-opacity': 1
+              'circle-radius': 2,
+              'circle-stroke-width': 0,
+              'circle-opacity': 0.95
             }
           })
 
@@ -3587,24 +3590,31 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
 }
 /* Center placeholder logic hack */
 .mapboxgl-ctrl-geocoder--input { background: transparent !important; }
-.mapboxgl-ctrl-geocoder--button {
-  background: transparent !important;
-  top: 50% !important; transform: translateY(-50%) !important;
-  right: 12px !important; margin: 0 !important;
-  display: flex !important; align-items: center; justify-content: center;
-}
-.mapboxgl-ctrl-geocoder--icon-close {
-  fill: #fff !important; width: 20px !important; height: 20px !important;
-  opacity: 0.7;
-}
-.mapboxgl-ctrl-geocoder--icon-close:hover { opacity: 1; }
+/* Pin-right container: let geocoder JS control visibility of the button */
 .mapboxgl-ctrl-geocoder--pin-right {
-  display: flex !important;
-  align-items: center;
   position: absolute !important;
   right: 0 !important; top: 0 !important; bottom: 0 !important;
-  padding-right: 6px;
+  display: flex !important;
+  align-items: center;
+  padding-right: 8px;
   pointer-events: auto;
+}
+/* Clear (X) button — small & refined, shown only when geocoder has input */
+.mapboxgl-ctrl-geocoder--button {
+  background: rgba(255,255,255,0.12) !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 18px !important; height: 18px !important;
+  padding: 0 !important; margin: 0 !important;
+  cursor: pointer;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.mapboxgl-ctrl-geocoder--button:hover { background: rgba(255,255,255,0.26) !important; }
+.mapboxgl-ctrl-geocoder--icon-close {
+  fill: rgba(255,255,255,0.75) !important;
+  width: 10px !important; height: 10px !important;
 }
 .mapboxgl-ctrl-geocoder--icon-loading { display: none !important; }
 
