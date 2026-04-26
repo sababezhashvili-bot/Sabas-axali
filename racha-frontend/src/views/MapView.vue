@@ -597,8 +597,11 @@
       </div>
     </div>
 
-    <!-- Logo — fixed bottom-left corner -->
-    <img :src="logoSrc" class="corner-logo" alt="SARO Logo" />
+    <!-- Logos — fixed bottom-left corner, side by side -->
+    <div class="corner-logo-wrap">
+      <img :src="logoSrc" class="corner-logo" alt="SARO Logo" />
+      <img :src="logo2Src" class="corner-logo corner-logo-2" alt="SARO Text" />
+    </div>
 
     <!-- Contact Modal -->
     <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
@@ -880,6 +883,7 @@ import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
 import { api } from '../services/api.js'
 import { t, lang, setLang } from '../i18n.js'
 import logoSrc from '../assets/1.png'
+import logo2Src from '../assets/saro2.png'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
 
@@ -3137,6 +3141,7 @@ body.light-theme .glass-input {
 body.light-theme .glass-input::placeholder { color: rgba(255,255,255,0.4) !important; }
 
 body.light-theme .corner-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(255,255,255,0.2)) !important; opacity: 0.9 !important; }
+body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px rgba(255,255,255,0.2)) !important; opacity: 0.9 !important; }
 
 .map-container {
   position: absolute; inset: 0;
@@ -3655,15 +3660,23 @@ body.light-theme .corner-logo { filter: brightness(6) drop-shadow(0 1px 10px rgb
   pointer-events: none;
 }
 
-/* ── Logo — fixed bottom-left corner ── */
-.corner-logo {
+/* ── Logo pair — fixed bottom-left corner ── */
+.corner-logo-wrap {
   position: fixed; bottom: 18px; left: 18px;
-  height: 20px; width: auto; max-width: 150px;
-  object-fit: contain;
-  filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
-  opacity: 0.82;
+  display: flex; align-items: center; gap: 8px;
   z-index: 9998;
   pointer-events: none;
+  /* stay within ctrl-panel column — ctrl-panel left edge is ~70px on desktop */
+  max-width: calc(100vw - 36px);
+}
+.corner-logo {
+  height: 20px; width: auto;
+  object-fit: contain; flex-shrink: 0;
+  filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
+  opacity: 0.82;
+}
+.corner-logo-2 {
+  height: 18px; /* slightly smaller to balance the proportions */
 }
 
 /* Region chip at bottom */
@@ -5421,6 +5434,8 @@ body.dark-theme .clouds {
   .ctrl-panel { top: 60px; left: 8px; }
   .bottom-cluster { left: 10px; bottom: 48px; width: calc(100vw - 20px); max-width: 380px; }
   .geocoder-bottom { width: 100%; }
-  .corner-logo { bottom: 14px; left: 10px; }
+  .corner-logo-wrap { bottom: 12px; left: 10px; }
+  .corner-logo { height: 16px; }
+  .corner-logo-2 { height: 14px; }
 }
 </style>
