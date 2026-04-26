@@ -597,11 +597,10 @@
       </div>
     </div>
 
-    <!-- Logos — fixed bottom-left corner, side by side -->
-    <div class="corner-logo-wrap">
-      <img :src="logoSrc" class="corner-logo" alt="SARO Logo" />
-      <img :src="logo2Src" class="corner-logo corner-logo-2" alt="SARO Text" />
-    </div>
+    <!-- Logo — fixed bottom-left -->
+    <img :src="logoSrc" class="corner-logo" alt="SARO Logo" />
+    <!-- Text logo — fixed bottom-right -->
+    <img :src="logo2Src" class="corner-logo-2" alt="SARO Text" />
 
     <!-- Contact Modal -->
     <div v-if="showContactModal" class="modal-overlay" @click.self="showContactModal = false">
@@ -3660,23 +3659,25 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   pointer-events: none;
 }
 
-/* ── Logo pair — fixed bottom-left corner ── */
-.corner-logo-wrap {
-  position: fixed; bottom: 18px; left: 18px;
-  display: flex; align-items: center; gap: 8px;
-  z-index: 9998;
-  pointer-events: none;
-  /* stay within ctrl-panel column — ctrl-panel left edge is ~70px on desktop */
-  max-width: calc(100vw - 36px);
-}
+/* ── Logo — fixed bottom-left ── */
 .corner-logo {
-  height: 20px; width: auto;
-  object-fit: contain; flex-shrink: 0;
+  position: fixed; bottom: 18px; left: 18px;
+  height: 20px; width: auto; max-width: 160px;
+  object-fit: contain;
   filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
   opacity: 0.82;
+  z-index: 9998;
+  pointer-events: none;
 }
+/* ── Text logo — fixed bottom-right ── */
 .corner-logo-2 {
-  height: 18px; /* slightly smaller to balance the proportions */
+  position: fixed; bottom: 18px; right: 18px;
+  height: 20px; width: auto; max-width: 180px;
+  object-fit: contain;
+  filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
+  opacity: 0.82;
+  z-index: 9998;
+  pointer-events: none;
 }
 
 /* Region chip at bottom */
@@ -5434,8 +5435,7 @@ body.dark-theme .clouds {
   .ctrl-panel { top: 60px; left: 8px; }
   .bottom-cluster { left: 10px; bottom: 48px; width: calc(100vw - 20px); max-width: 380px; }
   .geocoder-bottom { width: 100%; }
-  .corner-logo-wrap { bottom: 12px; left: 10px; }
-  .corner-logo { height: 16px; }
-  .corner-logo-2 { height: 14px; }
+  .corner-logo { bottom: 12px; left: 10px; height: 16px; }
+  .corner-logo-2 { bottom: 12px; right: 10px; height: 16px; }
 }
 </style>
