@@ -2076,28 +2076,27 @@ onMounted(async () => {
             }
           })
 
-          // Soft glow behind individual dot
+          // Glow halo behind individual dot
           map.addLayer({
             id: `${srcId}-glow`, type: 'circle', source: srcId,
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 9,
-              'circle-blur': 1.2,
-              'circle-opacity': 0.4,
+              'circle-radius': 14,
+              'circle-blur': 1,
+              'circle-opacity': 0.32,
               'circle-stroke-width': 0
             }
           })
 
-          // Individual dot — tiny Radio-Garden-style pin
+          // Individual dot
           map.addLayer({
             id: `${srcId}-points`, type: 'circle', source: srcId,
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 2,
-              'circle-stroke-width': 0,
-              'circle-opacity': 0.95
+              'circle-radius': 5,
+              'circle-stroke-width': 1.5, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
             }
           })
 
@@ -3599,22 +3598,22 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   padding-right: 8px;
   pointer-events: auto;
 }
-/* Clear (X) button — small & refined, shown only when geocoder has input */
+/* Clear (X) button — Mapbox JS controls show/hide; we only style it */
 .mapboxgl-ctrl-geocoder--button {
   background: rgba(255,255,255,0.12) !important;
   border: none !important;
   border-radius: 50% !important;
-  width: 18px !important; height: 18px !important;
+  width: 20px !important; height: 20px !important;
   padding: 0 !important; margin: 0 !important;
   cursor: pointer;
-  display: flex !important; align-items: center !important; justify-content: center !important;
+  align-items: center; justify-content: center;
   transition: background 0.15s;
   flex-shrink: 0;
 }
 .mapboxgl-ctrl-geocoder--button:hover { background: rgba(255,255,255,0.26) !important; }
 .mapboxgl-ctrl-geocoder--icon-close {
   fill: rgba(255,255,255,0.75) !important;
-  width: 10px !important; height: 10px !important;
+  width: 11px !important; height: 11px !important;
 }
 .mapboxgl-ctrl-geocoder--icon-loading { display: none !important; }
 
