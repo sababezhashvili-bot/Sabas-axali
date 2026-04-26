@@ -3565,7 +3565,7 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
 /* ── User Profile Container ── */
 .user-auth-wrap {
   position: fixed; top: 25px; right: 25px;
-  z-index: 100;
+  z-index: 10002;
 }
 .user-auth-wrap .pill-btn {
   width: 50px; height: 50px;
@@ -4884,29 +4884,28 @@ body.dark-theme .clouds {
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Top bar — centered, scrollable row */
+  /* Top bar — centered, no scroll, hide nav-only pills */
   .top-bar {
     top: 10px;
     left: 50%;
     transform: translateX(-50%);
     right: auto;
-    width: max-content;
-    max-width: calc(100vw - 110px); /* leave space for login button */
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    width: fit-content;
+    max-width: calc(100vw - 96px);
+    overflow: visible;
     border-radius: 50px;
     padding: 5px 8px;
     gap: 4px;
-    justify-content: flex-start;
   }
-  .top-bar::-webkit-scrollbar { display: none; }
+  /* Hide ads / contact / about on mobile — keeps bar short enough to fit */
+  .icon-pill-nav { display: none !important; }
+  /* Also hide the divider since nav pills are gone */
+  .icon-pill-divider { display: none !important; }
   .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
   .icon-pill::after { display: none; }
 
-  /* Znobari stays in top-bar on mobile; ensure never cut by flex */
+  /* Znobari always visible */
   .icon-pill-znobari { flex-shrink: 0 !important; }
 
   /* Bottom panels: add safe-area padding */
@@ -5055,19 +5054,30 @@ body.dark-theme .clouds {
 /* ── Landmark sub-arrow on pill ── */
 .icon-pill.has-sub {
   display: flex; flex-direction: column; align-items: center;
-  gap: 0; padding: 0; height: auto; min-height: 38px; padding: 4px 2px;
+  justify-content: center;
+  gap: 1px;
+  padding: 3px 4px;
+  height: auto;
+  min-height: 0;
 }
 .pill-sub-arrow {
   font-size: 7px; line-height: 1; color: rgba(255,255,255,0.5);
-  margin-top: -2px;
+  display: block;
 }
 .icon-pill.has-sub.active .pill-sub-arrow { color: var(--accent); }
+@media (max-width: 768px) {
+  .icon-pill.has-sub { width: 34px; height: 34px; padding: 2px 3px; }
+  .pill-sub-arrow { font-size: 6px; }
+}
+@media (max-width: 480px) {
+  .icon-pill.has-sub { width: 30px; height: 30px; padding: 1px 2px; }
+}
 
 /* ── Landmark dropdown row ── */
 .landmark-dropdown {
-  position: absolute;
+  position: fixed;
   top: 66px; left: 50%; transform: translateX(-50%);
-  z-index: 24;
+  z-index: 9998;
   display: flex; flex-wrap: wrap; gap: 6px;
   justify-content: center;
   background: rgba(8,8,18,0.72);
@@ -5099,13 +5109,16 @@ body.dark-theme .clouds {
 }
 /* transition */
 .lm-drop-enter-active, .lm-drop-leave-active { transition: opacity 0.18s, transform 0.18s; }
-.lm-drop-enter-from, .lm-drop-leave-to { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+.lm-drop-enter-from, .lm-drop-leave-to { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.97); }
 
 @media (max-width: 768px) {
-  .landmark-dropdown { top: 54px; max-width: calc(100vw - 20px); gap: 4px; padding: 6px 8px; }
+  .landmark-dropdown { top: 56px; max-width: calc(100vw - 20px); gap: 4px; padding: 6px 8px; }
   .lm-sub-btn { min-width: 44px; padding: 5px 6px; }
   .lm-sub-btn .material-symbols-outlined { font-size: 15px !important; }
   .lm-sub-label { font-size: 8px; }
+}
+@media (max-width: 480px) {
+  .landmark-dropdown { top: 46px; }
 }
 
 /* ── ცნობარი panel ── */
@@ -5366,15 +5379,15 @@ body.dark-theme .clouds {
 @media (max-width: 480px) {
   .top-bar {
     top: 8px;
-    max-width: calc(100vw - 96px);
+    max-width: calc(100vw - 86px);
     gap: 3px;
     padding: 4px 6px;
   }
-  .icon-pill { width: 28px; height: 28px; }
-  .icon-pill .material-symbols-outlined { font-size: 15px !important; }
+  .icon-pill { width: 30px; height: 30px; }
+  .icon-pill .material-symbols-outlined { font-size: 16px !important; }
   .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
   .user-auth-wrap .pill-btn,
-  .user-auth-wrap .lang-pill { width: 38px; height: 38px; }
+  .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
   .ctrl-panel { top: 118px; left: 8px; }
   .geocoder-center { top: 58px; width: calc(100vw - 16px); }
 }
