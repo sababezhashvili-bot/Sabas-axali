@@ -4884,23 +4884,25 @@ body.dark-theme .clouds {
    RESPONSIVE — Mobile & Tablet
 ═══════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Top bar — centered, no scroll, hide nav-only pills */
+  /* Top bar — fixed, LEFT-aligned so it never overlaps right-side auth buttons */
   .top-bar {
+    position: fixed;           /* escape map overflow:hidden */
     top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 10px;                /* left edge of screen */
+    transform: none;           /* NOT centered */
     right: auto;
     width: fit-content;
-    max-width: calc(100vw - 96px);
+    max-width: calc(100vw - 96px); /* leave 96px on right for auth buttons */
     overflow: visible;
     border-radius: 50px;
     padding: 5px 8px;
     gap: 4px;
+    z-index: 9999;
   }
-  /* Hide ads / contact / about on mobile — keeps bar short enough to fit */
+  /* Hide ads / contact / about on mobile — keeps bar short */
   .icon-pill-nav { display: none !important; }
-  /* Also hide the divider since nav pills are gone */
   .icon-pill-divider { display: none !important; }
+
   .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
   .icon-pill::after { display: none; }
@@ -5112,13 +5114,19 @@ body.dark-theme .clouds {
 .lm-drop-enter-from, .lm-drop-leave-to { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.97); }
 
 @media (max-width: 768px) {
-  .landmark-dropdown { top: 56px; max-width: calc(100vw - 20px); gap: 4px; padding: 6px 8px; }
+  .landmark-dropdown {
+    top: 58px;         /* below the fixed top-bar (~10px + 34px pill + 8px padding + 6px gap) */
+    left: 10px;        /* match top-bar left edge */
+    transform: none;   /* not centered */
+    max-width: calc(100vw - 20px);
+    gap: 4px; padding: 6px 8px;
+  }
   .lm-sub-btn { min-width: 44px; padding: 5px 6px; }
   .lm-sub-btn .material-symbols-outlined { font-size: 15px !important; }
   .lm-sub-label { font-size: 8px; }
 }
 @media (max-width: 480px) {
-  .landmark-dropdown { top: 46px; }
+  .landmark-dropdown { top: 54px; }
 }
 
 /* ── ცნობარი panel ── */
@@ -5379,16 +5387,17 @@ body.dark-theme .clouds {
 @media (max-width: 480px) {
   .top-bar {
     top: 8px;
-    max-width: calc(100vw - 86px);
+    left: 8px;
+    max-width: calc(100vw - 84px);
     gap: 3px;
     padding: 4px 6px;
   }
   .icon-pill { width: 30px; height: 30px; }
-  .icon-pill .material-symbols-outlined { font-size: 16px !important; }
+  .icon-pill .material-symbols-outlined { font-size: 15px !important; }
   .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
-  .ctrl-panel { top: 118px; left: 8px; }
-  .geocoder-center { top: 58px; width: calc(100vw - 16px); }
+  .ctrl-panel { top: 108px; left: 8px; }
+  .geocoder-center { top: 54px; width: calc(100vw - 16px); }
 }
 </style>
