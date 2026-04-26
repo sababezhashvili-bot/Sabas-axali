@@ -2452,8 +2452,8 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 14px;
 }
 .pf-btn {
-  flex: 1; min-width: 0;
-  padding: 5px 6px;
+  flex: 0 0 auto; /* content-width, no stretching */
+  padding: 5px 8px;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;

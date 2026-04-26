@@ -568,17 +568,13 @@
       </button>
     </div>
 
-    <!-- Floating search bar centered at top -->
-    <div ref="geocoderEl" class="geocoder-center"
-      :class="{ 'nav-banner-active': liveNavActive, 'lm-drop-open': showLandmarkDropdown && activeCat === 'landmark' }"></div>
-
-    <!-- Bottom cluster: Logo + Region selector + Population -->
+    <!-- Bottom cluster: Search + Region + Logo -->
     <div class="bottom-cluster">
-      <!-- Logo -->
-      <img :src="logoSrc" class="bl-logo" alt="SARO Logo" />
+      <!-- Search bar (suggestions open upward) -->
+      <div ref="geocoderEl" class="geocoder-bottom"></div>
 
       <!-- Unified region + population chip -->
-      <div v-if="activeRegion" class="region-bottom-wrap" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
+      <div v-show="activeRegion" class="region-bottom-wrap" @click.stop="isRegionDropdownOpen = !isRegionDropdownOpen">
         <transition name="dropdown-fade">
           <div v-if="isRegionDropdownOpen" class="region-dropdown-up" @click.stop>
             <div v-for="(pop, r) in SUB_REGIONS" :key="r"
@@ -599,6 +595,9 @@
           <span class="material-symbols-outlined dropdown-chevron" :class="{ open: isRegionDropdownOpen }">expand_more</span>
         </div>
       </div>
+
+      <!-- Logo -->
+      <img :src="logoSrc" class="bl-logo" alt="SARO Logo" />
     </div>
 
     <!-- Contact Modal -->
@@ -2064,13 +2063,26 @@ onMounted(async () => {
             paint: { 'text-color': '#ffffff' }
           })
 
+          // Glow halo behind individual dot
+          map.addLayer({
+            id: `${srcId}-glow`, type: 'circle', source: srcId,
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+              'circle-color': cat.color,
+              'circle-radius': 14,
+              'circle-blur': 1,
+              'circle-opacity': 0.32,
+              'circle-stroke-width': 0
+            }
+          })
+
           // Individual dot
           map.addLayer({
             id: `${srcId}-points`, type: 'circle', source: srcId,
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
-              'circle-radius': 6,
+              'circle-radius': 5,
               'circle-stroke-width': 1.5, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
             }
           })
@@ -2347,7 +2359,7 @@ function setPinCatVisibility(cat) {
     } else {
       visible = c === cat
     }
-    ;[`pins-${c}-clusters`, `pins-${c}-count`, `pins-${c}-points`].forEach(id => {
+    ;[`pins-${c}-glow`, `pins-${c}-clusters`, `pins-${c}-count`, `pins-${c}-points`].forEach(id => {
       if (map.getLayer(id)) try { map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none') } catch(e) {}
     })
   })
@@ -2461,11 +2473,6 @@ async function updateWeather() {
     } else {
       displayLocation.value = activeRegion.value || 'Racha'
     }
-
-    // 4. Update Population dynamically based on activeRegion
-    if (activeRegion.value.includes('Racha')) populationCount.value = '28,500'
-    else if (activeRegion.value.includes('Svaneti')) populationCount.value = '29,900'
-    else populationCount.value = '--'
 
   } catch(e) {}
 }
@@ -3042,7 +3049,7 @@ body.light-theme .top-bar,
 body.light-theme .region-chip-bottom,
 body.light-theme .region-dropdown-up,
 body.light-theme .bottom-cluster .bl-pop,
-body.light-theme .geocoder-center .mapboxgl-ctrl-geocoder,
+body.light-theme .geocoder-bottom .mapboxgl-ctrl-geocoder,
 body.light-theme .layer-card,
 body.light-theme .weather-detail-panel,
 body.light-theme .route-drawer,
@@ -3492,14 +3499,12 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
   margin: 0 2px; flex-shrink: 0;
 }
 
-/* ── Centered Geocoder (below top bar) ── */
-.geocoder-center {
-  position: absolute;
-  top: 90px;
-  left: 50%; transform: translateX(-50%);
+/* ── Bottom Geocoder (inside bottom-cluster) ── */
+.geocoder-bottom {
+  width: 260px;
   z-index: 10006;
   pointer-events: auto;
-  transition: top 0.2s ease;
+  flex-shrink: 0;
 }
 
 /* ── Geocoder (compact glassmorphism) ── */
@@ -3583,13 +3588,17 @@ body.light-theme .bl-logo { filter: brightness(6) drop-shadow(0 1px 10px rgba(25
 
 /* ── Geocoder Suggestions (Glassmorphism) ── */
 .mapboxgl-ctrl-geocoder .suggestions {
-  background-color: rgba(20,24,30,0.85) !important; /* Fallback / Base */
+  background-color: rgba(20,24,30,0.85) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
   border: 1px solid rgba(255,255,255,0.15) !important;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;
+  box-shadow: 0 -12px 40px rgba(0,0,0,0.5) !important;
   border-radius: 14px !important;
-  margin-top: 8px !important;
+  /* Open upward since geocoder is at the bottom */
+  top: auto !important;
+  bottom: calc(100% + 8px) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
   padding: 6px !important;
   left: 0 !important; right: 0 !important;
   width: auto !important; min-width: 100% !important;
@@ -4934,19 +4943,15 @@ body.dark-theme .clouds {
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 42px; height: 42px; }
 
-  /* Controls — below the geocoder bar (geocoder top:66px + ~50px height) */
-  .ctrl-panel { top: 130px; left: 10px; gap: 8px; }
+  /* Controls — below top bar */
+  .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
 
-  /* Geocoder — centered below top bar */
-  .geocoder-center {
-    top: 66px;
-    left: 50%;
-    transform: translateX(-50%);
-    right: auto;
+  /* Geocoder — bottom cluster search bar */
+  .geocoder-bottom {
     width: calc(100vw - 20px);
     max-width: 420px;
   }
-  .geocoder-center .mapboxgl-ctrl-geocoder {
+  .geocoder-bottom .mapboxgl-ctrl-geocoder {
     width: 100% !important;
     max-width: 100% !important;
   }
@@ -5021,15 +5026,10 @@ body.dark-theme .clouds {
 }
 .lang-pill .material-symbols-outlined { font-size: 22px !important; }
 
-/* ── Nav-banner-active: push top-bar and geocoder down when live nav is on ── */
+/* ── Nav-banner-active: push top-bar down when live nav is on ── */
 .top-bar.nav-banner-active { top: 80px !important; }
-.geocoder-center.nav-banner-active { top: 148px !important; }
-/* ── Push geocoder below landmark dropdown when it opens ── */
-.geocoder-center.lm-drop-open { top: 170px !important; transition: top 0.2s ease; }
 @media (max-width: 768px) {
   .top-bar.nav-banner-active { top: 68px !important; }
-  .geocoder-center.nav-banner-active { top: 126px !important; }
-  .geocoder-center.lm-drop-open { top: 160px !important; }
 }
 
 /* ── Route pick-from-pin button ── */
@@ -5079,8 +5079,8 @@ body.dark-theme .clouds {
   .pill-sub-arrow { font-size: 5px; }
 }
 @media (max-width: 480px) {
-  .icon-pill.has-sub { width: 30px !important; height: 30px !important; }
-  .icon-pill.has-sub .material-symbols-outlined { font-size: 14px !important; }
+  .icon-pill.has-sub { width: 36px !important; height: 36px !important; }
+  .icon-pill.has-sub .material-symbols-outlined { font-size: 17px !important; }
 }
 
 /* ── Landmark dropdown row ── */
@@ -5400,12 +5400,12 @@ body.dark-theme .clouds {
     gap: 3px;
     padding: 4px 6px;
   }
-  .icon-pill { width: 30px; height: 30px; }
-  .icon-pill .material-symbols-outlined { font-size: 15px !important; }
+  .icon-pill { width: 36px; height: 36px; }
+  .icon-pill .material-symbols-outlined { font-size: 17px !important; }
   .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
-  .ctrl-panel { top: 108px; left: 8px; }
-  .geocoder-center { top: 54px; width: calc(100vw - 16px); }
+  .ctrl-panel { top: 60px; left: 8px; }
+  .geocoder-bottom { width: calc(100vw - 20px); max-width: 400px; }
 }
 </style>
