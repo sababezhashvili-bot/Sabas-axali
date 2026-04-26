@@ -3303,12 +3303,12 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   background: rgba(255,255,255,.95); box-shadow: 0 0 8px rgba(255,255,255,.6); flex-shrink: 0;
 }
 
-/* ── Left Controls ── */
-/* ── Right Control Panel ── */
+/* ── Left Controls — vertically centered ── */
 .ctrl-panel {
-  position: absolute; top: 120px; left: 20px; /* Redesign: Moved to Left */
+  position: fixed; top: 50%; left: 20px;
+  transform: translateY(-50%);
   display: flex; flex-direction: column; gap: 14px; z-index: 10;
-  align-items: flex-start; /* Redesign: Align items to start */
+  align-items: flex-start;
 }
 
 /* Base Button Style */
@@ -3573,9 +3573,10 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
 .mapboxgl-ctrl-geocoder--icon-close:hover { opacity: 1; }
 .mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
 
-/* ── User Profile Container ── */
+/* ── User Profile Container — vertically centered ── */
 .user-auth-wrap {
-  position: fixed; top: 25px; right: 25px;
+  position: fixed; top: 50%; right: 25px;
+  transform: translateY(-50%);
   z-index: 10002;
 }
 .user-auth-wrap .pill-btn {
@@ -4959,13 +4960,13 @@ body.dark-theme .clouds {
   /* Route drawer on mobile — add safe-area */
   .route-drawer { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-  /* User auth + lang buttons — top right stacked */
-  .user-auth-wrap { top: 10px; right: 10px; gap: 6px; }
+  /* User auth + lang buttons — vertically centered right */
+  .user-auth-wrap { top: 50%; right: 10px; transform: translateY(-50%); gap: 6px; }
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 42px; height: 42px; }
 
-  /* Controls — below top bar */
-  .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
+  /* Controls — vertically centered left */
+  .ctrl-panel { top: 50%; left: 10px; transform: translateY(-50%); gap: 8px; }
 
   /* Bottom cluster — left-aligned, above the logo on mobile */
   .bottom-cluster {
@@ -5429,10 +5430,10 @@ body.dark-theme .clouds {
   }
   .icon-pill { width: 32px; height: 32px; }
   .icon-pill .material-symbols-outlined { font-size: 16px !important; }
-  .user-auth-wrap { top: 8px; right: 8px; gap: 5px; }
+  .user-auth-wrap { top: 50%; right: 8px; transform: translateY(-50%); gap: 5px; }
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
-  .ctrl-panel { top: 60px; left: 8px; }
+  .ctrl-panel { top: 50%; left: 8px; transform: translateY(-50%); }
   .bottom-cluster { left: 10px; bottom: 48px; width: calc(100vw - 20px); max-width: 380px; }
   .geocoder-bottom { width: 100%; }
   .corner-logo { bottom: 12px; left: 10px; height: 16px; }
