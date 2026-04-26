@@ -3655,9 +3655,9 @@ body.light-theme .corner-logo { filter: brightness(6) drop-shadow(0 1px 10px rgb
   pointer-events: none;
 }
 
-/* ── Logo — fixed top-left corner ── */
+/* ── Logo — fixed bottom-left corner ── */
 .corner-logo {
-  position: fixed; top: 14px; left: 14px;
+  position: fixed; bottom: 18px; left: 18px;
   height: 20px; width: auto; max-width: 150px;
   object-fit: contain;
   filter: brightness(6) drop-shadow(0 0 8px rgba(255,255,255,0.25));
@@ -4920,8 +4920,6 @@ body.dark-theme .clouds {
   .icon-pill-nav { display: none !important; }
   .icon-pill-divider { display: none !important; }
   .icon-pill-contact, .icon-pill-about { display: flex !important; }
-  /* Logo: top area too crowded on mobile — move to bottom-left */
-  .corner-logo { top: auto; bottom: 18px; left: 14px; }
 
   .icon-pill { width: 34px; height: 34px; flex-shrink: 0; }
   .icon-pill .material-symbols-outlined { font-size: 17px !important; }
@@ -4955,8 +4953,14 @@ body.dark-theme .clouds {
   /* Controls — below top bar */
   .ctrl-panel { top: 70px; left: 10px; gap: 8px; }
 
-  /* Bottom cluster + geocoder — full width on mobile */
-  .bottom-cluster { width: calc(100vw - 20px); max-width: 420px; }
+  /* Bottom cluster — left-aligned, above the logo on mobile */
+  .bottom-cluster {
+    left: 14px;
+    transform: none;
+    bottom: 50px; /* logo is bottom:18px + 20px height + 12px gap */
+    width: calc(100vw - 28px);
+    max-width: 400px;
+  }
   .geocoder-bottom { width: 100%; }
   .geocoder-bottom .mapboxgl-ctrl-geocoder {
     width: 100% !important;
@@ -5415,7 +5419,8 @@ body.dark-theme .clouds {
   .user-auth-wrap .pill-btn,
   .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
   .ctrl-panel { top: 60px; left: 8px; }
-  .bottom-cluster { width: calc(100vw - 20px); max-width: 400px; }
+  .bottom-cluster { left: 10px; bottom: 48px; width: calc(100vw - 20px); max-width: 380px; }
   .geocoder-bottom { width: 100%; }
+  .corner-logo { bottom: 14px; left: 10px; }
 }
 </style>
