@@ -1349,10 +1349,11 @@ function updateLayers() {
     const isPoi        = id.includes('poi')
     const isRoad       = id.includes('road') || id.includes('bridge') || id.includes('tunnel')
 
-    // Settlements: show/hide + apply region filter
+    // Settlements: show/hide + always clip to active region
     if (isSettlement && !isPoi) {
       try { map.setLayoutProperty(id, 'visibility', showLbl ? 'visible' : 'none') } catch(e) {}
-      if (showLbl && activeFeature.value) {
+      // Always apply within-filter regardless of showLbl, so outside labels never leak
+      if (activeFeature.value) {
         try { map.setFilter(id, ['within', activeFeature.value]) } catch(e) {}
       }
       if (showLbl && layer.type === 'symbol') {
@@ -1727,15 +1728,16 @@ onMounted(async () => {
     initMapLayers()
   })
 
-  // Hide every symbol / label layer the style provides (runs after each style change)
+  // Hide every base symbol/label layer (all types:symbol from the map style)
+  // Skips our custom layers (pins-*, route-*, esri-*)
   function hideBaseSymbolLayers() {
     const st = map.getStyle()
     if (!st || !st.layers) return
     st.layers.forEach(l => {
-      if (l.type === 'symbol' || l.type === 'line' &&
-          (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi'))) {
-        try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
-      }
+      if (l.type !== 'symbol') return
+      if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
+          l.id.startsWith('esri-') || l.id === '3d-buildings') return
+      try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
     })
   }
 
@@ -1743,11 +1745,11 @@ onMounted(async () => {
     hideBaseSymbolLayers()
     addEsriSatellite()
     if (ready) initMapLayers()
-    // Second pass after initMapLayers re-runs watchers — catches anything re-enabled
-    setTimeout(() => {
+    // Final pass after map is fully idle (tiles loaded, watchers settled)
+    map.once('idle', () => {
       hideBaseSymbolLayers()
       styleTransitioning.value = false
-    }, 300)
+    })
   })
 
   async function selectRegion(feature) {
