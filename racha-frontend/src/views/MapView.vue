@@ -1643,8 +1643,34 @@ onMounted(async () => {
     offset: [0, -130],
   })
 
+  // ── ESRI World Imagery ───────────────────────────────────────────
+  function addEsriSatellite() {
+    if (map.getSource('esri-satellite')) return
+    map.addSource('esri-satellite', {
+      type: 'raster',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      attribution: 'Tiles © Esri'
+    })
+    const layers = map.getStyle().layers
+    // Hide ALL existing raster layers (Mapbox satellite — whatever its ID is)
+    layers.filter(l => l.type === 'raster').forEach(l => {
+      try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+    })
+    // Insert ESRI above background but below the first non-raster/non-background layer
+    const insertBefore = layers.find(l => l.type !== 'background' && l.type !== 'raster')?.id
+    map.addLayer({
+      id: 'esri-satellite-layer',
+      type: 'raster',
+      source: 'esri-satellite',
+      paint: { 'raster-opacity': 1 }
+    }, insertBefore)
+  }
+
   map.on('load', async () => {
     ready = true
+
+    addEsriSatellite()
 
     // CLEAN START: Hide all global data layers initially
     const style = map.getStyle()
@@ -1679,6 +1705,7 @@ onMounted(async () => {
   })
 
   map.on('style.load', () => {
+    addEsriSatellite()
     if (ready) initMapLayers()
   })
 
