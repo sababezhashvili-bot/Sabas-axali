@@ -2046,29 +2046,39 @@ onMounted(async () => {
             cluster: true, clusterMaxZoom: 14, clusterRadius: 40
           })
 
-          // Cluster bubble — smooth continuous radius scaling (Radio Garden style)
+          // Cluster bubble — always large enough for the count label
           map.addLayer({
             id: `${srcId}-clusters`, type: 'circle', source: srcId,
             filter: ['has', 'point_count'],
             paint: {
               'circle-color': cat.color,
-              // r scales: 2 pins→5, 5→8, 15→13, 50→18, 150+→22
-              'circle-radius': ['interpolate', ['linear'], ['get', 'point_count'],
-                2, 5,  5, 8,  15, 13,  50, 18,  150, 22],
-              'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
-              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.88, 14.2, 0],
-              'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.88, 14.2, 0]
+              // minimum r=16 so 1-2 digit numbers fit; scales up for large groups
+              'circle-radius': ['step', ['get', 'point_count'],
+                16,   // 2–4  pins → r=16
+                5,  20,   // 5–14 pins → r=20
+                15, 24,   // 15–49 pins → r=24
+                50, 28    // 50+  pins → r=28
+              ],
+              'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0],
+              'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0]
             }
           })
 
-          // Cluster count label
+          // Cluster count label — text size matches bubble
           map.addLayer({
             id: `${srcId}-count`, type: 'symbol', source: srcId,
             filter: ['has', 'point_count'],
             layout: {
               'text-field': '{point_count_abbreviated}',
               'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-              'text-size': 11, 'text-allow-overlap': true
+              'text-size': ['step', ['get', 'point_count'],
+                11,   // 2–4  pins
+                5,  12,   // 5–14 pins
+                15, 13,   // 15–49 pins
+                50, 14    // 50+ pins
+              ],
+              'text-allow-overlap': true
             },
             paint: {
               'text-color': '#ffffff',
