@@ -146,8 +146,6 @@
         <span class="material-symbols-outlined">{{ themeIcon }}</span>
       </button>
 
-      <div class="ctrl-divider"></div>
-
       <!-- Weather Widget (Click-to-expand, Round) -->
       <div class="weather-wrap">
         <button class="pill-btn" @click.stop="isWeatherOpen = !isWeatherOpen; isLayerWidgetOpen = false; showRoutePanel = false" :class="{ active: isWeatherOpen }" :title="t('ctrl.weather')" style="position:relative">
@@ -217,8 +215,6 @@
         </div>
       </transition>
 
-      <div class="ctrl-divider"></div>
-
       <!-- Map Style Toggle: satellite ↔ graphic -->
       <button class="pill-btn" :class="{ active: mapStyleMode === 'graphic' }"
         @click="toggleMapStyle"
@@ -231,8 +227,6 @@
         <span class="material-symbols-outlined" style="font-size:20px">{{ is3D ? 'view_in_ar' : 'public' }}</span>
       </button>
       
-      <div class="ctrl-divider"></div>
-
       <!-- Zoom Controls -->
       <div class="zoom-group">
         <button class="pill-btn zoom-btn" @click="() => map && map.zoomIn()">
@@ -1702,21 +1696,20 @@ onMounted(async () => {
 
     addEsriSatellite()
 
-    // ── Graphic style as raster overlay — enables instant style switching ──
-    // Pre-load tiles so the first switch is fast. Layer starts hidden (satellite is default).
-    if (!map.getSource('graphic-raster')) {
-      map.addSource('graphic-raster', {
-        type: 'raster',
-        tiles: [`https://api.mapbox.com/styles/v1/sabuka629/cmn93zj1f000b01s7grsed6mv/tiles/256/{z}/{x}/{y}?access_token=${mapboxgl.accessToken}`],
-        tileSize: 256,
-        maxzoom: 22
+    // ── Graphic mode: world white fill — instant toggle, zero network cost ──
+    // Covers satellite imagery when visible; vector roads/labels draw on top.
+    if (!map.getSource('world-fill')) {
+      map.addSource('world-fill', {
+        type: 'geojson',
+        data: { type: 'Feature', geometry: { type: 'Polygon',
+          coordinates: [[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]]] } }
       })
       map.addLayer({
-        id: 'graphic-raster-layer',
-        type: 'raster',
-        source: 'graphic-raster',
-        layout: { visibility: 'none' }, // Hidden until user switches to graphic mode
-        paint: { 'raster-opacity': 1 }
+        id: 'graphic-bg',
+        type: 'fill',
+        source: 'world-fill',
+        layout: { visibility: 'none' },
+        paint: { 'fill-color': '#f0ece6', 'fill-opacity': 1 }
       })
     }
 
@@ -1760,7 +1753,7 @@ onMounted(async () => {
     st.layers.forEach(l => {
       if (l.type !== 'symbol') return
       if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
-          l.id.startsWith('esri-') || l.id.startsWith('graphic-') ||
+          l.id.startsWith('esri-') ||
           l.id.startsWith('ads-') || l.id === '3d-buildings') return
       try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
       // Backup: even if visibility gets re-enabled, filter blocks outside features
@@ -2617,52 +2610,97 @@ function toggleMapStyle() {
   mapStyleMode.value = toGraphic ? 'graphic' : 'satellite'
 
   if (toGraphic) {
-    // ── Enter graphic mode ──
-    // Show pre-loaded graphic raster tiles (instant — no setStyle reload!)
-    if (map.getLayer('graphic-raster-layer')) {
-      map.setLayoutProperty('graphic-raster-layer', 'visibility', 'visible')
-    }
-    // Hide ESRI satellite overlay
-    if (map.getLayer('esri-satellite-layer')) {
+    // ── Enter graphic mode — instant, zero network ──
+    // 1. Hide satellite imagery
+    if (map.getLayer('esri-satellite-layer'))
       map.setLayoutProperty('esri-satellite-layer', 'visibility', 'none')
+
+    // 2. Show world-fill white background (covers Mapbox base raster)
+    if (map.getLayer('graphic-bg'))
+      map.setLayoutProperty('graphic-bg', 'visibility', 'visible')
+
+    // 3. Show vector roads + place labels within Racha (gives graphic/streets look)
+    const st = map.getStyle()
+    if (st && st.layers && activeFeature.value) {
+      const withinFilter = ['within', activeFeature.value]
+      st.layers.forEach(l => {
+        const id = l.id
+        const isCasing = id.includes('case') || id.includes('-casing') || id.includes('outline')
+        const isPoi    = id.includes('poi')
+        if (isCasing || isPoi) return
+        const isRoad  = (id.includes('road') || id.includes('bridge') || id.includes('tunnel')) && l.type === 'line'
+        const isLabel = (id.includes('settlement') || id.includes('place-')) && l.type === 'symbol'
+        if (isRoad) {
+          try {
+            map.setLayoutProperty(id, 'visibility', 'visible')
+            map.setFilter(id, withinFilter)
+            map.setPaintProperty(id, 'line-color', 'rgba(190,170,150,0.9)')
+            map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'],7,0.5,11,1.2,14,2,17,3.5])
+            map.setPaintProperty(id, 'line-opacity', 0.85)
+          } catch(e) {}
+        }
+        if (isLabel) {
+          try {
+            map.setLayoutProperty(id, 'visibility', 'visible')
+            map.setFilter(id, withinFilter)
+            map.setPaintProperty(id, 'text-color', '#2c2420')
+            map.setPaintProperty(id, 'text-halo-color', 'rgba(240,236,230,0.95)')
+            map.setPaintProperty(id, 'text-halo-width', 1.5)
+            map.moveLayer(id)
+          } catch(e) {}
+        }
+      })
     }
-    // Hide all vector symbol labels — they're baked into the graphic raster tiles
-    hideBaseSymbolLayers()
-    // Dim-mask fully opaque → clean boundary edge, no outside labels leak through
+
+    // 4. Fully opaque mask — nothing visible outside region
     applyDimMaskOpacity()
-    // Disable terrain + fog (performance + not relevant for flat illustrated style)
+
+    // 5. No terrain/fog — flat 2D graphic look
     try { map.setTerrain(null) } catch(e) {}
-    try { map.setFog(null) } catch(e) {}
+    try { map.setFog(null) }     catch(e) {}
+
+    // 6. Re-raise mask + pins above new layers
+    ;['dim-mask-layer','focus-region-glow','focus-region-border'].forEach(id => {
+      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+    })
+    const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
+    ALL_CATS.forEach(c => {
+      ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
+        if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+      })
+    })
+
   } else {
     // ── Enter satellite mode ──
-    // Hide graphic raster tiles
-    if (map.getLayer('graphic-raster-layer')) {
-      map.setLayoutProperty('graphic-raster-layer', 'visibility', 'none')
-    }
-    // Show ESRI satellite overlay
-    if (map.getLayer('esri-satellite-layer')) {
+    // 1. Show ESRI satellite
+    if (map.getLayer('esri-satellite-layer'))
       map.setLayoutProperty('esri-satellite-layer', 'visibility', 'visible')
-    }
-    // Restore settlement + road labels with within-filter
+
+    // 2. Hide white background
+    if (map.getLayer('graphic-bg'))
+      map.setLayoutProperty('graphic-bg', 'visibility', 'none')
+
+    // 3. Restore base layers to satellite-appropriate state
+    hideBaseSymbolLayers()
     updateLayers()
-    // Dim-mask semi-transparent (satellite imagery shows through)
+
+    // 4. Semi-transparent mask
     applyDimMaskOpacity()
-    // Re-enable terrain
+
+    // 5. Re-enable terrain
     try {
-      if (!map.getSource('dem')) {
+      if (!map.getSource('dem'))
         map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
-      }
       map.setTerrain({ source:'dem', exaggeration: 1.5 })
     } catch(e) {}
-    // Re-enable fog
+
+    // 6. Re-enable fog (dark theme)
     try {
-      if (!isLightMode.value) {
+      if (!isLightMode.value)
         map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
-      }
     } catch(e) {}
   }
 
-  // No style reload → transition is near-instant (1-2 frames)
   requestAnimationFrame(() => { styleTransitioning.value = false })
 }
 
@@ -3303,6 +3341,31 @@ html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
   border-color: rgba(255,255,255,0.14) !important;
 }
 
+/* ── Graphic mode: panels need stronger dark bg (white map behind them) ── */
+.graphic-mode .route-drawer,
+.graphic-mode .layer-card,
+.graphic-mode .weather-detail-panel,
+.graphic-mode .znobari-panel {
+  background: rgba(12, 12, 22, 0.93) !important;
+  border-color: rgba(255,255,255,0.16) !important;
+  box-shadow: 0 16px 60px rgba(0,0,0,0.65) !important;
+}
+.graphic-mode .glass-modal,
+.graphic-mode .ad-glass-modal {
+  background: rgba(12, 12, 22, 0.95) !important;
+}
+.graphic-mode .region-chip-bottom {
+  background: rgba(10, 10, 20, 0.90) !important;
+  border-color: rgba(255,255,255,0.16) !important;
+}
+.graphic-mode .landmark-dropdown {
+  background: rgba(10, 10, 20, 0.90) !important;
+}
+.graphic-mode .mapboxgl-ctrl-geocoder {
+  background: rgba(10, 10, 20, 0.90) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+}
+
 /* Pins on graphic (white) map: darker border for contrast */
 .graphic-mode .pin-label {
   background: rgba(6, 6, 14, 0.92) !important;
@@ -3591,45 +3654,41 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   background: rgba(255,255,255,.95); box-shadow: 0 0 8px rgba(255,255,255,.6); flex-shrink: 0;
 }
 
-/* ── Left Control Panel — glass container ── */
+/* ── Left Control Panel — no container, only individual buttons ── */
 .ctrl-panel {
   position: fixed; top: 80px; left: 16px;
   display: flex; flex-direction: column; gap: 6px;
   z-index: 9999;
   align-items: center;
-  background: rgba(8, 8, 20, 0.52);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 28px;
-  padding: 10px 8px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07);
 }
 
-/* ── Glass Pill Button — visible glass, not transparent ── */
+/* ── Glass Pill Button — standalone glass, each button self-contained ── */
 .pill-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.65);
+  background: rgba(8, 8, 20, 0.55);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: rgba(255, 255, 255, 0.70);
   width: 40px; height: 40px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   flex-shrink: 0;
 }
 .pill-btn:hover {
-  background: rgba(255,255,255,0.14);
+  background: rgba(20, 20, 40, 0.75);
   color: #fff;
-  transform: scale(1.05);
-  border-color: rgba(255,255,255,0.18);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  transform: scale(1.07);
+  border-color: rgba(255,255,255,0.22);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.45);
 }
 .pill-btn.active {
   background: var(--accent);
   color: #fff;
-  border-color: rgba(114,169,143,0.5);
-  box-shadow: 0 2px 12px rgba(114,169,143,0.4);
+  border-color: rgba(114,169,143,0.6);
+  box-shadow: 0 4px 18px rgba(114,169,143,0.45);
 }
 .pill-btn .material-symbols-outlined { color: inherit !important; }
 
@@ -3892,21 +3951,11 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
 }
 .mapboxgl-ctrl-geocoder--icon-loading { display: none !important; }
 
-/* ── User Auth Wrap — glass container matching left panel ── */
+/* ── User Auth Wrap — no container, only individual buttons ── */
 .user-auth-wrap {
   position: fixed; top: 80px; right: 16px;
   z-index: 10002;
   display: flex; flex-direction: column; gap: 6px; align-items: center;
-  background: rgba(8, 8, 20, 0.52);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 28px;
-  padding: 10px 8px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07);
-}
-.user-auth-wrap .pill-btn {
-  width: 40px; height: 40px;
 }
 
 /* ── Geocoder Suggestions (Glassmorphism) ── */
