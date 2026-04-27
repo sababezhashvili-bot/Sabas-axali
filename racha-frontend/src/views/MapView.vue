@@ -1728,16 +1728,18 @@ onMounted(async () => {
     initMapLayers()
   })
 
-  // Hide every base symbol/label layer (all types:symbol from the map style)
-  // Skips our custom layers (pins-*, route-*, esri-*)
+  // Hide every base symbol layer AND clip it to Racha polygon (double protection)
   function hideBaseSymbolLayers() {
     const st = map.getStyle()
     if (!st || !st.layers) return
+    const withinFilter = activeFeature.value ? ['within', activeFeature.value] : ['==', 'id', '']
     st.layers.forEach(l => {
       if (l.type !== 'symbol') return
       if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
           l.id.startsWith('esri-') || l.id === '3d-buildings') return
       try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+      // Backup: even if visibility gets re-enabled, filter blocks outside features
+      try { map.setFilter(l.id, withinFilter) } catch(e) {}
     })
   }
 
@@ -1745,7 +1747,6 @@ onMounted(async () => {
     hideBaseSymbolLayers()
     addEsriSatellite()
     if (ready) initMapLayers()
-    // Final pass after map is fully idle (tiles loaded, watchers settled)
     map.once('idle', () => {
       hideBaseSymbolLayers()
       styleTransitioning.value = false
@@ -1862,12 +1863,16 @@ onMounted(async () => {
     }
     hideBoundaries()
 
-    // ── Terrain ──
+    // ── Terrain — disabled in graphic mode for performance ──
     try {
-      if (!map.getSource('dem')) {
-        map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
+      if (mapStyleMode.value === 'graphic') {
+        map.setTerrain(null)
+      } else {
+        if (!map.getSource('dem')) {
+          map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
+        }
+        map.setTerrain({ source:'dem', exaggeration: 1.5 })
       }
-      map.setTerrain({ source:'dem', exaggeration: 1.5 })
     } catch(e) {}
 
     // ── Cinematic Lighting ──
@@ -1875,9 +1880,9 @@ onMounted(async () => {
       map.setLight({ anchor:'viewport', color:'#ffffff', intensity:isLightMode.value ? 0.6 : 0.1, position:[1.15, 210, 30] })
     } catch(e) {}
 
-    // ── Fog ──
-    try { 
-      if (isLightMode.value) map.setFog(null)
+    // ── Fog — disabled in graphic mode for performance ──
+    try {
+      if (mapStyleMode.value === 'graphic' || isLightMode.value) map.setFog(null)
       else map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
     } catch(e) {}
 
