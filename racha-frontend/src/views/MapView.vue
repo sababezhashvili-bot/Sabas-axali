@@ -1643,28 +1643,32 @@ onMounted(async () => {
     offset: [0, -130],
   })
 
-  // ── ESRI World Imagery ───────────────────────────────────────────
+  // ── ESRI World Imagery (with Mapbox fallback at high zoom) ───────
   function addEsriSatellite() {
     if (map.getSource('esri-satellite')) return
     map.addSource('esri-satellite', {
       type: 'raster',
       tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
       tileSize: 256,
+      maxzoom: 19,
       attribution: 'Tiles © Esri'
     })
     const layers = map.getStyle().layers
-    // Hide ALL existing raster layers (Mapbox satellite — whatever its ID is)
-    layers.filter(l => l.type === 'raster').forEach(l => {
-      try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
-    })
     // Insert ESRI above background but below the first non-raster/non-background layer
     const insertBefore = layers.find(l => l.type !== 'background' && l.type !== 'raster')?.id
     map.addLayer({
       id: 'esri-satellite-layer',
       type: 'raster',
       source: 'esri-satellite',
-      paint: { 'raster-opacity': 1 }
+      paint: {
+        // Fade out ESRI when zooming in past zoom 15 → Mapbox satellite shows through
+        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 15, 1, 17, 0],
+        // Slight brightness lift to help dark/cloudy mountain areas
+        'raster-brightness-min': 0.06,
+        'raster-contrast': 0.08
+      }
     }, insertBefore)
+    // Do NOT hide Mapbox satellite — it serves as high-zoom fallback
   }
 
   map.on('load', async () => {
