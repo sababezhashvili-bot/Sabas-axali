@@ -1749,6 +1749,7 @@ onMounted(async () => {
     if (ready) initMapLayers()
     map.once('idle', () => {
       hideBaseSymbolLayers()
+      applyDimMaskOpacity()
       styleTransitioning.value = false
     })
   })
@@ -1822,8 +1823,14 @@ onMounted(async () => {
       })
     }
 
-    // C. Move mask to top
-    if (map.getLayer('dim-mask-layer')) map.moveLayer('dim-mask-layer')
+    // C. Move mask to top + set opacity based on style mode
+    if (map.getLayer('dim-mask-layer')) {
+      map.moveLayer('dim-mask-layer')
+      try {
+        map.setPaintProperty('dim-mask-layer', 'fill-opacity',
+          mapStyleMode.value === 'graphic' ? 1 : 0.8)
+      } catch(e) {}
+    }
     if (map.getLayer('focus-region-glow')) {
         map.moveLayer('focus-region-glow')
         map.setPaintProperty('focus-region-glow', 'line-opacity', 0.6)
@@ -1900,12 +1907,16 @@ onMounted(async () => {
         if (!map.getSource('dim-mask-source')) map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
 
         if (!map.getLayer('dim-mask-layer')) {
-          map.addLayer({ 
-            id: 'dim-mask-layer', 
-            type: 'fill', 
-            source: 'dim-mask-source', 
-            paint: { 'fill-color': '#000000', 'fill-opacity': 0.8 } 
+          map.addLayer({
+            id: 'dim-mask-layer',
+            type: 'fill',
+            source: 'dim-mask-source',
+            paint: { 'fill-color': '#0d0d14', 'fill-opacity': 0.8 }
           })
+        }
+        // Graphic mode: fully opaque mask hides ALL outside text/roads/symbols
+        if (mapStyleMode.value === 'graphic' && map.getLayer('dim-mask-layer')) {
+          try { map.setPaintProperty('dim-mask-layer', 'fill-opacity', 1) } catch(e) {}
         }
         if (!map.getLayer('focus-region-glow')) {
           map.addLayer({ 
@@ -2590,7 +2601,15 @@ function toggleMapStyle() {
   styleTransitioning.value = true
   mapStyleMode.value = mapStyleMode.value === 'satellite' ? 'graphic' : 'satellite'
   map.setStyle(MAP_STYLES[mapStyleMode.value])
-  // style.load fires → overlay hidden, layers restored
+  // style.load fires → layers restored, dim-mask opacity updated
+}
+
+function applyDimMaskOpacity() {
+  if (!map || !map.getLayer('dim-mask-layer')) return
+  try {
+    map.setPaintProperty('dim-mask-layer', 'fill-opacity',
+      mapStyleMode.value === 'graphic' ? 1 : 0.8)
+  } catch(e) {}
 }
 
 function toggle3D() {
