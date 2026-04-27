@@ -23,6 +23,19 @@ export default defineConfig({
     }
   },
   build: {
-    chunkSizeWarningLimit: 2000, // Silence the >500kb warning for Mapbox
+    chunkSizeWarningLimit: 3000,
+    target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Mapbox is large — separate chunk so app shell loads fast
+          'mapbox': ['mapbox-gl'],
+          // Mapbox geocoder — only loaded on map page
+          'geocoder': ['@mapbox/mapbox-gl-geocoder'],
+          // Vue runtime
+          'vue': ['vue', 'vue-router'],
+        }
+      }
+    }
   }
 })

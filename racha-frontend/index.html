@@ -4,31 +4,106 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Racha Map</title>
+
+  <!-- Primary SEO -->
+  <title>რაჭა 629 | Interactive Map of Racha Region, Georgia</title>
+  <meta name="description" content="Explore Racha-Lechkhumi & Kvemo Svaneti on an interactive 3D map. Discover landmarks, waterfalls, hotels, restaurants, and hidden gems of the Racha region in Georgia.">
+  <meta name="keywords" content="Racha, Georgia, map, tourism, interactive map, Ambrolauri, Oni, travel, landmarks, waterfalls, Racha-Lechkhumi">
+  <meta name="author" content="Racha 629">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://racha629.ge/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://racha629.ge/">
+  <meta property="og:title" content="რაჭა 629 | Interactive Map of Racha, Georgia">
+  <meta property="og:description" content="Explore Racha-Lechkhumi on an interactive 3D satellite map. Discover landmarks, waterfalls, hotels, and the beauty of Racha region in Georgia.">
+  <meta property="og:image" content="https://racha629.ge/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="ka_GE">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:site_name" content="Racha 629">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@racha629">
+  <meta name="twitter:title" content="Racha 629 | Interactive Map of Racha, Georgia">
+  <meta name="twitter:description" content="Explore Racha-Lechkhumi on an interactive 3D satellite map.">
+  <meta name="twitter:image" content="https://racha629.ge/og-image.jpg">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Racha 629",
+    "description": "Interactive 3D map of the Racha-Lechkhumi & Kvemo Svaneti region in Georgia",
+    "url": "https://racha629.ge",
+    "applicationCategory": "TravelApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "GEL" },
+    "areaServed": {
+      "@type": "Place",
+      "name": "Racha-Lechkhumi and Kvemo Svaneti",
+      "containedInPlace": { "@type": "Country", "name": "Georgia" }
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Racha 629",
+      "url": "https://racha629.ge"
+    }
+  }
+  </script>
+
+  <!-- Preconnect to critical origins for speed -->
+  <link rel="preconnect" href="https://api.mapbox.com">
+  <link rel="preconnect" href="https://events.mapbox.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://sabas-axali-production.up.railway.app">
+  <link rel="dns-prefetch" href="https://api.open-meteo.com">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <!-- Fonts — display=swap prevents render-blocking -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Montserrat:wght@300;400;500;700&display=swap"
+    rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Montserrat:wght@300;400;500;700&display=swap"
+      rel="stylesheet">
+  </noscript>
+
   <style>
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       width: 100%;
       overflow: hidden;
+      background: #0b0c12;
     }
-
     #app {
       height: 100%;
       width: 100%;
     }
+    /* Critical above-fold: prevent flash of unstyled content */
+    .app-init-loader {
+      position: fixed; inset: 0;
+      background: #0b0c12;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 99999;
+    }
   </style>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&family=Montserrat:wght@300;400;500;700&display=swap"
-    rel="stylesheet" />
 </head>
 
 <body>
   <div id="app"></div>
-  <!-- Turf.js for buffer + difference geometry operations -->
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <!-- Turf.js for geometry operations — loaded async to not block render -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js" defer></script>
   <script type="module" src="/src/main.js"></script>
 </body>
 

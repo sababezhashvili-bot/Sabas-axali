@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="map-root" :class="{ 'graphic-mode': mapStyleMode === 'graphic' }">
 
-    <!-- Style transition overlay — prevents flicker during setStyle() -->
+    <!-- Style transition overlay — brief visual bridge during layer visibility switch -->
     <transition name="style-fade">
       <div v-if="styleTransitioning" class="style-transition-overlay"></div>
     </transition>
@@ -140,11 +140,13 @@
 
     <!-- Right Control Panel (Theme, Weather, Layers, Tools) -->
     <div class="ctrl-panel">
-      
+
       <!-- Theme Toggle -->
       <button class="pill-btn theme-btn" @click="toggleTheme" title="Toggle Theme">
         <span class="material-symbols-outlined">{{ themeIcon }}</span>
       </button>
+
+      <div class="ctrl-divider"></div>
 
       <!-- Weather Widget (Click-to-expand, Round) -->
       <div class="weather-wrap">
@@ -215,6 +217,8 @@
         </div>
       </transition>
 
+      <div class="ctrl-divider"></div>
+
       <!-- Map Style Toggle: satellite ↔ graphic -->
       <button class="pill-btn" :class="{ active: mapStyleMode === 'graphic' }"
         @click="toggleMapStyle"
@@ -227,6 +231,8 @@
         <span class="material-symbols-outlined" style="font-size:20px">{{ is3D ? 'view_in_ar' : 'public' }}</span>
       </button>
       
+      <div class="ctrl-divider"></div>
+
       <!-- Zoom Controls -->
       <div class="zoom-group">
         <button class="pill-btn zoom-btn" @click="() => map && map.zoomIn()">
@@ -921,10 +927,9 @@ const is3D        = ref(true)
 const showForest  = ref(false)
 const mapStyleMode        = ref('satellite') // 'satellite' | 'graphic'
 const styleTransitioning  = ref(false)
-const MAP_STYLES = {
-  satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
-  graphic:   'mapbox://styles/sabuka629/cmn93zj1f000b01s7grsed6mv'
-}
+// Only the satellite style URL is used — graphic mode now uses a raster tile overlay
+// (eliminates map.setStyle() reload; switching is instant via layer visibility toggle)
+const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12'
 const activeRegion = ref('რაჭა')
 const maskingReady = ref(false) // Controls loading screen
 
@@ -1500,6 +1505,8 @@ let map     = null
 let popup   = null
 let ready   = false
 let markers = []
+// Module-level cache: geoBoundaries JSON is ~200KB — fetch once, reuse forever
+let _geoBoundariesCache = null
 let hoveredId    = null
 let adm1HoveredId = null
 
@@ -1624,7 +1631,7 @@ onMounted(async () => {
 
   map = new mapboxgl.Map({
     container: mapEl.value,
-    style: 'mapbox://styles/mapbox/satellite-streets-v12', 
+    style: SATELLITE_STYLE,
     bounds: RACHA_BOUNDS, 
     maxBounds: MAX_PAN_BOUNDS,
     fitBoundsOptions: { padding: 0, animate: false },
@@ -1664,7 +1671,6 @@ onMounted(async () => {
 
   // ── ESRI World Imagery (with Mapbox fallback at high zoom) ───────
   function addEsriSatellite() {
-    if (mapStyleMode.value !== 'satellite') return
     if (map.getSource('esri-satellite')) return
     map.addSource('esri-satellite', {
       type: 'raster',
@@ -1695,6 +1701,24 @@ onMounted(async () => {
     ready = true
 
     addEsriSatellite()
+
+    // ── Graphic style as raster overlay — enables instant style switching ──
+    // Pre-load tiles so the first switch is fast. Layer starts hidden (satellite is default).
+    if (!map.getSource('graphic-raster')) {
+      map.addSource('graphic-raster', {
+        type: 'raster',
+        tiles: [`https://api.mapbox.com/styles/v1/sabuka629/cmn93zj1f000b01s7grsed6mv/tiles/256/{z}/{x}/{y}?access_token=${mapboxgl.accessToken}`],
+        tileSize: 256,
+        maxzoom: 22
+      })
+      map.addLayer({
+        id: 'graphic-raster-layer',
+        type: 'raster',
+        source: 'graphic-raster',
+        layout: { visibility: 'none' }, // Hidden until user switches to graphic mode
+        paint: { 'raster-opacity': 1 }
+      })
+    }
 
     // CLEAN START: Hide all global data layers initially
     const style = map.getStyle()
@@ -1736,22 +1760,18 @@ onMounted(async () => {
     st.layers.forEach(l => {
       if (l.type !== 'symbol') return
       if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
-          l.id.startsWith('esri-') || l.id === '3d-buildings') return
+          l.id.startsWith('esri-') || l.id.startsWith('graphic-') ||
+          l.id.startsWith('ads-') || l.id === '3d-buildings') return
       try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
       // Backup: even if visibility gets re-enabled, filter blocks outside features
       try { map.setFilter(l.id, withinFilter) } catch(e) {}
     })
   }
 
+  // style.load fires once on initial map load — hide base symbol layers immediately
+  // (We no longer call map.setStyle() for mode switching, so this only fires once)
   map.on('style.load', () => {
     hideBaseSymbolLayers()
-    addEsriSatellite()
-    if (ready) initMapLayers()
-    map.once('idle', () => {
-      hideBaseSymbolLayers()
-      applyDimMaskOpacity()
-      styleTransitioning.value = false
-    })
   })
 
   async function selectRegion(feature) {
@@ -1823,13 +1843,10 @@ onMounted(async () => {
       })
     }
 
-    // C. Move mask to top + set opacity based on style mode
+    // C. Move mask to top + apply correct opacity for current style mode
     if (map.getLayer('dim-mask-layer')) {
       map.moveLayer('dim-mask-layer')
-      try {
-        map.setPaintProperty('dim-mask-layer', 'fill-opacity',
-          mapStyleMode.value === 'graphic' ? 1 : 0.8)
-      } catch(e) {}
+      applyDimMaskOpacity()
     }
     if (map.getLayer('focus-region-glow')) {
         map.moveLayer('focus-region-glow')
@@ -1840,8 +1857,9 @@ onMounted(async () => {
         map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
     }
 
-    // D. Pin layers above mask (all category layers)
-    ;['landmark','waterfall','hotel','restaurant'].forEach(c => {
+    // D. Pin layers above mask + graphic raster (all category layers)
+    const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
+    ALL_CATS.forEach(c => {
       ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
         if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
       })
@@ -1870,16 +1888,12 @@ onMounted(async () => {
     }
     hideBoundaries()
 
-    // ── Terrain — disabled in graphic mode for performance ──
+    // ── Terrain ──
     try {
-      if (mapStyleMode.value === 'graphic') {
-        map.setTerrain(null)
-      } else {
-        if (!map.getSource('dem')) {
-          map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
-        }
-        map.setTerrain({ source:'dem', exaggeration: 1.5 })
+      if (!map.getSource('dem')) {
+        map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
       }
+      map.setTerrain({ source:'dem', exaggeration: 1.5 })
     } catch(e) {}
 
     // ── Cinematic Lighting ──
@@ -1887,16 +1901,21 @@ onMounted(async () => {
       map.setLight({ anchor:'viewport', color:'#ffffff', intensity:isLightMode.value ? 0.6 : 0.1, position:[1.15, 210, 30] })
     } catch(e) {}
 
-    // ── Fog — disabled in graphic mode for performance ──
+    // ── Atmospheric Fog ──
     try {
-      if (mapStyleMode.value === 'graphic' || isLightMode.value) map.setFog(null)
-      else map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
+      if (!isLightMode.value) {
+        map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
+      }
     } catch(e) {}
 
       // ── Admin Regions & Masking (ADM2 for Municipality Isolation) ──
       try {
-        const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson')
-        const json = await res.json()
+        // Fetch once per session; reuse cached copy on subsequent initMapLayers calls
+        if (!_geoBoundariesCache) {
+          const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson')
+          _geoBoundariesCache = await res.json()
+        }
+        const json = _geoBoundariesCache
         
         // Filter Ambrolauri & Oni specifically
         const rachaFeatures = json.features.filter(f => 
@@ -1911,12 +1930,9 @@ onMounted(async () => {
             id: 'dim-mask-layer',
             type: 'fill',
             source: 'dim-mask-source',
-            paint: { 'fill-color': '#0d0d14', 'fill-opacity': 0.8 }
+            // Start at 0 — applyDimMaskOpacity() sets the correct opacity after mask is populated
+            paint: { 'fill-color': '#0d0d14', 'fill-opacity': 0 }
           })
-        }
-        // Graphic mode: fully opaque mask hides ALL outside text/roads/symbols
-        if (mapStyleMode.value === 'graphic' && map.getLayer('dim-mask-layer')) {
-          try { map.setPaintProperty('dim-mask-layer', 'fill-opacity', 1) } catch(e) {}
         }
         if (!map.getLayer('focus-region-glow')) {
           map.addLayer({ 
@@ -2171,27 +2187,17 @@ onMounted(async () => {
             }
           })
 
-          // Glow halo behind individual dot
-          map.addLayer({
-            id: `${srcId}-glow`, type: 'circle', source: srcId,
-            filter: ['!', ['has', 'point_count']],
-            paint: {
-              'circle-color': cat.color,
-              'circle-radius': 14,
-              'circle-blur': 1,
-              'circle-opacity': 0.32,
-              'circle-stroke-width': 0
-            }
-          })
-
-          // Individual dot
+          // Individual dot — clean, no glow for a sharp premium look
           map.addLayer({
             id: `${srcId}-points`, type: 'circle', source: srcId,
             filter: ['!', ['has', 'point_count']],
             paint: {
               'circle-color': cat.color,
               'circle-radius': 5,
-              'circle-stroke-width': 1.5, 'circle-stroke-color': '#111111', 'circle-opacity': 0.95
+              // In graphic mode (white bg): dark stroke for contrast; satellite: light stroke
+              'circle-stroke-width': 1.5,
+              'circle-stroke-color': '#ffffff',
+              'circle-opacity': 0.95
             }
           })
 
@@ -2251,7 +2257,12 @@ onMounted(async () => {
     maskingReady.value = true
   }
 
-  map.on('moveend', updateWeather)
+  // Debounced weather — fires max once per 8 seconds after map stops moving
+  let _weatherDebounce = null
+  map.on('moveend', () => {
+    clearTimeout(_weatherDebounce)
+    _weatherDebounce = setTimeout(updateWeather, 8000)
+  })
 
   // Click handler for route waypoints
   // ── User interaction tracking — pauses/stops nav camera follow ────
@@ -2556,17 +2567,26 @@ function toggleAdSpaces() {
 }
 
 // ─── WEATHER ──────────────────────────────────────────────────────────────────
-// ─── WEATHER ──────────────────────────────────────────────────────────────────
+let _lastWeatherCoord = null
 async function updateWeather() {
   if (!map || !ready) return
   const c = map.getCenter()
+
+  // Skip if center hasn't moved more than ~0.05° (≈5km) — avoids spam on small pans
+  if (_lastWeatherCoord) {
+    const dlat = Math.abs(c.lat - _lastWeatherCoord.lat)
+    const dlng = Math.abs(c.lng - _lastWeatherCoord.lng)
+    if (dlat < 0.05 && dlng < 0.05) return
+  }
+  _lastWeatherCoord = { lat: c.lat, lng: c.lng }
+
   try {
     // 1. Altitude (Terrain)
     const elev = map.queryTerrainElevation(c) || 0
     elevation.value = Math.round(elev) + ' მ'
-    
-    // 2. Weather API (Open-Meteo)
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lng}&current_weather=true&hourly=relativehumidity_2m`)
+
+    // 2. Weather API (Open-Meteo) — single request
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat.toFixed(3)}&longitude=${c.lng.toFixed(3)}&current_weather=true&hourly=relativehumidity_2m`)
     const d = await r.json()
     const t = Math.round(d.current_weather.temperature)
     btnTemp.value = t+'°'; widgetTemp.value = t+'°C'
@@ -2582,16 +2602,9 @@ async function updateWeather() {
     else if (wc <= 77) { weatherIcon.value='ac_unit'; weatherIconColor.value='#99ccff'; weatherCondition.value='თოვლიანი' }
     else if (wc <= 82) { weatherIcon.value='rainy'; weatherIconColor.value='#4477aa'; weatherCondition.value='საშუალო წვიმა' }
     else { weatherIcon.value='thunderstorm'; weatherIconColor.value='#ffaa44'; weatherCondition.value='ჭექა-ქუხილი' }
-    
-    // 3. Reverse Geocode for Location Name
-    const geoRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${c.lng},${c.lat}.json?types=place,locality,neighborhood&access_token=${mapboxgl.accessToken}`)
-    const geoJson = await geoRes.json()
-    if (geoJson.features && geoJson.features.length > 0) {
-      displayLocation.value = geoJson.features[0].text
-    } else {
-      displayLocation.value = activeRegion.value || 'Racha'
-    }
 
+    // 3. Location name: use active region name — saves a Mapbox geocoding API call
+    displayLocation.value = activeRegion.value || 'Racha'
   } catch(e) {}
 }
 
@@ -2599,14 +2612,65 @@ async function updateWeather() {
 function toggleMapStyle() {
   if (!map || styleTransitioning.value) return
   styleTransitioning.value = true
-  mapStyleMode.value = mapStyleMode.value === 'satellite' ? 'graphic' : 'satellite'
-  map.setStyle(MAP_STYLES[mapStyleMode.value])
-  // style.load fires → layers restored, dim-mask opacity updated
+
+  const toGraphic = mapStyleMode.value === 'satellite'
+  mapStyleMode.value = toGraphic ? 'graphic' : 'satellite'
+
+  if (toGraphic) {
+    // ── Enter graphic mode ──
+    // Show pre-loaded graphic raster tiles (instant — no setStyle reload!)
+    if (map.getLayer('graphic-raster-layer')) {
+      map.setLayoutProperty('graphic-raster-layer', 'visibility', 'visible')
+    }
+    // Hide ESRI satellite overlay
+    if (map.getLayer('esri-satellite-layer')) {
+      map.setLayoutProperty('esri-satellite-layer', 'visibility', 'none')
+    }
+    // Hide all vector symbol labels — they're baked into the graphic raster tiles
+    hideBaseSymbolLayers()
+    // Dim-mask fully opaque → clean boundary edge, no outside labels leak through
+    applyDimMaskOpacity()
+    // Disable terrain + fog (performance + not relevant for flat illustrated style)
+    try { map.setTerrain(null) } catch(e) {}
+    try { map.setFog(null) } catch(e) {}
+  } else {
+    // ── Enter satellite mode ──
+    // Hide graphic raster tiles
+    if (map.getLayer('graphic-raster-layer')) {
+      map.setLayoutProperty('graphic-raster-layer', 'visibility', 'none')
+    }
+    // Show ESRI satellite overlay
+    if (map.getLayer('esri-satellite-layer')) {
+      map.setLayoutProperty('esri-satellite-layer', 'visibility', 'visible')
+    }
+    // Restore settlement + road labels with within-filter
+    updateLayers()
+    // Dim-mask semi-transparent (satellite imagery shows through)
+    applyDimMaskOpacity()
+    // Re-enable terrain
+    try {
+      if (!map.getSource('dem')) {
+        map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
+      }
+      map.setTerrain({ source:'dem', exaggeration: 1.5 })
+    } catch(e) {}
+    // Re-enable fog
+    try {
+      if (!isLightMode.value) {
+        map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
+      }
+    } catch(e) {}
+  }
+
+  // No style reload → transition is near-instant (1-2 frames)
+  requestAnimationFrame(() => { styleTransitioning.value = false })
 }
 
 function applyDimMaskOpacity() {
   if (!map || !map.getLayer('dim-mask-layer')) return
   try {
+    // Graphic mode: fully opaque outside boundary → no labels/roads show outside
+    // Satellite mode: semi-transparent so satellite imagery subtly shows through
     map.setPaintProperty('dim-mask-layer', 'fill-opacity',
       mapStyleMode.value === 'graphic' ? 1 : 0.8)
   } catch(e) {}
@@ -3119,6 +3183,23 @@ function stopLiveNav() {
 
 watch(selectingWaypointIdx, idx => { if (map) map.getCanvas().style.cursor = idx >= 0 ? 'crosshair' : '' })
 
+// Re-apply ['within', polygon] filter to ALL symbol layers once Racha polygon is available.
+// This is the reliable fix for outside labels leaking in graphic mode — activeFeature is null
+// during style.load, so the first hideBaseSymbolLayers() call falls back to a blank filter.
+// When selectRegion() sets activeFeature, this watcher fires and clips everything correctly.
+watch(activeFeature, (feature) => {
+  if (!map || !feature) return
+  const st = map.getStyle()
+  if (!st || !st.layers) return
+  const withinFilter = ['within', feature]
+  st.layers.forEach(l => {
+    if (l.type !== 'symbol') return
+    if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
+        l.id.startsWith('esri-') || l.id === '3d-buildings') return
+    try { map.setFilter(l.id, withinFilter) } catch(e) {}
+  })
+})
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function toggleAuth() {
   if (!localStorage.getItem('authToken')) { showAuth.value=true; authView.value='login'; return }
@@ -3156,46 +3237,84 @@ html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
 #app { height:100%; width:100%; }
 
 .map-root {
-  --glass-bg:      rgba(20, 20, 35, 0.45);
-  --glass-border:  rgba(255, 255, 255, 0.12);
-  --glass-blur:    blur(24px) saturate(180%);
-  --neon-glow:     0 0 10px rgba(114, 169, 143, 0.4);
-  --accent:        var(--brand-green);
+  /* ── Premium Glassmorphism Design Tokens ── */
+  --glass-bg:         rgba(10, 10, 20, 0.55);
+  --glass-bg-light:   rgba(255, 255, 255, 0.07);
+  --glass-border:     rgba(255, 255, 255, 0.10);
+  --glass-border-s:   rgba(255, 255, 255, 0.06);  /* subtle */
+  --glass-blur:       blur(24px) saturate(160%);
+  --glass-blur-heavy: blur(36px) saturate(200%);
+  --glass-shadow:     0 8px 32px rgba(0, 0, 0, 0.45);
+  --glass-shadow-s:   0 4px 16px rgba(0, 0, 0, 0.3);
+  --glass-radius:     16px;
+  --glass-radius-lg:  24px;
+  --glass-radius-pill: 100px;
+
+  --accent:        #72A98F;
+  --accent-dim:    rgba(114, 169, 143, 0.25);
   --text-main:     #ffffff;
-  --text-muted:    rgba(255, 255, 255, 0.6);
-  --font-main:     'Inter', sans-serif;
+  --text-muted:    rgba(255, 255, 255, 0.55);
+  --text-faint:    rgba(255, 255, 255, 0.30);
 
   position: fixed; inset: 0;
-  font-family: var(--font-main);
+  font-family: 'Montserrat', 'SF Pro Display', 'Noto Sans Georgian', sans-serif;
   color: var(--text-main);
 }
 
-/* ── Style Transition Overlay ── */
+/* ── Style Transition Overlay — very brief since switching is now instant ── */
 .style-transition-overlay {
   position: fixed; inset: 0; z-index: 99998;
   background: #0b0c12;
   pointer-events: none;
 }
-.style-fade-enter-active { transition: opacity 0.15s ease; }
-.style-fade-leave-active { transition: opacity 0.4s ease 0.1s; }
+.style-fade-enter-active { transition: opacity 0.08s ease; }
+.style-fade-leave-active { transition: opacity 0.25s ease; }
 .style-fade-enter-from,
 .style-fade-leave-to { opacity: 0; }
 
-/* ── Graphic mode: darken all UI buttons so they're visible on light map ── */
+/* ══════════════════════════════════════════════════
+   GRAPHIC MODE — UI contrast on light basemap
+══════════════════════════════════════════════════ */
 .graphic-mode .pill-btn {
-  background: rgba(18, 18, 28, 0.82) !important;
-  border-color: rgba(255,255,255,0.18) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.45) !important;
+  background: rgba(14, 14, 24, 0.88) !important;
+  border-color: rgba(255,255,255,0.16) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important;
 }
 .graphic-mode .pill-btn:hover {
-  background: rgba(30, 30, 45, 0.92) !important;
+  background: rgba(24, 24, 40, 0.95) !important;
+}
+.graphic-mode .pill-btn.active {
+  background: var(--accent) !important;
+}
+.graphic-mode .top-bar {
+  background: rgba(14, 14, 24, 0.88) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+.graphic-mode .icon-pill {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.10) !important;
 }
 .graphic-mode .bottom-cluster .mapboxgl-ctrl-geocoder {
-  background: rgba(18, 18, 28, 0.88) !important;
+  background: rgba(14, 14, 24, 0.90) !important;
+  border-color: rgba(255,255,255,0.14) !important;
 }
 .graphic-mode .region-chip-bottom {
-  background: rgba(18, 18, 28, 0.82) !important;
-  border-color: rgba(255,255,255,0.18) !important;
+  background: rgba(14, 14, 24, 0.88) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+}
+
+/* Pins on graphic (white) map: darker border for contrast */
+.graphic-mode .pin-label {
+  background: rgba(6, 6, 14, 0.92) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+}
+.graphic-mode .pin-badge {
+  border-color: rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.55) !important;
+}
+/* Pin dot glow removed — clean and sharp */
+.pin-dot {
+  box-shadow: none !important;
 }
 
 /* ── Glassmorphism Utility Class ── */
@@ -3472,38 +3591,47 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   background: rgba(255,255,255,.95); box-shadow: 0 0 8px rgba(255,255,255,.6); flex-shrink: 0;
 }
 
-/* ── Left Controls — starts from same top line as right buttons ── */
+/* ── Left Control Panel — glass container ── */
 .ctrl-panel {
-  position: fixed; top: 80px; left: 20px;
-  display: flex; flex-direction: column; gap: 14px; z-index: 10;
-  align-items: flex-start;
+  position: fixed; top: 80px; left: 16px;
+  display: flex; flex-direction: column; gap: 6px;
+  z-index: 9999;
+  align-items: center;
+  background: rgba(8, 8, 20, 0.52);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 28px;
+  padding: 10px 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07);
 }
 
-/* Base Button Style */
-/* Base Button Style (Synced with Admin) */
+/* ── Glass Pill Button — visible glass, not transparent ── */
 .pill-btn {
-  background: transparent;
-  color: var(--text-muted);
-  width: 44px; height: 44px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  width: 40px; height: 40px;
   border-radius: 50%;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.25s;
-  backdrop-filter: blur(4px); /* Subtle blur for unselected */
+  transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  flex-shrink: 0;
 }
 .pill-btn:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.14);
   color: #fff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  border-color: rgba(255,255,255,0.1);
+  transform: scale(1.05);
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
 .pill-btn.active {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 0 20px rgba(114,169,143,0.4);
+  border-color: rgba(114,169,143,0.5);
+  box-shadow: 0 2px 12px rgba(114,169,143,0.4);
 }
+.pill-btn .material-symbols-outlined { color: inherit !important; }
 
 /* Premium Logo Styling (Antigravity Floating) */
 .premium-logo-wrap {
@@ -3525,12 +3653,19 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
 }
 .pill-btn.sm { width: 32px; height: 32px; border-radius: 8px; }
 
+/* Thin separator inside ctrl-panel */
+.ctrl-divider {
+  width: 24px; height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 2px 0;
+}
+
 /* Zoom Controls */
 .zoom-group {
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 4px;
 }
 .zoom-btn {
-  width: 44px; height: 44px; border-radius: 50%;
+  width: 40px; height: 40px; border-radius: 50%;
 }
 
 /* Weather Widget Base */
@@ -3545,11 +3680,11 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
 .layer-card {
   position: absolute; left: 58px; top: 0;
   width: 230px;
-  background: rgba(8,8,20,0.78);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-lg);
   padding: 14px;
   display: flex; flex-direction: column; gap: 4px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
@@ -3596,16 +3731,17 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; 
 }
 
-/* ── Top Bar — floating icon-pill row ── */
+/* ── Top Bar — floating pill, premium glassmorphism ── */
 .top-bar {
   position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
   z-index: 25; display: flex; align-items: center; gap: 6px;
-  background: rgba(8,8,18,0.58);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
-  border: 1px solid rgba(255,255,255,0.09);
-  padding: 7px 12px; border-radius: 100px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border-s);
+  padding: 7px 12px; border-radius: var(--glass-radius-pill);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+  transition: background 0.3s;
 }
 
 /* ── Icon Pills (round glassmorphism buttons) ── */
@@ -3756,21 +3892,21 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
 }
 .mapboxgl-ctrl-geocoder--icon-loading { display: none !important; }
 
-/* ── User Profile Container — same top line as left buttons ── */
+/* ── User Auth Wrap — glass container matching left panel ── */
 .user-auth-wrap {
-  position: fixed; top: 80px; right: 25px;
+  position: fixed; top: 80px; right: 16px;
   z-index: 10002;
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  background: rgba(8, 8, 20, 0.52);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 28px;
+  padding: 10px 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07);
 }
 .user-auth-wrap .pill-btn {
-  width: 50px; height: 50px;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-}
-.user-auth-wrap .pill-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  width: 40px; height: 40px;
 }
 
 /* ── Geocoder Suggestions (Glassmorphism) ── */
@@ -3938,11 +4074,11 @@ body.light-theme .corner-logo-2 { filter: brightness(6) drop-shadow(0 1px 10px r
   z-index: 10100; display: flex; align-items: center; justify-content: center;
 }
 .glass-modal {
-  background: rgba(8,8,20,0.78);
-  backdrop-filter: blur(32px) saturate(200%);
-  -webkit-backdrop-filter: blur(32px) saturate(200%);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 24px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-lg);
   padding: 32px 28px 28px;
   width: 340px; text-align: center; color: #fff;
   box-shadow: 0 24px 64px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07);
@@ -5153,8 +5289,7 @@ body.dark-theme .clouds {
 
   /* User auth — same top line as left buttons */
   .user-auth-wrap { top: 60px; right: 10px; transform: none; gap: 6px; }
-  .user-auth-wrap .pill-btn,
-  .user-auth-wrap .lang-pill { width: 42px; height: 42px; }
+  .user-auth-wrap .pill-btn { width: 38px; height: 38px; }
 
   /* Controls — same top line as right buttons */
   .ctrl-panel { top: 60px; left: 10px; gap: 8px; }
@@ -5222,26 +5357,12 @@ body.dark-theme .clouds {
 }
 
 /* ── Language pill (below login button in user-auth-wrap) ── */
-.user-auth-wrap {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-}
 .lang-pill {
-  width: 50px; height: 50px;
+  /* Same size as every other pill-btn */
+  width: 40px; height: 40px;
   border-radius: 50%;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  color: var(--text);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
-.lang-pill:hover {
-  background: rgba(255,255,255,0.15);
-  transform: scale(1.05);
-}
-.lang-pill .material-symbols-outlined { font-size: 22px !important; }
+.lang-pill .material-symbols-outlined { font-size: 20px !important; }
 
 /* ── Nav-banner-active: push top-bar down when live nav is on ── */
 .top-bar.nav-banner-active { top: 80px !important; }
@@ -5621,8 +5742,7 @@ body.dark-theme .clouds {
   .icon-pill { width: 32px; height: 32px; }
   .icon-pill .material-symbols-outlined { font-size: 16px !important; }
   .user-auth-wrap { top: 54px; right: 8px; transform: none; gap: 5px; }
-  .user-auth-wrap .pill-btn,
-  .user-auth-wrap .lang-pill { width: 36px; height: 36px; }
+  .user-auth-wrap .pill-btn { width: 36px; height: 36px; }
   .ctrl-panel { top: 54px; left: 8px; transform: none; }
   .bottom-cluster { left: 50%; transform: translateX(-50%); bottom: 44px; width: calc(100vw - 20px); max-width: 380px; }
   .geocoder-bottom { width: 100%; }

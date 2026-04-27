@@ -1,3 +1,12 @@
+// Simple in-memory cache for read-heavy endpoints
+const _cache = new Map()
+function cached(key, ttlMs, fetcher) {
+  const hit = _cache.get(key)
+  if (hit && Date.now() - hit.ts < ttlMs) return Promise.resolve(hit.data)
+  return fetcher().then(data => { _cache.set(key, { data, ts: Date.now() }); return data })
+}
+function bustCache(key) { _cache.delete(key) }
+
 class ApiClient {
   constructor() {
     this.baseUrl = import.meta.env.VITE_API_URL
@@ -14,7 +23,6 @@ class ApiClient {
       body: JSON.stringify({ username, password })
     })
     if (!res.ok) throw new Error(await res.text())
-
     const data = await res.json()
     this.token = data.token
     this.user = data
@@ -82,12 +90,16 @@ class ApiClient {
     window.location.href = '/'
   }
 
-  async getLocations() {
-    const res = await fetch(`${this.baseUrl}/racha/locations`)
-    if (!res.ok) throw new Error('Failed to fetch locations')
-    return await res.json()
+  // Cached 5 min — locations rarely change during a session
+  getLocations() {
+    return cached('locations', 5 * 60_000, () =>
+      fetch(`${this.baseUrl}/racha/locations`).then(r => {
+        if (!r.ok) throw new Error('Failed to fetch locations')
+        return r.json()
+      })
+    )
   }
-
+  // Bust cache when admin mutates data
   async addLocation(formData) {
     const res = await fetch(`${this.baseUrl}/racha/locations`, {
       method: 'POST',
@@ -95,13 +107,17 @@ class ApiClient {
       body: formData
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('locations')
     return await res.json()
   }
 
   async getLocation(id) {
-    const res = await fetch(`${this.baseUrl}/racha/locations/${id}`)
-    if (!res.ok) throw new Error('Failed to fetch location')
-    return await res.json()
+    return cached(`location_${id}`, 10 * 60_000, () =>
+      fetch(`${this.baseUrl}/racha/locations/${id}`).then(r => {
+        if (!r.ok) throw new Error('Failed to fetch location')
+        return r.json()
+      })
+    )
   }
 
   async updateLocation(id, formData) {
@@ -111,6 +127,8 @@ class ApiClient {
       body: formData
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('locations')
+    bustCache(`location_${id}`)
     return await res.json()
   }
 
@@ -120,15 +138,15 @@ class ApiClient {
       headers: { 'Authorization': `Bearer ${this.token}` }
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('locations')
+    bustCache(`location_${id}`)
   }
 
   // ── Ad Platform ──
-  async getAds() {
-    try {
-      const res = await fetch(`${this.baseUrl}/ad`)
-      if (!res.ok) return []
-      return await res.json()
-    } catch { return [] }
+  getAds() {
+    return cached('ads', 5 * 60_000, () =>
+      fetch(`${this.baseUrl}/ad`).then(r => r.ok ? r.json() : []).catch(() => [])
+    )
   }
 
   async createAd(adData) {
@@ -141,6 +159,7 @@ class ApiClient {
       body: JSON.stringify(adData)
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('ads')
     return await res.json()
   }
 
@@ -154,6 +173,7 @@ class ApiClient {
       body: JSON.stringify(rentData)
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('ads')
     return await res.text()
   }
 
@@ -182,6 +202,7 @@ class ApiClient {
       headers: { 'Authorization': `Bearer ${this.token}` }
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('ads')
   }
 
   async demoteUser(id) {
@@ -218,12 +239,10 @@ class ApiClient {
   }
 
   // ── Tours ──
-  async getTours() {
-    try {
-      const res = await fetch(`${this.baseUrl}/tours`)
-      if (!res.ok) return []
-      return await res.json()
-    } catch { return [] }
+  getTours() {
+    return cached('tours', 5 * 60_000, () =>
+      fetch(`${this.baseUrl}/tours`).then(r => r.ok ? r.json() : []).catch(() => [])
+    )
   }
 
   async createTour(tourData) {
@@ -233,6 +252,7 @@ class ApiClient {
       body: JSON.stringify(tourData)
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('tours')
     return await res.json()
   }
 
@@ -243,6 +263,7 @@ class ApiClient {
       body: JSON.stringify(tourData)
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('tours')
     return await res.json()
   }
 
@@ -252,6 +273,7 @@ class ApiClient {
       headers: { 'Authorization': `Bearer ${this.token}` }
     })
     if (!res.ok) throw new Error(await res.text())
+    bustCache('tours')
   }
 
   // ── Transport ──
@@ -297,8 +319,6 @@ class ApiClient {
     fd.append('notes',        data.notes        ?? '')
     if (photoFile) fd.append('photo', photoFile)
 
-    // Public endpoint — do NOT send Authorization header so ASP.NET doesn't
-    // attempt (and fail) JWT validation on an unauthenticated submission.
     const res = await fetch(`${this.baseUrl}/directory`, {
       method: 'POST',
       body: fd
