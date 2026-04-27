@@ -1,6 +1,11 @@
 ﻿<template>
   <div class="map-root">
-    
+
+    <!-- Style transition overlay — prevents flicker during setStyle() -->
+    <transition name="style-fade">
+      <div v-if="styleTransitioning" class="style-transition-overlay"></div>
+    </transition>
+
     <!-- Animated Sky Background -->
     <div class="sky-background">
       <div class="clouds"></div>
@@ -914,7 +919,8 @@ const themeIcon   = ref(document.body.classList.contains('dark-theme') ? 'dark_m
 const isLightMode = ref(!document.body.classList.contains('dark-theme'))
 const is3D        = ref(true)
 const showForest  = ref(false)
-const mapStyleMode = ref('satellite') // 'satellite' | 'graphic'
+const mapStyleMode        = ref('satellite') // 'satellite' | 'graphic'
+const styleTransitioning  = ref(false)
 const MAP_STYLES = {
   satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
   graphic:   'mapbox://styles/sabuka629/cmn93zj1f000b01s7grsed6mv'
@@ -1722,8 +1728,21 @@ onMounted(async () => {
   })
 
   map.on('style.load', () => {
+    // Hide default labels/roads/poi in both satellite and graphic styles
+    const st = map.getStyle()
+    if (st && st.layers) {
+      st.layers.forEach(l => {
+        if (l.type === 'symbol' ||
+            l.id.includes('label') || l.id.includes('road') ||
+            l.id.includes('poi')   || l.id.includes('building')) {
+          try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+        }
+      })
+    }
     addEsriSatellite()
     if (ready) initMapLayers()
+    // Hide transition overlay after layers are restored
+    styleTransitioning.value = false
   })
 
   async function selectRegion(feature) {
@@ -2555,10 +2574,11 @@ async function updateWeather() {
 
 // ─── CONTROLS ─────────────────────────────────────────────────────────────────
 function toggleMapStyle() {
-  if (!map) return
+  if (!map || styleTransitioning.value) return
+  styleTransitioning.value = true
   mapStyleMode.value = mapStyleMode.value === 'satellite' ? 'graphic' : 'satellite'
   map.setStyle(MAP_STYLES[mapStyleMode.value])
-  // style.load fires automatically → addEsriSatellite() + initMapLayers() re-run
+  // style.load fires → overlay hidden, layers restored
 }
 
 function toggle3D() {
@@ -3118,6 +3138,17 @@ html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
   font-family: var(--font-main);
   color: var(--text-main);
 }
+
+/* ── Style Transition Overlay ── */
+.style-transition-overlay {
+  position: fixed; inset: 0; z-index: 99998;
+  background: #0b0c12;
+  pointer-events: none;
+}
+.style-fade-enter-active { transition: opacity 0.15s ease; }
+.style-fade-leave-active { transition: opacity 0.4s ease 0.1s; }
+.style-fade-enter-from,
+.style-fade-leave-to { opacity: 0; }
 
 /* ── Glassmorphism Utility Class ── */
 .glass-effect {
