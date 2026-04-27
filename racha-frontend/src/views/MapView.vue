@@ -1643,32 +1643,8 @@ onMounted(async () => {
     offset: [0, -130],
   })
 
-  // ── ESRI World Imagery: replace Mapbox satellite uniformly ──────
-  function addEsriSatellite() {
-    if (map.getSource('esri-satellite')) return
-    map.addSource('esri-satellite', {
-      type: 'raster',
-      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-      tileSize: 256,
-      attribution: 'Tiles © Esri'
-    })
-    // Insert below the first symbol (label) layer so roads/labels stay on top
-    const firstSymbol = map.getStyle().layers.find(l => l.type === 'symbol')?.id
-    map.addLayer({
-      id: 'esri-satellite-layer',
-      type: 'raster',
-      source: 'esri-satellite',
-      paint: { 'raster-opacity': 1 }
-    }, firstSymbol)
-    // Hide Mapbox's own satellite raster
-    if (map.getLayer('satellite')) map.setLayoutProperty('satellite', 'visibility', 'none')
-  }
-
   map.on('load', async () => {
     ready = true
-
-    // Replace Mapbox satellite with ESRI
-    addEsriSatellite()
 
     // CLEAN START: Hide all global data layers initially
     const style = map.getStyle()
@@ -1703,7 +1679,6 @@ onMounted(async () => {
   })
 
   map.on('style.load', () => {
-    addEsriSatellite()
     if (ready) initMapLayers()
   })
 
