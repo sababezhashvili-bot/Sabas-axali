@@ -210,6 +210,13 @@
         </div>
       </transition>
 
+      <!-- Map Style Toggle: satellite ↔ graphic -->
+      <button class="pill-btn" :class="{ active: mapStyleMode === 'graphic' }"
+        @click="toggleMapStyle"
+        :title="mapStyleMode === 'satellite' ? t('ctrl.graphicMap') : t('ctrl.satelliteMap')">
+        <span class="material-symbols-outlined">{{ mapStyleMode === 'satellite' ? 'map' : 'satellite_alt' }}</span>
+      </button>
+
       <!-- 3D Toggle -->
       <button class="pill-btn" :class="{ active: is3D }" @click="toggle3D" title="2D/3D Toggle">
         <span class="material-symbols-outlined" style="font-size:20px">{{ is3D ? 'view_in_ar' : 'public' }}</span>
@@ -907,6 +914,11 @@ const themeIcon   = ref(document.body.classList.contains('dark-theme') ? 'dark_m
 const isLightMode = ref(!document.body.classList.contains('dark-theme'))
 const is3D        = ref(true)
 const showForest  = ref(false)
+const mapStyleMode = ref('satellite') // 'satellite' | 'graphic'
+const MAP_STYLES = {
+  satellite: 'mapbox://styles/mapbox/satellite-streets-v12',
+  graphic:   'mapbox://styles/sabuka629/cmn93zj1f000b01s7grsed6mv'
+}
 const activeRegion = ref('რაჭა')
 const maskingReady = ref(false) // Controls loading screen
 
@@ -1645,6 +1657,7 @@ onMounted(async () => {
 
   // ── ESRI World Imagery (with Mapbox fallback at high zoom) ───────
   function addEsriSatellite() {
+    if (mapStyleMode.value !== 'satellite') return
     if (map.getSource('esri-satellite')) return
     map.addSource('esri-satellite', {
       type: 'raster',
@@ -2541,6 +2554,13 @@ async function updateWeather() {
 }
 
 // ─── CONTROLS ─────────────────────────────────────────────────────────────────
+function toggleMapStyle() {
+  if (!map) return
+  mapStyleMode.value = mapStyleMode.value === 'satellite' ? 'graphic' : 'satellite'
+  map.setStyle(MAP_STYLES[mapStyleMode.value])
+  // style.load fires automatically → addEsriSatellite() + initMapLayers() re-run
+}
+
 function toggle3D() {
   if (!map) return
   const p = map.getPitch() > 0
