@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="map-root">
+  <div class="map-root" :class="{ 'graphic-mode': mapStyleMode === 'graphic' }">
 
     <!-- Style transition overlay — prevents flicker during setStyle() -->
     <transition name="style-fade">
@@ -1727,22 +1727,27 @@ onMounted(async () => {
     initMapLayers()
   })
 
-  map.on('style.load', () => {
-    // Hide default labels/roads/poi in both satellite and graphic styles
+  // Hide every symbol / label layer the style provides (runs after each style change)
+  function hideBaseSymbolLayers() {
     const st = map.getStyle()
-    if (st && st.layers) {
-      st.layers.forEach(l => {
-        if (l.type === 'symbol' ||
-            l.id.includes('label') || l.id.includes('road') ||
-            l.id.includes('poi')   || l.id.includes('building')) {
-          try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
-        }
-      })
-    }
+    if (!st || !st.layers) return
+    st.layers.forEach(l => {
+      if (l.type === 'symbol' || l.type === 'line' &&
+          (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi'))) {
+        try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+      }
+    })
+  }
+
+  map.on('style.load', () => {
+    hideBaseSymbolLayers()
     addEsriSatellite()
     if (ready) initMapLayers()
-    // Hide transition overlay after layers are restored
-    styleTransitioning.value = false
+    // Second pass after initMapLayers re-runs watchers — catches anything re-enabled
+    setTimeout(() => {
+      hideBaseSymbolLayers()
+      styleTransitioning.value = false
+    }, 300)
   })
 
   async function selectRegion(feature) {
@@ -3149,6 +3154,23 @@ html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; }
 .style-fade-leave-active { transition: opacity 0.4s ease 0.1s; }
 .style-fade-enter-from,
 .style-fade-leave-to { opacity: 0; }
+
+/* ── Graphic mode: darken all UI buttons so they're visible on light map ── */
+.graphic-mode .pill-btn {
+  background: rgba(18, 18, 28, 0.82) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.45) !important;
+}
+.graphic-mode .pill-btn:hover {
+  background: rgba(30, 30, 45, 0.92) !important;
+}
+.graphic-mode .bottom-cluster .mapboxgl-ctrl-geocoder {
+  background: rgba(18, 18, 28, 0.88) !important;
+}
+.graphic-mode .region-chip-bottom {
+  background: rgba(18, 18, 28, 0.82) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+}
 
 /* ── Glassmorphism Utility Class ── */
 .glass-effect {
