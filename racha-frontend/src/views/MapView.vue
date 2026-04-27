@@ -2052,12 +2052,11 @@ onMounted(async () => {
             filter: ['has', 'point_count'],
             paint: {
               'circle-color': cat.color,
-              // minimum r=16 so 1-2 digit numbers fit; scales up for large groups
               'circle-radius': ['step', ['get', 'point_count'],
-                16,   // 2–4  pins → r=16
-                5,  20,   // 5–14 pins → r=20
-                15, 24,   // 15–49 pins → r=24
-                50, 28    // 50+  pins → r=28
+                8,    // 2–4  pins → r=8
+                5,  10,   // 5–14 pins → r=10
+                15, 12,   // 15–49 pins → r=12
+                50, 14    // 50+  pins → r=14
               ],
               'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
               'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0],
@@ -2073,10 +2072,10 @@ onMounted(async () => {
               'text-field': '{point_count_abbreviated}',
               'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
               'text-size': ['step', ['get', 'point_count'],
-                11,   // 2–4  pins
-                5,  12,   // 5–14 pins
-                15, 13,   // 15–49 pins
-                50, 14    // 50+ pins
+                8,    // 2–4  pins
+                5,   9,   // 5–14 pins
+                15, 10,   // 15–49 pins
+                50, 11    // 50+ pins
               ],
               'text-allow-overlap': true
             },
