@@ -1356,9 +1356,10 @@ function updateLayers() {
         try { map.setFilter(id, ['within', activeFeature.value]) } catch(e) {}
       }
       if (showLbl && layer.type === 'symbol') {
+        const isGraphic = mapStyleMode.value === 'graphic'
         try {
-          map.setPaintProperty(id, 'text-color', '#ffffff')
-          map.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.85)')
+          map.setPaintProperty(id, 'text-color', isGraphic ? '#2c2420' : '#ffffff')
+          map.setPaintProperty(id, 'text-halo-color', isGraphic ? 'rgba(240,236,230,0.95)' : 'rgba(0,0,0,0.85)')
           map.setPaintProperty(id, 'text-halo-width', 1.8)
           map.moveLayer(id)
         } catch(e) {}
@@ -1370,7 +1371,7 @@ function updateLayers() {
       try { map.setLayoutProperty(id, 'visibility', 'none') } catch(e) {}
     }
 
-    // Roads
+    // Roads — mode-aware colours
     if (isRoad) {
       // Casing layers (road border/outline) — always hidden, they create the "many stripes" effect
       const isCasing = id.includes('case') || id.includes('-casing') || id.includes('outline')
@@ -1384,22 +1385,23 @@ function updateLayers() {
         try { map.setFilter(id, ['within', activeFeature.value]) } catch(e) {}
       }
       if (showRd) {
+        const isGraphic = mapStyleMode.value === 'graphic'
         if (layer.type === 'line') {
           try {
-            // Distinctive teal accent — matches the app's brand color
-            map.setPaintProperty(id, 'line-color', 'rgba(114,200,165,0.72)')
+            map.setPaintProperty(id, 'line-color',
+              isGraphic ? 'rgba(160,140,120,0.90)' : 'rgba(114,200,165,0.72)')
             map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'], 7,0.5, 11,1.1, 14,1.8, 17,3.0])
-            map.setPaintProperty(id, 'line-opacity', 0.72)
-            map.setPaintProperty(id, 'line-blur', 0.5)
+            map.setPaintProperty(id, 'line-opacity', isGraphic ? 0.88 : 0.72)
+            map.setPaintProperty(id, 'line-blur', isGraphic ? 0 : 0.5)
           } catch(e) {}
         }
         if (layer.type === 'symbol') {
           try {
-            // Hide road shield icon (white rectangle background)
             map.setPaintProperty(id, 'icon-opacity', 0)
-            // Road name text — white with dark shadow halo, no white background
-            map.setPaintProperty(id, 'text-color', 'rgba(114,200,165,0.95)')
-            map.setPaintProperty(id, 'text-halo-color', 'rgba(0,0,0,0.92)')
+            map.setPaintProperty(id, 'text-color',
+              isGraphic ? 'rgba(80,60,40,0.95)' : 'rgba(114,200,165,0.95)')
+            map.setPaintProperty(id, 'text-halo-color',
+              isGraphic ? 'rgba(240,236,230,0.92)' : 'rgba(0,0,0,0.92)')
             map.setPaintProperty(id, 'text-halo-width', 1.5)
             map.moveLayer(id)
           } catch(e) {}
@@ -1413,18 +1415,9 @@ function updateLayers() {
     const shouldShow = (showBuildings.value || all)
     try { map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none') } catch(e) {}
     if (shouldShow) {
-      // Move above mask but keep boundary layers on top
       try { map.moveLayer('3d-buildings') } catch(e) {}
-      // Re-raise boundary + mask layers so they stay on top
-      ;['dim-mask-layer', 'focus-region-glow', 'focus-region-border'].forEach(id => {
-        if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-      })
-      // Re-raise pin layers
-      ;['landmark','waterfall','hotel','restaurant'].forEach(c => {
-        ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(lid => {
-          if (map.getLayer(lid)) try { map.moveLayer(lid) } catch(e) {}
-        })
-      })
+      // Re-raise mask + city labels + pins above buildings
+      raiseMaskAndPins()
     }
   }
 }
@@ -1696,20 +1689,76 @@ onMounted(async () => {
 
     addEsriSatellite()
 
-    // ── Graphic mode: world white fill — instant toggle, zero network cost ──
-    // Covers satellite imagery when visible; vector roads/labels draw on top.
+    // ── Graphic mode: world cream fill — inserted BELOW roads/labels so vector
+    //    layers naturally render on top of it without any moveLayer hacks.
     if (!map.getSource('world-fill')) {
       map.addSource('world-fill', {
         type: 'geojson',
         data: { type: 'Feature', geometry: { type: 'Polygon',
           coordinates: [[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]]] } }
       })
+      // Find first non-background/non-raster layer → insert graphic-bg just before it
+      // so it sits below all road and label layers from the satellite-streets style.
+      const _gLayers = map.getStyle().layers
+      const _firstVec = _gLayers.find(l => l.type !== 'background' && l.type !== 'raster')?.id
       map.addLayer({
         id: 'graphic-bg',
         type: 'fill',
         source: 'world-fill',
         layout: { visibility: 'none' },
         paint: { 'fill-color': '#f0ece6', 'fill-opacity': 1 }
+      }, _firstVec)  // ← before first road = BELOW all roads and labels
+    }
+
+    // ── Major city labels — Ambrolauri, Oni, Nikortsminda ──
+    // Separate source from POI pins; always visible in both satellite and graphic modes.
+    if (!map.getSource('major-settlements')) {
+      map.addSource('major-settlements', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            { type: 'Feature', geometry: { type: 'Point', coordinates: [43.1579, 42.5115] },
+              properties: { nameGeo: 'ამბროლაური', nameEng: 'Ambrolauri', rank: 1 } },
+            { type: 'Feature', geometry: { type: 'Point', coordinates: [43.4453, 42.5861] },
+              properties: { nameGeo: 'ონი', nameEng: 'Oni', rank: 1 } },
+            { type: 'Feature', geometry: { type: 'Point', coordinates: [43.1268, 42.4773] },
+              properties: { nameGeo: 'ნიკორწმინდა', nameEng: 'Nikortsminda', rank: 2 } },
+          ]
+        }
+      })
+      // Dot marker
+      map.addLayer({
+        id: 'major-settlements-dot',
+        type: 'circle',
+        source: 'major-settlements',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 12, 6],
+          'circle-color': '#ffffff',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#72A98F',
+          'circle-opacity': 0.95
+        }
+      })
+      // Text label — language is updated by the lang watcher below
+      map.addLayer({
+        id: 'major-settlements-label',
+        type: 'symbol',
+        source: 'major-settlements',
+        layout: {
+          'text-field': ['coalesce', ['get', lang.value === 'en' ? 'nameEng' : 'nameGeo'], ['get', 'nameGeo']],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 10, 13, 14, 15],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+          'text-offset': [0, 1.1],
+          'text-anchor': 'top',
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': 'rgba(0,0,0,0.82)',
+          'text-halo-width': 1.5
+        }
       })
     }
 
@@ -1723,22 +1772,22 @@ onMounted(async () => {
       })
     }
 
-    // ── 3D Buildings — added here (synchronously, before updateLayers) so getLayer always finds it ──
+    // ── 3D Buildings — minzoom 14 so we only render when building data actually exists ──
     if (!map.getLayer('3d-buildings')) {
       try {
         map.addLayer({
           id: '3d-buildings', source: 'composite', 'source-layer': 'building',
-          type: 'fill-extrusion', minzoom: 10,
+          type: 'fill-extrusion', minzoom: 14,
           layout: { visibility: 'none' },
           paint: {
-            // coalesce: if 'height' is null (most rural buildings), use 8m as fallback
             'fill-extrusion-color': '#72A98F',
-            'fill-extrusion-height': ['coalesce', ['to-number', ['get', 'height'], null], 8],
-            'fill-extrusion-base':   ['coalesce', ['to-number', ['get', 'min_height'], null], 0],
-            'fill-extrusion-opacity': 0.82
+            // Use render_height as fallback for Mapbox v3 styles; 0 = no extrusion if no data
+            'fill-extrusion-height': ['coalesce', ['get', 'height'], ['get', 'render_height'], 0],
+            'fill-extrusion-base':   ['coalesce', ['get', 'min_height'], ['get', 'render_min_height'], 0],
+            'fill-extrusion-opacity': 0.75
           }
         })
-      } catch(e) { console.warn('3d-buildings addLayer failed:', e) }
+      } catch(e) { console.warn('3d-buildings addLayer failed (no composite source?):', e) }
     }
 
     updateLayers()
@@ -1753,7 +1802,7 @@ onMounted(async () => {
     st.layers.forEach(l => {
       if (l.type !== 'symbol') return
       if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
-          l.id.startsWith('esri-') ||
+          l.id.startsWith('esri-') || l.id.startsWith('major-settlements') ||
           l.id.startsWith('ads-') || l.id === '3d-buildings') return
       try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
       // Backup: even if visibility gets re-enabled, filter blocks outside features
@@ -1827,10 +1876,12 @@ onMounted(async () => {
     const style = map.getStyle()
     if (style && style.layers) {
       style.layers.forEach(l => {
+        // Never filter our custom major-settlement labels — they are already inside Racha
+        if (l.id.startsWith('major-settlements')) return
         if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
-          try { 
+          try {
             // Only show labels/features IF they are within our Racha boundary
-            map.setFilter(l.id, ['within', feature]) 
+            map.setFilter(l.id, ['within', feature])
           } catch (e) {}
         }
       })
@@ -1849,6 +1900,11 @@ onMounted(async () => {
         map.moveLayer('focus-region-border')
         map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
     }
+
+    // C2. Major city labels above mask — always visible
+    ;['major-settlements-dot','major-settlements-label'].forEach(id => {
+      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+    })
 
     // D. Pin layers above mask + graphic raster (all category layers)
     const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
@@ -2320,10 +2376,18 @@ onMounted(async () => {
     try {
       map.getStyle().layers.forEach(layer => {
         if (layer.type !== 'symbol') return
+        // Don't overwrite our custom major-settlements text-field expressions
+        if (layer.id.startsWith('major-settlements')) return
         const tf = map.getLayoutProperty(layer.id, 'text-field')
         if (tf) map.setLayoutProperty(layer.id, 'text-field', labelField)
       })
     } catch(e) { /* style not ready */ }
+    // Update major-settlements label separately with our custom name properties
+    try {
+      if (map.getLayer('major-settlements-label'))
+        map.setLayoutProperty('major-settlements-label', 'text-field',
+          ['coalesce', ['get', newLang === 'en' ? 'nameEng' : 'nameGeo'], ['get', 'nameGeo']])
+    } catch(e) {}
   })
 
   try {
@@ -2601,6 +2665,46 @@ async function updateWeather() {
   } catch(e) {}
 }
 
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+// Raise mask → border glow → major city labels → POI pins to the top of the
+// GL layer stack.  Call after any operation that adds or re-positions layers.
+function raiseMaskAndPins() {
+  if (!map) return
+  ;['dim-mask-layer','focus-region-glow','focus-region-border'].forEach(id => {
+    if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+  })
+  // City labels always above the dim mask
+  ;['major-settlements-dot','major-settlements-label'].forEach(id => {
+    if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+  })
+  // POI pins at the very top
+  const _ALL = ['landmark','waterfall','lake','river','mountain','forest','canyon',
+                'church','fortress','museum','archaeological','village','architecture',
+                'hotel','restaurant']
+  _ALL.forEach(c => {
+    ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
+      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+    })
+  })
+}
+
+// Update major-settlements dot/label style to match current map mode.
+function applyMajorSettlementsStyle() {
+  if (!map) return
+  const isGraphic = mapStyleMode.value === 'graphic'
+  try {
+    map.setPaintProperty('major-settlements-label', 'text-color',
+      isGraphic ? '#1a1208' : '#ffffff')
+    map.setPaintProperty('major-settlements-label', 'text-halo-color',
+      isGraphic ? 'rgba(240,236,230,0.95)' : 'rgba(0,0,0,0.82)')
+    map.setPaintProperty('major-settlements-dot', 'circle-color',
+      isGraphic ? '#555040' : '#ffffff')
+    map.setPaintProperty('major-settlements-dot', 'circle-stroke-color',
+      isGraphic ? '#72A98F' : '#72A98F')
+  } catch(e) {}
+}
+
 // ─── CONTROLS ─────────────────────────────────────────────────────────────────
 function toggleMapStyle() {
   if (!map || styleTransitioning.value) return
@@ -2611,108 +2715,68 @@ function toggleMapStyle() {
 
   try {
     if (toGraphic) {
-      // ── Enter graphic mode — instant, zero network ──
-      // 1. Hide satellite imagery
+      // ── Enter graphic mode ──
+      // graphic-bg was inserted BELOW roads/labels at map load, so simply
+      // making it visible gives a white canvas with roads/labels on top.
+      // No moveLayer hacks needed.
+
+      // 1. Hide satellite imagery, show cream background
       if (map.getLayer('esri-satellite-layer'))
         map.setLayoutProperty('esri-satellite-layer', 'visibility', 'none')
-
-      // 2. Show world-fill white background (covers Mapbox base raster)
       if (map.getLayer('graphic-bg'))
         map.setLayoutProperty('graphic-bg', 'visibility', 'visible')
 
-      // 3. Show vector roads + place labels within Racha (gives graphic/streets look)
-      //    Roads and labels are moved ABOVE graphic-bg (but below dim-mask-layer) so they
-      //    render on the white canvas instead of being covered by it.
-      const hasMask = !!map.getLayer('dim-mask-layer')
-      const st = map.getStyle()
-      if (st && st.layers && activeFeature.value) {
-        const withinFilter = ['within', activeFeature.value]
-        st.layers.forEach(l => {
-          const id = l.id
-          const isCasing = id.includes('case') || id.includes('-casing') || id.includes('outline')
-          const isPoi    = id.includes('poi')
-          if (isCasing || isPoi) return
-          const isRoad  = (id.includes('road') || id.includes('bridge') || id.includes('tunnel')) && l.type === 'line'
-          const isLabel = (id.includes('settlement') || id.includes('place-')) && l.type === 'symbol'
-          if (isRoad) {
-            try {
-              map.setLayoutProperty(id, 'visibility', 'visible')
-              map.setFilter(id, withinFilter)
-              map.setPaintProperty(id, 'line-color', 'rgba(190,170,150,0.9)')
-              map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'],7,0.5,11,1.2,14,2,17,3.5])
-              map.setPaintProperty(id, 'line-opacity', 0.85)
-              // Lift road above graphic-bg white fill → roads visible on white canvas
-              if (hasMask) map.moveLayer(id, 'dim-mask-layer')
-            } catch(e) {}
-          }
-          if (isLabel) {
-            try {
-              map.setLayoutProperty(id, 'visibility', 'visible')
-              map.setFilter(id, withinFilter)
-              map.setPaintProperty(id, 'text-color', '#2c2420')
-              map.setPaintProperty(id, 'text-halo-color', 'rgba(240,236,230,0.95)')
-              map.setPaintProperty(id, 'text-halo-width', 1.5)
-              // Lift label above graphic-bg, below mask (so it clips at Racha boundary)
-              if (hasMask) map.moveLayer(id, 'dim-mask-layer')
-              else map.moveLayer(id)
-            } catch(e) {}
-          }
-        })
-      }
+      // 2. Apply layer visibility + graphic-mode colours via updateLayers()
+      updateLayers()
 
-      // 4. 0.8 opacity mask — subtle fade outside region
+      // 3. Mask, terrain, fog
       applyDimMaskOpacity()
-
-      // 5. No terrain/fog — flat 2D graphic look
       try { map.setTerrain(null) } catch(e) {}
       try { map.setFog(null) }     catch(e) {}
 
-      // 6. Re-raise mask + boundary + pins above everything
-      ;['dim-mask-layer','focus-region-glow','focus-region-border'].forEach(id => {
-        if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-      })
-      const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
-      ALL_CATS.forEach(c => {
-        ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
-          if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-        })
-      })
+      // 4. City label style → dark text on light halo
+      applyMajorSettlementsStyle()
+
+      // 5. Re-raise mask, city labels, pins
+      raiseMaskAndPins()
 
     } else {
       // ── Enter satellite mode ──
-      // 1. Show ESRI satellite
+
+      // 1. Show satellite, hide graphic background
       if (map.getLayer('esri-satellite-layer'))
         map.setLayoutProperty('esri-satellite-layer', 'visibility', 'visible')
-
-      // 2. Hide white background
       if (map.getLayer('graphic-bg'))
         map.setLayoutProperty('graphic-bg', 'visibility', 'none')
 
-      // 3. Restore base layers to satellite-appropriate state
+      // 2. Hide all default Mapbox labels, then re-apply user toggles
       hideBaseSymbolLayers()
       updateLayers()
 
-      // 4. Semi-transparent mask
+      // 3. Mask, terrain, fog
       applyDimMaskOpacity()
-
-      // 5. Re-enable terrain
       try {
         if (!map.getSource('dem'))
           map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
         map.setTerrain({ source:'dem', exaggeration: 1.5 })
       } catch(e) {}
-
-      // 6. Re-enable fog (dark theme)
       try {
         if (!isLightMode.value)
-          map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
+          map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000',
+                       'space-color':'#000000', 'star-intensity':0.6 })
       } catch(e) {}
+
+      // 4. City label style → white text on dark halo
+      applyMajorSettlementsStyle()
+
+      // 5. Re-raise mask, city labels, pins
+      raiseMaskAndPins()
     }
   } catch(e) {
     console.error('[MapStyle] toggleMapStyle error:', e)
   }
 
-  // 300 ms cooldown — long enough for all GL operations to settle before next toggle
+  // 300 ms cooldown — prevents double-tap crash
   setTimeout(() => { styleTransitioning.value = false }, 300)
 }
 
