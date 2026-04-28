@@ -2609,108 +2609,118 @@ function toggleMapStyle() {
   const toGraphic = mapStyleMode.value === 'satellite'
   mapStyleMode.value = toGraphic ? 'graphic' : 'satellite'
 
-  if (toGraphic) {
-    // ── Enter graphic mode — instant, zero network ──
-    // 1. Hide satellite imagery
-    if (map.getLayer('esri-satellite-layer'))
-      map.setLayoutProperty('esri-satellite-layer', 'visibility', 'none')
+  try {
+    if (toGraphic) {
+      // ── Enter graphic mode — instant, zero network ──
+      // 1. Hide satellite imagery
+      if (map.getLayer('esri-satellite-layer'))
+        map.setLayoutProperty('esri-satellite-layer', 'visibility', 'none')
 
-    // 2. Show world-fill white background (covers Mapbox base raster)
-    if (map.getLayer('graphic-bg'))
-      map.setLayoutProperty('graphic-bg', 'visibility', 'visible')
+      // 2. Show world-fill white background (covers Mapbox base raster)
+      if (map.getLayer('graphic-bg'))
+        map.setLayoutProperty('graphic-bg', 'visibility', 'visible')
 
-    // 3. Show vector roads + place labels within Racha (gives graphic/streets look)
-    const st = map.getStyle()
-    if (st && st.layers && activeFeature.value) {
-      const withinFilter = ['within', activeFeature.value]
-      st.layers.forEach(l => {
-        const id = l.id
-        const isCasing = id.includes('case') || id.includes('-casing') || id.includes('outline')
-        const isPoi    = id.includes('poi')
-        if (isCasing || isPoi) return
-        const isRoad  = (id.includes('road') || id.includes('bridge') || id.includes('tunnel')) && l.type === 'line'
-        const isLabel = (id.includes('settlement') || id.includes('place-')) && l.type === 'symbol'
-        if (isRoad) {
-          try {
-            map.setLayoutProperty(id, 'visibility', 'visible')
-            map.setFilter(id, withinFilter)
-            map.setPaintProperty(id, 'line-color', 'rgba(190,170,150,0.9)')
-            map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'],7,0.5,11,1.2,14,2,17,3.5])
-            map.setPaintProperty(id, 'line-opacity', 0.85)
-          } catch(e) {}
-        }
-        if (isLabel) {
-          try {
-            map.setLayoutProperty(id, 'visibility', 'visible')
-            map.setFilter(id, withinFilter)
-            map.setPaintProperty(id, 'text-color', '#2c2420')
-            map.setPaintProperty(id, 'text-halo-color', 'rgba(240,236,230,0.95)')
-            map.setPaintProperty(id, 'text-halo-width', 1.5)
-            map.moveLayer(id)
-          } catch(e) {}
-        }
-      })
-    }
+      // 3. Show vector roads + place labels within Racha (gives graphic/streets look)
+      //    Roads and labels are moved ABOVE graphic-bg (but below dim-mask-layer) so they
+      //    render on the white canvas instead of being covered by it.
+      const hasMask = !!map.getLayer('dim-mask-layer')
+      const st = map.getStyle()
+      if (st && st.layers && activeFeature.value) {
+        const withinFilter = ['within', activeFeature.value]
+        st.layers.forEach(l => {
+          const id = l.id
+          const isCasing = id.includes('case') || id.includes('-casing') || id.includes('outline')
+          const isPoi    = id.includes('poi')
+          if (isCasing || isPoi) return
+          const isRoad  = (id.includes('road') || id.includes('bridge') || id.includes('tunnel')) && l.type === 'line'
+          const isLabel = (id.includes('settlement') || id.includes('place-')) && l.type === 'symbol'
+          if (isRoad) {
+            try {
+              map.setLayoutProperty(id, 'visibility', 'visible')
+              map.setFilter(id, withinFilter)
+              map.setPaintProperty(id, 'line-color', 'rgba(190,170,150,0.9)')
+              map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'],7,0.5,11,1.2,14,2,17,3.5])
+              map.setPaintProperty(id, 'line-opacity', 0.85)
+              // Lift road above graphic-bg white fill → roads visible on white canvas
+              if (hasMask) map.moveLayer(id, 'dim-mask-layer')
+            } catch(e) {}
+          }
+          if (isLabel) {
+            try {
+              map.setLayoutProperty(id, 'visibility', 'visible')
+              map.setFilter(id, withinFilter)
+              map.setPaintProperty(id, 'text-color', '#2c2420')
+              map.setPaintProperty(id, 'text-halo-color', 'rgba(240,236,230,0.95)')
+              map.setPaintProperty(id, 'text-halo-width', 1.5)
+              // Lift label above graphic-bg, below mask (so it clips at Racha boundary)
+              if (hasMask) map.moveLayer(id, 'dim-mask-layer')
+              else map.moveLayer(id)
+            } catch(e) {}
+          }
+        })
+      }
 
-    // 4. Fully opaque mask — nothing visible outside region
-    applyDimMaskOpacity()
+      // 4. 0.8 opacity mask — subtle fade outside region
+      applyDimMaskOpacity()
 
-    // 5. No terrain/fog — flat 2D graphic look
-    try { map.setTerrain(null) } catch(e) {}
-    try { map.setFog(null) }     catch(e) {}
+      // 5. No terrain/fog — flat 2D graphic look
+      try { map.setTerrain(null) } catch(e) {}
+      try { map.setFog(null) }     catch(e) {}
 
-    // 6. Re-raise mask + pins above new layers
-    ;['dim-mask-layer','focus-region-glow','focus-region-border'].forEach(id => {
-      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-    })
-    const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
-    ALL_CATS.forEach(c => {
-      ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
+      // 6. Re-raise mask + boundary + pins above everything
+      ;['dim-mask-layer','focus-region-glow','focus-region-border'].forEach(id => {
         if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
       })
-    })
+      const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
+      ALL_CATS.forEach(c => {
+        ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
+          if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
+        })
+      })
 
-  } else {
-    // ── Enter satellite mode ──
-    // 1. Show ESRI satellite
-    if (map.getLayer('esri-satellite-layer'))
-      map.setLayoutProperty('esri-satellite-layer', 'visibility', 'visible')
+    } else {
+      // ── Enter satellite mode ──
+      // 1. Show ESRI satellite
+      if (map.getLayer('esri-satellite-layer'))
+        map.setLayoutProperty('esri-satellite-layer', 'visibility', 'visible')
 
-    // 2. Hide white background
-    if (map.getLayer('graphic-bg'))
-      map.setLayoutProperty('graphic-bg', 'visibility', 'none')
+      // 2. Hide white background
+      if (map.getLayer('graphic-bg'))
+        map.setLayoutProperty('graphic-bg', 'visibility', 'none')
 
-    // 3. Restore base layers to satellite-appropriate state
-    hideBaseSymbolLayers()
-    updateLayers()
+      // 3. Restore base layers to satellite-appropriate state
+      hideBaseSymbolLayers()
+      updateLayers()
 
-    // 4. Semi-transparent mask
-    applyDimMaskOpacity()
+      // 4. Semi-transparent mask
+      applyDimMaskOpacity()
 
-    // 5. Re-enable terrain
-    try {
-      if (!map.getSource('dem'))
-        map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
-      map.setTerrain({ source:'dem', exaggeration: 1.5 })
-    } catch(e) {}
+      // 5. Re-enable terrain
+      try {
+        if (!map.getSource('dem'))
+          map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
+        map.setTerrain({ source:'dem', exaggeration: 1.5 })
+      } catch(e) {}
 
-    // 6. Re-enable fog (dark theme)
-    try {
-      if (!isLightMode.value)
-        map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
-    } catch(e) {}
+      // 6. Re-enable fog (dark theme)
+      try {
+        if (!isLightMode.value)
+          map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
+      } catch(e) {}
+    }
+  } catch(e) {
+    console.error('[MapStyle] toggleMapStyle error:', e)
   }
 
-  requestAnimationFrame(() => { styleTransitioning.value = false })
+  // 300 ms cooldown — long enough for all GL operations to settle before next toggle
+  setTimeout(() => { styleTransitioning.value = false }, 300)
 }
 
 function applyDimMaskOpacity() {
   if (!map || !map.getLayer('dim-mask-layer')) return
   try {
-    // Graphic mode: fully opaque outside boundary → no labels/roads show outside
-    // Satellite mode: semi-transparent so satellite imagery subtly shows through
-    map.setPaintProperty('dim-mask-layer', 'fill-opacity',
-      mapStyleMode.value === 'graphic' ? 1 : 0.8)
+    // 0.8 in both modes — subtle fade outside region while keeping some context visible
+    map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.8)
   } catch(e) {}
 }
 
