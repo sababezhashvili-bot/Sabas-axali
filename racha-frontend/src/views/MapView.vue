@@ -922,7 +922,7 @@ const showForest  = ref(false)
 const mapStyleMode        = ref('satellite') // 'satellite' | 'graphic'
 const styleTransitioning  = ref(false)
 const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12'
-const GRAPHIC_STYLE   = 'mapbox://styles/mapbox/light-v11'
+const GRAPHIC_STYLE   = 'mapbox://styles/mapbox/outdoors-v12'
 
 // Bundled approximate Racha polygon — instant fallback if geoboundaries fetch fails.
 // Covers Ambrolauri + Oni districts without any network dependency.
@@ -1403,22 +1403,21 @@ function updateLayers() {
         const isGraphic = mapStyleMode.value === 'graphic'
         if (layer.type === 'line') {
           try {
-            map.setPaintProperty(id, 'line-color',
-              isGraphic ? 'rgba(160,140,120,0.90)' : 'rgba(114,200,165,0.72)')
+            // Same green road colour in both modes — visible on dark satellite AND on light outdoors
+            map.setPaintProperty(id, 'line-color', 'rgba(114,200,165,0.82)')
             map.setPaintProperty(id, 'line-width', ['interpolate',['linear'],['zoom'], 7,0.5, 11,1.1, 14,1.8, 17,3.0])
-            map.setPaintProperty(id, 'line-opacity', isGraphic ? 0.88 : 0.72)
-            map.setPaintProperty(id, 'line-blur', isGraphic ? 0 : 0.5)
+            map.setPaintProperty(id, 'line-opacity', 0.82)
+            map.setPaintProperty(id, 'line-blur', 0.5)
           } catch(e) {}
         }
         if (layer.type === 'symbol') {
           try {
             map.setPaintProperty(id, 'icon-opacity', 0)
-            map.setPaintProperty(id, 'text-color',
-              isGraphic ? 'rgba(80,60,40,0.95)' : 'rgba(114,200,165,0.95)')
+            // Green text on both — halo adapts for readability on light vs dark background
+            map.setPaintProperty(id, 'text-color', 'rgba(114,200,165,0.95)')
             map.setPaintProperty(id, 'text-halo-color',
-              isGraphic ? 'rgba(240,236,230,0.92)' : 'rgba(0,0,0,0.92)')
+              isGraphic ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.92)')
             map.setPaintProperty(id, 'text-halo-width', 1.5)
-            // Layer order is established by rebuildMapAfterStyleChange() — do NOT moveLayer here
           } catch(e) {}
         }
       }
@@ -1949,21 +1948,24 @@ onMounted(async () => {
       }
 
       // 9. 3D buildings (below dim-mask so outside-Racha buildings are dimmed)
-      if (!map.getLayer('3d-buildings')) {
-        try {
-          map.addLayer({
-            id: '3d-buildings', source: 'composite', 'source-layer': 'building',
-            type: 'fill-extrusion', minzoom: 14,
-            layout: { visibility: 'none' },
-            paint: {
-              'fill-extrusion-color': '#72A98F',
-              'fill-extrusion-height': ['coalesce', ['get', 'height'], ['get', 'render_height'], 0],
-              'fill-extrusion-base':   ['coalesce', ['get', 'min_height'], ['get', 'render_min_height'], 0],
-              'fill-extrusion-opacity': 0.75
-            }
-          })
-        } catch(e) {}
+      // Force-remove any existing layer with this ID (base styles like satellite-streets-v12
+      // may ship their own '3d-buildings' layer — we must own this ID to control visibility).
+      if (map.getLayer('3d-buildings')) {
+        try { map.removeLayer('3d-buildings') } catch(e) {}
       }
+      try {
+        map.addLayer({
+          id: '3d-buildings', source: 'composite', 'source-layer': 'building',
+          type: 'fill-extrusion', minzoom: 14,
+          layout: { visibility: showBuildings.value ? 'visible' : 'none' },
+          paint: {
+            'fill-extrusion-color': '#72A98F',
+            'fill-extrusion-height': ['coalesce', ['get', 'height'], ['get', 'render_height'], 0],
+            'fill-extrusion-base':   ['coalesce', ['get', 'min_height'], ['get', 'render_min_height'], 0],
+            'fill-extrusion-opacity': 0.75
+          }
+        })
+      } catch(e) { console.error('[rebuildMapAfterStyleChange] 3d-buildings addLayer failed:', e) }
 
       // 10. Dim mask — darkens everything OUTSIDE the Racha polygon
       if (!map.getLayer('dim-mask-layer')) {
@@ -2066,6 +2068,16 @@ onMounted(async () => {
         reapplyRegionState()
       }
 
+      // 22. Restore pin category visibility state — pinsHidden / activeCat survive setStyle()
+      //     but the newly-added GL layers start visible; re-apply any filter the user had set.
+      if (pinsHidden.value) {
+        setPinCatVisibility('none')
+      } else if (activeCat.value && activeCat.value !== 'all') {
+        // Specific category or sub-category was selected before style switch
+        setPinCatVisibility(activeCat.value)
+      }
+      // activeCat === 'all' && !pinsHidden → all layers already visible by default ✓
+
     } catch(e) {
       console.error('[rebuildMapAfterStyleChange] error:', e)
     }
@@ -2113,7 +2125,8 @@ onMounted(async () => {
   }
 
   // Rebuild pin GL sources and layers from the existingPins.value cache.
-  // Safe to call multiple times — skips categories where layers already exist.
+  // Always force-removes stale layers/sources first — setStyle() may leave getLayer()
+  // cache entries that prevent re-addition without removal.
   // Click/cursor handlers are registered only once (_pinHandlersRegistered flag).
   function rebuildPinLayers() {
     if (!existingPins.value.length || !map) return
@@ -2152,67 +2165,71 @@ onMounted(async () => {
       const catFeatures = allFeatures.filter(f => f.properties.category === cat.key)
       const srcId = `pins-${cat.key}`
 
-      if (!map.getSource(srcId)) {
+      // Force-remove stale layers before re-adding — after setStyle() Mapbox GL's internal
+      // getLayer() cache may still return old objects, causing addLayer() to throw silently.
+      ;[`${srcId}-clusters`, `${srcId}-count`, `${srcId}-points`].forEach(id => {
+        if (map.getLayer(id)) try { map.removeLayer(id) } catch(e) {}
+      })
+      if (map.getSource(srcId)) try { map.removeSource(srcId) } catch(e) {}
+
+      try {
         map.addSource(srcId, {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: catFeatures },
           cluster: true, clusterMaxZoom: 14, clusterRadius: 40
         })
-      }
+      } catch(e) { console.error(`[rebuildPinLayers] addSource ${srcId} failed:`, e); continue }
 
-      if (map.getLayer(`${srcId}-clusters`)) continue // layers exist — skip (handlers persist)
+      try {
+        map.addLayer({
+          id: `${srcId}-clusters`, type: 'circle', source: srcId,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': cat.color,
+            'circle-radius': ['step', ['get', 'point_count'], 8, 5, 10, 15, 12, 50, 14],
+            'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0],
+            'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0]
+          }
+        })
+        map.addLayer({
+          id: `${srcId}-count`, type: 'symbol', source: srcId,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+            'text-size': ['step', ['get', 'point_count'], 8, 5, 9, 15, 10, 50, 11],
+            'text-allow-overlap': true
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 1, 14.2, 0]
+          }
+        })
+        map.addLayer({
+          id: `${srcId}-points`, type: 'circle', source: srcId,
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': cat.color,
+            'circle-radius': 5,
+            'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+            'circle-opacity': 0.95
+          }
+        })
+      } catch(e) { console.error(`[rebuildPinLayers] addLayer ${srcId} failed:`, e); continue }
 
-      map.addLayer({
-        id: `${srcId}-clusters`, type: 'circle', source: srcId,
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': cat.color,
-          'circle-radius': ['step', ['get', 'point_count'], 8, 5, 10, 15, 12, 50, 14],
-          'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
-          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0],
-          'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0]
-        }
-      })
-
-      map.addLayer({
-        id: `${srcId}-count`, type: 'symbol', source: srcId,
-        filter: ['has', 'point_count'],
-        layout: {
-          'text-field': '{point_count_abbreviated}',
-          'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-          'text-size': ['step', ['get', 'point_count'], 8, 5, 9, 15, 10, 50, 11],
-          'text-allow-overlap': true
-        },
-        paint: {
-          'text-color': '#ffffff',
-          'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 1, 14.2, 0]
-        }
-      })
-
-      map.addLayer({
-        id: `${srcId}-points`, type: 'circle', source: srcId,
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-          'circle-color': cat.color,
-          'circle-radius': 5,
-          'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.95
-        }
-      })
-
-      // Cursor handlers — safe to re-register (redundant pointer=pointer is harmless)
+      // Cursor handlers — re-registered on each rebuild (idempotent for pointer style)
       ;[`${srcId}-clusters`, `${srcId}-points`].forEach(lyr => {
         map.on('mouseenter', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = 'pointer' })
         map.on('mouseleave', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = '' })
       })
     }
 
-    // Click handlers registered ONCE — they persist through setStyle() calls in
-    // Mapbox GL's _delegatedListeners and fire again when layers are re-added.
+    // Click handlers registered ONCE — map-level event listeners survive setStyle()
+    // and fire again when layers with matching IDs are re-added.
     if (!_pinHandlersRegistered) {
       _pinHandlersRegistered = true
 
-      // Single handler for all pin-point layers
       const _pinPointClick = (e) => {
         if (!e.features?.length) return
         const props  = e.features[0].properties
@@ -2262,7 +2279,11 @@ onMounted(async () => {
   // Click/cursor handlers registered once (_adHandlersRegistered flag).
   function rebuildAdLayers() {
     if (!adsDataCache || !map) return
-    if (map.getSource('ads')) return // Already present (first call or no style switch yet)
+    // Force-remove stale layers/source before re-adding (same fix as rebuildPinLayers)
+    ;['ads-clusters', 'ads-cluster-count', 'ads-points', 'ads-points-icon'].forEach(id => {
+      if (map.getLayer(id)) try { map.removeLayer(id) } catch(e) {}
+    })
+    if (map.getSource('ads')) try { map.removeSource('ads') } catch(e) {}
 
     map.addSource('ads', {
       type: 'geojson',
