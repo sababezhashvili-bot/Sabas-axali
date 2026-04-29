@@ -921,9 +921,24 @@ const is3D        = ref(true)
 const showForest  = ref(false)
 const mapStyleMode        = ref('satellite') // 'satellite' | 'graphic'
 const styleTransitioning  = ref(false)
-// Only the satellite style URL is used — graphic mode now uses a raster tile overlay
-// (eliminates map.setStyle() reload; switching is instant via layer visibility toggle)
 const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12'
+const GRAPHIC_STYLE   = 'mapbox://styles/mapbox/light-v11'
+
+// Bundled approximate Racha polygon — instant fallback if geoboundaries fetch fails.
+// Covers Ambrolauri + Oni districts without any network dependency.
+const RACHA_POLYGON_FALLBACK = {
+  type: 'Feature',
+  properties: { shapeName: 'რაჭა' },
+  geometry: {
+    type: 'Polygon',
+    coordinates: [[
+      [42.55, 42.30], [43.00, 42.20], [43.45, 42.28],
+      [43.90, 42.50], [43.92, 42.75], [43.70, 43.00],
+      [43.30, 43.05], [42.90, 42.95], [42.60, 42.70],
+      [42.55, 42.50], [42.55, 42.30]
+    ]]
+  }
+}
 const activeRegion = ref('რაჭა')
 const maskingReady = ref(false) // Controls loading screen
 
@@ -1361,7 +1376,7 @@ function updateLayers() {
           map.setPaintProperty(id, 'text-color', isGraphic ? '#2c2420' : '#ffffff')
           map.setPaintProperty(id, 'text-halo-color', isGraphic ? 'rgba(240,236,230,0.95)' : 'rgba(0,0,0,0.85)')
           map.setPaintProperty(id, 'text-halo-width', 1.8)
-          map.moveLayer(id)
+          // Layer order is established by rebuildMapAfterStyleChange() — do NOT moveLayer here
         } catch(e) {}
       }
     }
@@ -1403,7 +1418,7 @@ function updateLayers() {
             map.setPaintProperty(id, 'text-halo-color',
               isGraphic ? 'rgba(240,236,230,0.92)' : 'rgba(0,0,0,0.92)')
             map.setPaintProperty(id, 'text-halo-width', 1.5)
-            map.moveLayer(id)
+            // Layer order is established by rebuildMapAfterStyleChange() — do NOT moveLayer here
           } catch(e) {}
         }
       }
@@ -1414,11 +1429,8 @@ function updateLayers() {
   if (map.getLayer('3d-buildings')) {
     const shouldShow = (showBuildings.value || all)
     try { map.setLayoutProperty('3d-buildings', 'visibility', shouldShow ? 'visible' : 'none') } catch(e) {}
-    if (shouldShow) {
-      try { map.moveLayer('3d-buildings') } catch(e) {}
-      // Re-raise mask + city labels + pins above buildings
-      raiseMaskAndPins()
-    }
+    // Layer order is established by rebuildMapAfterStyleChange() — 3d-buildings sits
+    // below dim-mask by construction so no moveLayer needed here.
   }
 }
 
@@ -1493,7 +1505,12 @@ let popup   = null
 let ready   = false
 let markers = []
 // Module-level cache: geoBoundaries JSON is ~200KB — fetch once, reuse forever
-let _geoBoundariesCache = null
+let _geoBoundariesCache  = null
+// Cached ad GeoJSON features — reused when rebuilding layers after setStyle()
+let adsDataCache         = null
+// Guard: pin/ad click+cursor handlers are registered once and persist through setStyle()
+let _pinHandlersRegistered = false
+let _adHandlersRegistered  = false
 let hoveredId    = null
 let adm1HoveredId = null
 
@@ -1656,141 +1673,9 @@ onMounted(async () => {
     offset: [0, -130],
   })
 
-  // ── ESRI World Imagery (with Mapbox fallback at high zoom) ───────
-  function addEsriSatellite() {
-    if (map.getSource('esri-satellite')) return
-    map.addSource('esri-satellite', {
-      type: 'raster',
-      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: 'Tiles © Esri'
-    })
-    const layers = map.getStyle().layers
-    // Insert ESRI above background but below the first non-raster/non-background layer
-    const insertBefore = layers.find(l => l.type !== 'background' && l.type !== 'raster')?.id
-    map.addLayer({
-      id: 'esri-satellite-layer',
-      type: 'raster',
-      source: 'esri-satellite',
-      paint: {
-        // Fade out ESRI when zooming in past zoom 15 → Mapbox satellite shows through
-        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 15, 1, 17, 0],
-        // Slight brightness lift to help dark/cloudy mountain areas
-        'raster-brightness-min': 0.06,
-        'raster-contrast': 0.08
-      }
-    }, insertBefore)
-    // Do NOT hide Mapbox satellite — it serves as high-zoom fallback
-  }
 
   map.on('load', async () => {
     ready = true
-
-    addEsriSatellite()
-
-    // ── Graphic mode: world cream fill — inserted BELOW roads/labels so vector
-    //    layers naturally render on top of it without any moveLayer hacks.
-    if (!map.getSource('world-fill')) {
-      map.addSource('world-fill', {
-        type: 'geojson',
-        data: { type: 'Feature', geometry: { type: 'Polygon',
-          coordinates: [[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]]] } }
-      })
-      // Find first non-background/non-raster layer → insert graphic-bg just before it
-      // so it sits below all road and label layers from the satellite-streets style.
-      const _gLayers = map.getStyle().layers
-      const _firstVec = _gLayers.find(l => l.type !== 'background' && l.type !== 'raster')?.id
-      map.addLayer({
-        id: 'graphic-bg',
-        type: 'fill',
-        source: 'world-fill',
-        layout: { visibility: 'none' },
-        paint: { 'fill-color': '#f0ece6', 'fill-opacity': 1 }
-      }, _firstVec)  // ← before first road = BELOW all roads and labels
-    }
-
-    // ── Major city labels — Ambrolauri, Oni, Nikortsminda ──
-    // Separate source from POI pins; always visible in both satellite and graphic modes.
-    if (!map.getSource('major-settlements')) {
-      map.addSource('major-settlements', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: [
-            { type: 'Feature', geometry: { type: 'Point', coordinates: [43.1579, 42.5115] },
-              properties: { nameGeo: 'ამბროლაური', nameEng: 'Ambrolauri', rank: 1 } },
-            { type: 'Feature', geometry: { type: 'Point', coordinates: [43.4453, 42.5861] },
-              properties: { nameGeo: 'ონი', nameEng: 'Oni', rank: 1 } },
-            { type: 'Feature', geometry: { type: 'Point', coordinates: [43.1268, 42.4773] },
-              properties: { nameGeo: 'ნიკორწმინდა', nameEng: 'Nikortsminda', rank: 2 } },
-          ]
-        }
-      })
-      // Dot marker
-      map.addLayer({
-        id: 'major-settlements-dot',
-        type: 'circle',
-        source: 'major-settlements',
-        paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 12, 6],
-          'circle-color': '#ffffff',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#72A98F',
-          'circle-opacity': 0.95
-        }
-      })
-      // Text label — language is updated by the lang watcher below
-      map.addLayer({
-        id: 'major-settlements-label',
-        type: 'symbol',
-        source: 'major-settlements',
-        layout: {
-          'text-field': ['coalesce', ['get', lang.value === 'en' ? 'nameEng' : 'nameGeo'], ['get', 'nameGeo']],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 10, 13, 14, 15],
-          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
-          'text-offset': [0, 1.1],
-          'text-anchor': 'top',
-          'text-allow-overlap': false,
-          'text-ignore-placement': false,
-        },
-        paint: {
-          'text-color': '#ffffff',
-          'text-halo-color': 'rgba(0,0,0,0.82)',
-          'text-halo-width': 1.5
-        }
-      })
-    }
-
-    // CLEAN START: Hide all global data layers initially
-    const style = map.getStyle()
-    if (style && style.layers) {
-      style.layers.forEach(l => {
-        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('poi') || l.id.includes('building')) {
-          map.setLayoutProperty(l.id, 'visibility', 'none')
-        }
-      })
-    }
-
-    // ── 3D Buildings — minzoom 14 so we only render when building data actually exists ──
-    if (!map.getLayer('3d-buildings')) {
-      try {
-        map.addLayer({
-          id: '3d-buildings', source: 'composite', 'source-layer': 'building',
-          type: 'fill-extrusion', minzoom: 14,
-          layout: { visibility: 'none' },
-          paint: {
-            'fill-extrusion-color': '#72A98F',
-            // Use render_height as fallback for Mapbox v3 styles; 0 = no extrusion if no data
-            'fill-extrusion-height': ['coalesce', ['get', 'height'], ['get', 'render_height'], 0],
-            'fill-extrusion-base':   ['coalesce', ['get', 'min_height'], ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': 0.75
-          }
-        })
-      } catch(e) { console.warn('3d-buildings addLayer failed (no composite source?):', e) }
-    }
-
-    updateLayers()
     initMapLayers()
   })
 
@@ -1810,10 +1695,11 @@ onMounted(async () => {
     })
   }
 
-  // style.load fires once on initial map load — hide base symbol layers immediately
-  // (We no longer call map.setStyle() for mode switching, so this only fires once)
+  // style.load fires on initial load AND after every map.setStyle() call.
+  // rebuildMapAfterStyleChange() re-establishes all custom sources/layers in
+  // guaranteed bottom-to-top order each time the base style changes.
   map.on('style.load', () => {
-    hideBaseSymbolLayers()
+    rebuildMapAfterStyleChange()
   })
 
   async function selectRegion(feature) {
@@ -1887,423 +1773,550 @@ onMounted(async () => {
       })
     }
 
-    // C. Move mask to top + apply correct opacity for current style mode
-    if (map.getLayer('dim-mask-layer')) {
-      map.moveLayer('dim-mask-layer')
-      applyDimMaskOpacity()
-    }
-    if (map.getLayer('focus-region-glow')) {
-        map.moveLayer('focus-region-glow')
-        map.setPaintProperty('focus-region-glow', 'line-opacity', 0.6)
-    }
-    if (map.getLayer('focus-region-border')) {
-        map.moveLayer('focus-region-border')
-        map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
-    }
+    // C. Dim mask opacity + focus region border visibility
+    applyDimMaskOpacity()
+    if (map.getLayer('focus-region-glow'))
+      map.setPaintProperty('focus-region-glow', 'line-opacity', 0.6)
+    if (map.getLayer('focus-region-border'))
+      map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
 
-    // C2. Major city labels above mask — always visible
-    ;['major-settlements-dot','major-settlements-label'].forEach(id => {
-      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-    })
-
-    // D. Pin layers above mask + graphic raster (all category layers)
-    const ALL_CATS = ['landmark','waterfall','lake','river','mountain','forest','canyon','church','fortress','museum','archaeological','village','architecture','hotel','restaurant']
-    ALL_CATS.forEach(c => {
-      ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
-        if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-      })
-    })
-    // E. Ad GL layers above mask
-    ;['ads-clusters','ads-cluster-count','ads-points','ads-points-icon'].forEach(id => {
-      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-    })
-    // F. Route layers above mask (if active)
-    ;['route-line','route-wp-outer','route-wp-inner'].forEach(id => {
+    // D. Route layers on top (added dynamically — must stay above pins)
+    ;['route-line-bg','route-line','route-wp-outer','route-wp-inner','route-wp-labels'].forEach(id => {
       if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
     })
   }
 
   async function initMapLayers() {
-    // ── Global Boundary Hide ──
-    const hideBoundaries = () => {
-        const style = map.getStyle()
-        if (style && style.layers) {
-          style.layers.forEach(l => {
-            if (l.id.includes('admin') || l.id.includes('boundary')) {
-              try { map.setPaintProperty(l.id, 'line-opacity', 0) } catch(e) {}
-            }
-          })
-        }
-    }
-    hideBoundaries()
+    // Terrain, lighting, fog, and all GL layer creation are handled by
+    // rebuildMapAfterStyleChange() which fires on every style.load event.
+    // initMapLayers() is responsible ONLY for fetching remote data and
+    // populating the module-level caches used by the rebuild functions.
 
-    // ── Terrain ──
+    // ── Fetch accurate Racha boundary polygon ──────────────────────────────────
     try {
-      if (!map.getSource('dem')) {
-        map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
+      if (!_geoBoundariesCache) {
+        const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson')
+        if (!res.ok) throw new Error(`geoBoundaries HTTP ${res.status}`)
+        _geoBoundariesCache = await res.json()
       }
-      map.setTerrain({ source:'dem', exaggeration: 1.5 })
-    } catch(e) {}
 
-    // ── Cinematic Lighting ──
-    try {
-      map.setLight({ anchor:'viewport', color:'#ffffff', intensity:isLightMode.value ? 0.6 : 0.1, position:[1.15, 210, 30] })
-    } catch(e) {}
-
-    // ── Atmospheric Fog ──
-    try {
-      if (!isLightMode.value) {
-        map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000', 'space-color':'#000000', 'star-intensity':0.6 })
+      // Add admin-regions source/layer if not yet present (may already be added by rebuildMapAfterStyleChange)
+      if (!map.getSource('admin-regions')) {
+        map.addSource('admin-regions', { type: 'geojson', data: _geoBoundariesCache })
+        map.addLayer({ id: 'admin-regions-fill', type: 'fill', source: 'admin-regions',
+          paint: { 'fill-color': 'transparent', 'fill-opacity': 0 } })
       }
-    } catch(e) {}
 
-      // ── Admin Regions & Masking (ADM2 for Municipality Isolation) ──
-      try {
-        // Fetch once per session; reuse cached copy on subsequent initMapLayers calls
-        if (!_geoBoundariesCache) {
-          const res = await fetch('https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/gbOpen/GEO/ADM2/geoBoundaries-GEO-ADM2_simplified.geojson')
-          _geoBoundariesCache = await res.json()
-        }
-        const json = _geoBoundariesCache
-        
-        // Filter Ambrolauri & Oni specifically
-        const rachaFeatures = json.features.filter(f => 
-          ['Ambrolauri', 'Oni'].includes(f.properties.shapeName)
-        )
-
-        if (!map.getSource('focus-region')) map.addSource('focus-region', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
-        if (!map.getSource('dim-mask-source')) map.addSource('dim-mask-source', { type:'geojson', data: { type:'FeatureCollection', features:[] } })
-
-        if (!map.getLayer('dim-mask-layer')) {
-          map.addLayer({
-            id: 'dim-mask-layer',
-            type: 'fill',
-            source: 'dim-mask-source',
-            // Start at 0 — applyDimMaskOpacity() sets the correct opacity after mask is populated
-            paint: { 'fill-color': '#0d0d14', 'fill-opacity': 0 }
-          })
-        }
-        if (!map.getLayer('focus-region-glow')) {
-          map.addLayer({ 
-            id: 'focus-region-glow', 
-            type: 'line', 
-            source: 'focus-region', 
-            paint: { 
-              'line-color': '#ffffff', 
-              'line-width': 12, 
-              'line-blur': 15,
-              'line-opacity': 0 
-            } 
-          })
-        }
-        if (!map.getLayer('focus-region-border')) {
-          map.addLayer({ 
-            id: 'focus-region-border', 
-            type: 'line', 
-            source: 'focus-region', 
-            paint: { 
-              'line-color': '#ffffff', 
-              'line-width': 1.5, 
-              'line-opacity': 0,
-              'line-blur': 0.5
-            } 
-          })
-        }
-
-        // Combine into one Racha region for masking
-        if (rachaFeatures.length > 0) {
-          const combinedRacha = rachaFeatures.reduce((acc, feat) => {
-            return window.turf.union(acc, feat)
-          })
-          combinedRacha.properties = { shapeName: 'რაჭა' }
-          combinedRachaRef.value = combinedRacha // Store for later use
-          
-          // We'll use this combined feature as the 'active' region for initial view
-          selectRegion(combinedRacha)
-          // Double force data for first-frame display
-          activeRegion.value = 'რაჭა'
-          populationCount.value = '31,000'
-          actualPopNum.value = 31000
-        }
-
-        if (!map.getSource('admin-regions')) {
-          map.addSource('admin-regions', { type:'geojson', data: json })
-          map.addLayer({ id: 'admin-regions-fill', type: 'fill', source: 'admin-regions', paint: { 'fill-color': 'transparent', 'fill-opacity': 0 } })
-
-          // Hide hard boundary lines (Dasher, dots, etc.)
-          const style = map.getStyle()
-          style.layers.forEach(l => {
-            if (l.id.includes('admin') || l.id.includes('boundary')) {
-              map.setPaintProperty(l.id, 'line-opacity', 0)
-            }
-          })
-        }
-
-      if (json.features) {
-        // Initial setup for combined ADM2 (Racha-Lechkhumi & Qvemo Svaneti) 
-        // Logic handled above in reduce()
+      const rachaFeatures = _geoBoundariesCache.features.filter(f =>
+        ['Ambrolauri', 'Oni'].includes(f.properties.shapeName)
+      )
+      if (rachaFeatures.length > 0) {
+        const combinedRacha = rachaFeatures.reduce((acc, feat) => window.turf.union(acc, feat))
+        combinedRacha.properties = { shapeName: 'რაჭა' }
+        combinedRachaRef.value = combinedRacha
+        selectRegion(combinedRacha)
+        activeRegion.value = 'რაჭა'
+        populationCount.value = '31,000'
+        actualPopNum.value = 31000
       }
-    } catch(e) {}
-
-    // ── Forest ──
-    if (!map.getLayer('forest')) {
-      try {
-        map.addLayer({
-          id: 'forest', type: 'fill-extrusion', source: { type:'vector', url:'mapbox://mapbox.mapbox-terrain-v2' },
-          'source-layer': 'landcover', filter: ['==', 'class', 'wood'], minzoom: 8,
-          layout: { visibility: showForest.value ? 'visible' : 'none' },
-          paint: {
-            'fill-extrusion-color': ['interpolate',['linear'],['zoom'], 8,'#4a6d5c', 12,'#72A98F'],
-            'fill-extrusion-height': ['interpolate',['linear'],['zoom'], 8,25, 13,70],
-            'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.65,
-          },
-        })
-      } catch(e) {}
+    } catch(e) {
+      console.error('[initMapLayers] geoBoundaries fetch failed — using fallback polygon:', e)
+      if (!combinedRachaRef.value) {
+        combinedRachaRef.value = RACHA_POLYGON_FALLBACK
+        selectRegion(RACHA_POLYGON_FALLBACK)
+      }
     }
 
-    // ── Ads — GL layers with clustering (static, no jitter) ──
+    // ── Ads — fetch data, cache, then build GL layers ─────────────────────────
     try {
       const adsData = await api.getAds()
-      if (adsData?.length && !map.getSource('ads')) {
-        const adFeatures = adsData
+      if (adsData?.length) {
+        adsDataCache = adsData
           .filter(ad => ad.latitude != null && ad.longitude != null)
           .map(ad => ({
             type: 'Feature',
             geometry: { type: 'Point', coordinates: [parseFloat(ad.longitude), parseFloat(ad.latitude)] },
             properties: {
               id: ad.id, name: ad.name || 'Ad Space',
-              status: ad.status || 'Available',
-              adType: ad.type || 'Billboard',
-              price: ad.priceMonthly || 0,
-              imageUrl: ad.currentImageUrl || ad.imageUrl || ''
+              status: ad.status || 'Available', adType: ad.type || 'Billboard',
+              price: ad.priceMonthly || 0, imageUrl: ad.currentImageUrl || ad.imageUrl || ''
             }
           }))
-
-        if (adFeatures.length) {
-          map.addSource('ads', {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: adFeatures },
-            cluster: true, clusterMaxZoom: 13, clusterRadius: 50
-          })
-          map.addLayer({
-            id: 'ads-clusters', type: 'circle', source: 'ads',
-            filter: ['has', 'point_count'],
-            layout: { visibility: 'none' },
-            paint: {
-              'circle-color': '#FF9800',
-              'circle-radius': ['step', ['get', 'point_count'], 18, 3, 22, 8, 26],
-              'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.92
-            }
-          })
-          map.addLayer({
-            id: 'ads-cluster-count', type: 'symbol', source: 'ads',
-            filter: ['has', 'point_count'],
-            layout: { visibility: 'none', 'text-field': '{point_count_abbreviated}', 'text-size': 12, 'text-allow-overlap': true, 'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'] },
-            paint: { 'text-color': '#ffffff' }
-          })
-          map.addLayer({
-            id: 'ads-points', type: 'circle', source: 'ads',
-            filter: ['!', ['has', 'point_count']],
-            layout: { visibility: 'none' },
-            paint: {
-              'circle-color': ['match', ['get', 'status'],
-                'Available', '#FF9800', 'Rented', '#F44336', 'Pending', '#9C27B0', '#FF9800'
-              ],
-              'circle-radius': 11,
-              'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.95
-            }
-          })
-          // Inner icon dot
-          map.addLayer({
-            id: 'ads-points-icon', type: 'circle', source: 'ads',
-            filter: ['!', ['has', 'point_count']],
-            layout: { visibility: 'none' },
-            paint: { 'circle-color': '#ffffff', 'circle-radius': 4, 'circle-opacity': 0.9 }
-          })
-
-          // Move above mask
-          ;['ads-clusters', 'ads-cluster-count', 'ads-points', 'ads-points-icon'].forEach(id => {
-            try { map.moveLayer(id) } catch(e) {}
-          })
-
-          // Click individual ad → show glass detail panel
-          map.on('click', 'ads-points', (e) => {
-            e.originalEvent.stopPropagation()
-            const props = e.features[0].properties
-            openAdModal({
-              id: props.id, name: props.name, status: props.status,
-              type: props.adType, priceMonthly: props.price,
-              currentImageUrl: props.imageUrl, imageUrl: props.imageUrl
-            })
-          })
-          // Click cluster → zoom in
-          map.on('click', 'ads-clusters', (e) => {
-            const feat = map.queryRenderedFeatures(e.point, { layers: ['ads-clusters'] })[0]
-            if (!feat) return
-            map.getSource('ads').getClusterExpansionZoom(feat.properties.cluster_id, (err, zoom) => {
-              if (!err) map.easeTo({ center: feat.geometry.coordinates, zoom: zoom + 1, duration: 500 })
-            })
-          })
-          ;['ads-clusters', 'ads-points'].forEach(lyr => {
-            map.on('mouseenter', lyr, () => { map.getCanvas().style.cursor = 'pointer' })
-            map.on('mouseleave', lyr, () => { map.getCanvas().style.cursor = '' })
-          })
-        }
+        rebuildAdLayers()
       }
-    } catch(e) { console.error('Ads GL error', e) }
+    } catch(e) { console.error('[initMapLayers] Ads fetch error:', e) }
 
-    // ── Location Pins — per-category clustering (each colour groups separately) ──
-    if (!map.getSource('pins-landmark')) {
-      try {
-        const locs = await api.getLocations()
-        existingPins.value = locs || []
-        const allFeatures = (locs?.length ? locs : []).map(l => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [parseFloat(l.longitude), parseFloat(l.latitude)] },
-          properties: {
-            id: l.id,
-            name: l.nameGeo || l.name || '',
-            nameEng: l.nameEng || l.nameGeo || l.name || '',
-            description: l.typeGeo || l.description || '',
-            category: (l.category || 'landmark').toLowerCase()
-          }
-        }))
+    // ── Location Pins — fetch data, cache, then build GL layers ──────────────
+    try {
+      const locs = await api.getLocations()
+      existingPins.value = locs || []
+      rebuildPinLayers()
+    } catch(e) { console.error('[initMapLayers] Pin fetch error:', e) }
 
-        const CAT_DEFS = [
-          { key: 'landmark',       color: '#4CAF50' },
-          { key: 'waterfall',      color: '#6699cc' },
-          { key: 'lake',           color: '#42A5F5' },
-          { key: 'river',          color: '#26C6DA' },
-          { key: 'mountain',       color: '#78909C' },
-          { key: 'forest',         color: '#66BB6A' },
-          { key: 'canyon',         color: '#A1887F' },
-          { key: 'church',         color: '#FFA726' },
-          { key: 'fortress',       color: '#8D6E63' },
-          { key: 'museum',         color: '#AB47BC' },
-          { key: 'archaeological', color: '#FFCA28' },
-          { key: 'village',        color: '#AED581' },
-          { key: 'architecture',   color: '#90A4AE' },
-          { key: 'hotel',          color: '#F44336' },
-          { key: 'restaurant',     color: '#FFD700' },
-        ]
-
-        for (const cat of CAT_DEFS) {
-          const catFeatures = allFeatures.filter(f => f.properties.category === cat.key)
-          const srcId = `pins-${cat.key}`
-
-          map.addSource(srcId, {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: catFeatures },
-            cluster: true, clusterMaxZoom: 14, clusterRadius: 40
-          })
-
-          // Cluster bubble — always large enough for the count label
-          map.addLayer({
-            id: `${srcId}-clusters`, type: 'circle', source: srcId,
-            filter: ['has', 'point_count'],
-            paint: {
-              'circle-color': cat.color,
-              'circle-radius': ['step', ['get', 'point_count'],
-                8,    // 2–4  pins → r=8
-                5,  10,   // 5–14 pins → r=10
-                15, 12,   // 15–49 pins → r=12
-                50, 14    // 50+  pins → r=14
-              ],
-              'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
-              'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0],
-              'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0]
-            }
-          })
-
-          // Cluster count label — text size matches bubble
-          map.addLayer({
-            id: `${srcId}-count`, type: 'symbol', source: srcId,
-            filter: ['has', 'point_count'],
-            layout: {
-              'text-field': '{point_count_abbreviated}',
-              'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
-              'text-size': ['step', ['get', 'point_count'],
-                8,    // 2–4  pins
-                5,   9,   // 5–14 pins
-                15, 10,   // 15–49 pins
-                50, 11    // 50+ pins
-              ],
-              'text-allow-overlap': true
-            },
-            paint: {
-              'text-color': '#ffffff',
-              'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 1, 14.2, 0]
-            }
-          })
-
-          // Individual dot — clean, no glow for a sharp premium look
-          map.addLayer({
-            id: `${srcId}-points`, type: 'circle', source: srcId,
-            filter: ['!', ['has', 'point_count']],
-            paint: {
-              'circle-color': cat.color,
-              'circle-radius': 5,
-              // In graphic mode (white bg): dark stroke for contrast; satellite: light stroke
-              'circle-stroke-width': 1.5,
-              'circle-stroke-color': '#ffffff',
-              'circle-opacity': 0.95
-            }
-          })
-
-          // Click → popup with detail link
-          map.on('click', `${srcId}-points`, (e) => {
-            const props = e.features[0].properties
-            const coords = e.features[0].geometry.coordinates.slice()
-            // Intercept pin click when selecting waypoint from map
-            if (selectingWaypointIdx.value >= 0) {
-              const wp = routeWaypoints.value[selectingWaypointIdx.value]
-              if (wp) {
-                wp.lng = parseFloat(coords[0])
-                wp.lat = parseFloat(coords[1])
-                wp.name = lang.value === 'en' ? (props.nameEng || props.name) : props.name
-              }
-              selectingWaypointIdx.value = -1
-              routePanelMinimized.value = false
-              e.originalEvent.stopPropagation()
-              return
-            }
-            e.originalEvent.stopPropagation()
-            const cfg = CAT_CFG[props.category] || CAT_CFG.default
-            const locId = props.id
-            const displayName = lang.value === 'en' ? (props.nameEng || props.name) : props.name
-            const catLabel = t(`cat.${props.category}.full`) || cfg.label
-            popup.setLngLat(coords).setHTML(`
-              <div class="popup-inner">
-                <div class="popup-accent-bar" style="background:${cfg.color}"></div>
-                <div class="popup-cat" style="color:${cfg.color}">${catLabel}</div>
-                <h3 class="popup-title">${displayName}</h3>
-                ${props.description ? `<p class="popup-desc">${props.description}</p>` : ''}
-                <button class="popup-detail-btn" style="border-color:${cfg.color}33;color:${cfg.color}" onclick="window.__rachaNavToLocation(${locId})">
-                  <span style="font-size:13px;vertical-align:middle">${t('loc.viewOnMap')}</span>
-                  <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span>
-                </button>
-              </div>`).addTo(map)
-          })
-
-          // Click cluster → zoom in
-          map.on('click', `${srcId}-clusters`, (e) => {
-            const feat = map.queryRenderedFeatures(e.point, { layers: [`${srcId}-clusters`] })[0]
-            if (!feat) return
-            map.getSource(srcId).getClusterExpansionZoom(feat.properties.cluster_id, (err, zoom) => {
-              if (!err) map.easeTo({ center: feat.geometry.coordinates, zoom: zoom + 1, duration: 500 })
-            })
-          })
-
-          // Cursors
-          ;[`${srcId}-clusters`, `${srcId}-points`].forEach(lyr => {
-            map.on('mouseenter', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = 'pointer' })
-            map.on('mouseleave', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = '' })
-          })
-        }
-      } catch(e) { console.error('Pin layer error', e) }
-    }
     updateWeather()
     maskingReady.value = true
+  }
+
+  // ─── LAYER REBUILD ────────────────────────────────────────────────────────────
+
+  // Called on EVERY style.load event (initial load + after each setStyle()).
+  // Establishes all custom sources and layers in guaranteed bottom-to-top render order.
+  // Never relies on existing layer state — always checks getSource/getLayer guards.
+  function rebuildMapAfterStyleChange() {
+    if (!map) return
+    const isSatellite = mapStyleMode.value === 'satellite'
+    try {
+      // ── SOURCES ────────────────────────────────────────────────────────────
+
+      // 1. ESRI World Imagery (satellite mode only)
+      if (isSatellite && !map.getSource('esri-satellite')) {
+        map.addSource('esri-satellite', {
+          type: 'raster',
+          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+          tileSize: 256, maxzoom: 19, attribution: 'Tiles © Esri'
+        })
+      }
+
+      // 2. Focus region border
+      if (!map.getSource('focus-region')) {
+        map.addSource('focus-region', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      }
+
+      // 3. Dim mask (world minus Racha — populated by reapplyRegionState / selectRegion)
+      if (!map.getSource('dim-mask-source')) {
+        map.addSource('dim-mask-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      }
+
+      // 4. Major settlements — always visible in both modes
+      if (!map.getSource('major-settlements')) {
+        map.addSource('major-settlements', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: [
+              { type: 'Feature', geometry: { type: 'Point', coordinates: [43.1579, 42.5115] },
+                properties: { nameGeo: 'ამბროლაური', nameEng: 'Ambrolauri', rank: 1 } },
+              { type: 'Feature', geometry: { type: 'Point', coordinates: [43.4453, 42.5861] },
+                properties: { nameGeo: 'ონი', nameEng: 'Oni', rank: 1 } },
+              { type: 'Feature', geometry: { type: 'Point', coordinates: [43.1268, 42.4773] },
+                properties: { nameGeo: 'ნიკორწმინდა', nameEng: 'Nikortsminda', rank: 2 } },
+            ]
+          }
+        })
+      }
+
+      // 5. Admin regions source (for sub-region click, if boundaries cached)
+      if (_geoBoundariesCache && !map.getSource('admin-regions')) {
+        map.addSource('admin-regions', { type: 'geojson', data: _geoBoundariesCache })
+      }
+
+      // ── LAYERS — bottom-to-top order ───────────────────────────────────────
+      // Everything added below sits ABOVE the base style tiles by default.
+
+      // 6. ESRI satellite raster (inserted below first vector layer from the style)
+      if (isSatellite && !map.getLayer('esri-satellite-layer')) {
+        const _fv = map.getStyle().layers.find(l => l.type !== 'background' && l.type !== 'raster')?.id
+        map.addLayer({
+          id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite',
+          paint: {
+            'raster-opacity': ['interpolate', ['linear'], ['zoom'], 15, 1, 17, 0],
+            'raster-brightness-min': 0.06, 'raster-contrast': 0.08
+          }
+        }, _fv)
+      }
+
+      // 7. Admin regions fill (transparent click target)
+      if (_geoBoundariesCache && !map.getLayer('admin-regions-fill')) {
+        map.addLayer({ id: 'admin-regions-fill', type: 'fill', source: 'admin-regions',
+          paint: { 'fill-color': 'transparent', 'fill-opacity': 0 } })
+      }
+
+      // 8. Forest canopy (below dim-mask so outside-Racha forest is dimmed)
+      if (!map.getLayer('forest')) {
+        try {
+          map.addLayer({
+            id: 'forest', type: 'fill-extrusion',
+            source: { type: 'vector', url: 'mapbox://mapbox.mapbox-terrain-v2' },
+            'source-layer': 'landcover', filter: ['==', 'class', 'wood'], minzoom: 8,
+            layout: { visibility: showForest.value ? 'visible' : 'none' },
+            paint: {
+              'fill-extrusion-color': ['interpolate', ['linear'], ['zoom'], 8, '#4a6d5c', 12, '#72A98F'],
+              'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 8, 25, 13, 70],
+              'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.65,
+            }
+          })
+        } catch(e) {}
+      }
+
+      // 9. 3D buildings (below dim-mask so outside-Racha buildings are dimmed)
+      if (!map.getLayer('3d-buildings')) {
+        try {
+          map.addLayer({
+            id: '3d-buildings', source: 'composite', 'source-layer': 'building',
+            type: 'fill-extrusion', minzoom: 14,
+            layout: { visibility: 'none' },
+            paint: {
+              'fill-extrusion-color': '#72A98F',
+              'fill-extrusion-height': ['coalesce', ['get', 'height'], ['get', 'render_height'], 0],
+              'fill-extrusion-base':   ['coalesce', ['get', 'min_height'], ['get', 'render_min_height'], 0],
+              'fill-extrusion-opacity': 0.75
+            }
+          })
+        } catch(e) {}
+      }
+
+      // 10. Dim mask — darkens everything OUTSIDE the Racha polygon
+      if (!map.getLayer('dim-mask-layer')) {
+        map.addLayer({
+          id: 'dim-mask-layer', type: 'fill', source: 'dim-mask-source',
+          paint: { 'fill-color': '#0d0d14', 'fill-opacity': 0 }
+        })
+      }
+
+      // 11. Focus region glow + border (above dim-mask)
+      if (!map.getLayer('focus-region-glow')) {
+        map.addLayer({ id: 'focus-region-glow', type: 'line', source: 'focus-region',
+          paint: { 'line-color': '#ffffff', 'line-width': 12, 'line-blur': 15, 'line-opacity': 0 } })
+      }
+      if (!map.getLayer('focus-region-border')) {
+        map.addLayer({ id: 'focus-region-border', type: 'line', source: 'focus-region',
+          paint: { 'line-color': '#ffffff', 'line-width': 1.5, 'line-opacity': 0, 'line-blur': 0.5 } })
+      }
+
+      // 12. Major settlements dot + label (always visible, above dim-mask)
+      if (!map.getLayer('major-settlements-dot')) {
+        map.addLayer({
+          id: 'major-settlements-dot', type: 'circle', source: 'major-settlements',
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 12, 6],
+            'circle-color': '#ffffff', 'circle-stroke-width': 2,
+            'circle-stroke-color': '#72A98F', 'circle-opacity': 0.95
+          }
+        })
+      }
+      if (!map.getLayer('major-settlements-label')) {
+        map.addLayer({
+          id: 'major-settlements-label', type: 'symbol', source: 'major-settlements',
+          layout: {
+            'text-field': ['coalesce', ['get', lang.value === 'en' ? 'nameEng' : 'nameGeo'], ['get', 'nameGeo']],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 10, 13, 14, 15],
+            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+            'text-offset': [0, 1.1], 'text-anchor': 'top',
+            'text-allow-overlap': false, 'text-ignore-placement': false,
+          },
+          paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.82)', 'text-halo-width': 1.5 }
+        })
+      }
+
+      // 13. Pin GL layers (from cache — above settlements)
+      rebuildPinLayers()
+
+      // 14. Ad GL layers (from cache)
+      rebuildAdLayers()
+
+      // ── STYLE CONFIG ──────────────────────────────────────────────────────
+
+      // 15. Hide all default Mapbox labels (village names, POI names) —
+      //     only our custom major-settlements labels show by default.
+      hideBaseSymbolLayers()
+
+      // 16. Apply user toggle state (roads/labels visibility, mode-aware colours)
+      updateLayers()
+
+      // 17. Mode-specific settings
+      if (isSatellite) {
+        try {
+          if (!map.getSource('dem'))
+            map.addSource('dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 })
+          map.setTerrain({ source: 'dem', exaggeration: 1.5 })
+        } catch(e) {}
+        try {
+          if (!isLightMode.value)
+            map.setFog({ range: [0.5, 12], color: '#0d1520', 'high-color': '#000000', 'space-color': '#000000', 'star-intensity': 0.6 })
+        } catch(e) {}
+      } else {
+        try { map.setTerrain(null) } catch(e) {}
+        try { map.setFog(null)     } catch(e) {}
+      }
+
+      // 18. Lighting
+      try {
+        map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: isLightMode.value ? 0.6 : 0.1, position: [1.15, 210, 30] })
+      } catch(e) {}
+
+      // 19. Hide admin boundary lines
+      try {
+        map.getStyle().layers.forEach(l => {
+          if (l.id.includes('admin') || l.id.includes('boundary'))
+            try { map.setPaintProperty(l.id, 'line-opacity', 0) } catch(e) {}
+        })
+      } catch(e) {}
+
+      // 20. Mode-aware city label colours
+      applyMajorSettlementsStyle()
+
+      // 21. On mode switch (ready=true): re-apply current region state without flying
+      if (ready && activeFeature.value) {
+        reapplyRegionState()
+      }
+
+    } catch(e) {
+      console.error('[rebuildMapAfterStyleChange] error:', e)
+    }
+
+    // Clear style-transition overlay after rebuild settles
+    setTimeout(() => { styleTransitioning.value = false }, 400)
+  }
+
+  // Re-applies the current active region state (mask data, focus border, label filters)
+  // without flying. Called after setStyle() so the region context is preserved.
+  function reapplyRegionState() {
+    if (!map || !activeFeature.value || !window.turf) return
+    const feature = activeFeature.value
+
+    // Update focus-region border
+    if (map.getSource('focus-region')) {
+      map.getSource('focus-region').setData(feature)
+      if (map.getLayer('focus-region-glow'))   map.setPaintProperty('focus-region-glow',   'line-opacity', 0.6)
+      if (map.getLayer('focus-region-border')) map.setPaintProperty('focus-region-border', 'line-opacity', 0.8)
+    }
+
+    // Recompute and apply dim-mask
+    try {
+      const worldPoly = window.turf.polygon([[[-179.9,-85],[179.9,-85],[179.9,85],[-179.9,85],[-179.9,-85]]])
+      const mask = window.turf.difference(worldPoly, feature)
+      if (mask && map.getSource('dim-mask-source')) {
+        map.getSource('dim-mask-source').setData(mask)
+        if (map.getLayer('dim-mask-layer'))
+          map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.8)
+      }
+    } catch(e) {}
+
+    // Re-apply within-filter to base label/road/poi layers
+    try {
+      const withinFilter = ['within', feature]
+      map.getStyle().layers.forEach(l => {
+        if (l.id.startsWith('major-settlements') || l.id.startsWith('pins-') ||
+            l.id.startsWith('route-') || l.id.startsWith('ads-')) return
+        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
+          try { map.setFilter(l.id, withinFilter) } catch(e) {}
+        }
+      })
+    } catch(e) {}
+  }
+
+  // Rebuild pin GL sources and layers from the existingPins.value cache.
+  // Safe to call multiple times — skips categories where layers already exist.
+  // Click/cursor handlers are registered only once (_pinHandlersRegistered flag).
+  function rebuildPinLayers() {
+    if (!existingPins.value.length || !map) return
+
+    const CAT_DEFS = [
+      { key: 'landmark',       color: '#4CAF50' },
+      { key: 'waterfall',      color: '#6699cc' },
+      { key: 'lake',           color: '#42A5F5' },
+      { key: 'river',          color: '#26C6DA' },
+      { key: 'mountain',       color: '#78909C' },
+      { key: 'forest',         color: '#66BB6A' },
+      { key: 'canyon',         color: '#A1887F' },
+      { key: 'church',         color: '#FFA726' },
+      { key: 'fortress',       color: '#8D6E63' },
+      { key: 'museum',         color: '#AB47BC' },
+      { key: 'archaeological', color: '#FFCA28' },
+      { key: 'village',        color: '#AED581' },
+      { key: 'architecture',   color: '#90A4AE' },
+      { key: 'hotel',          color: '#F44336' },
+      { key: 'restaurant',     color: '#FFD700' },
+    ]
+
+    const allFeatures = existingPins.value.map(l => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [parseFloat(l.longitude), parseFloat(l.latitude)] },
+      properties: {
+        id: l.id,
+        name: l.nameGeo || l.name || '',
+        nameEng: l.nameEng || l.nameGeo || l.name || '',
+        description: l.typeGeo || l.description || '',
+        category: (l.category || 'landmark').toLowerCase()
+      }
+    }))
+
+    for (const cat of CAT_DEFS) {
+      const catFeatures = allFeatures.filter(f => f.properties.category === cat.key)
+      const srcId = `pins-${cat.key}`
+
+      if (!map.getSource(srcId)) {
+        map.addSource(srcId, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: catFeatures },
+          cluster: true, clusterMaxZoom: 14, clusterRadius: 40
+        })
+      }
+
+      if (map.getLayer(`${srcId}-clusters`)) continue // layers exist — skip (handlers persist)
+
+      map.addLayer({
+        id: `${srcId}-clusters`, type: 'circle', source: srcId,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': cat.color,
+          'circle-radius': ['step', ['get', 'point_count'], 8, 5, 10, 15, 12, 50, 14],
+          'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0],
+          'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0.9, 14.2, 0]
+        }
+      })
+
+      map.addLayer({
+        id: `${srcId}-count`, type: 'symbol', source: srcId,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+          'text-size': ['step', ['get', 'point_count'], 8, 5, 9, 15, 10, 50, 11],
+          'text-allow-overlap': true
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 1, 14.2, 0]
+        }
+      })
+
+      map.addLayer({
+        id: `${srcId}-points`, type: 'circle', source: srcId,
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': cat.color,
+          'circle-radius': 5,
+          'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.95
+        }
+      })
+
+      // Cursor handlers — safe to re-register (redundant pointer=pointer is harmless)
+      ;[`${srcId}-clusters`, `${srcId}-points`].forEach(lyr => {
+        map.on('mouseenter', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = 'pointer' })
+        map.on('mouseleave', lyr, () => { if (selectingWaypointIdx.value < 0) map.getCanvas().style.cursor = '' })
+      })
+    }
+
+    // Click handlers registered ONCE — they persist through setStyle() calls in
+    // Mapbox GL's _delegatedListeners and fire again when layers are re-added.
+    if (!_pinHandlersRegistered) {
+      _pinHandlersRegistered = true
+
+      // Single handler for all pin-point layers
+      const _pinPointClick = (e) => {
+        if (!e.features?.length) return
+        const props  = e.features[0].properties
+        const coords = e.features[0].geometry.coordinates.slice()
+        if (selectingWaypointIdx.value >= 0) {
+          const wp = routeWaypoints.value[selectingWaypointIdx.value]
+          if (wp) { wp.lng = parseFloat(coords[0]); wp.lat = parseFloat(coords[1])
+            wp.name = lang.value === 'en' ? (props.nameEng || props.name) : props.name }
+          selectingWaypointIdx.value = -1; routePanelMinimized.value = false
+          e.originalEvent.stopPropagation(); return
+        }
+        e.originalEvent.stopPropagation()
+        const cfg = CAT_CFG[props.category] || CAT_CFG.default
+        const locId = props.id
+        const displayName = lang.value === 'en' ? (props.nameEng || props.name) : props.name
+        const catLabel = t(`cat.${props.category}.full`) || cfg.label
+        popup.setLngLat(coords).setHTML(`
+          <div class="popup-inner">
+            <div class="popup-accent-bar" style="background:${cfg.color}"></div>
+            <div class="popup-cat" style="color:${cfg.color}">${catLabel}</div>
+            <h3 class="popup-title">${displayName}</h3>
+            ${props.description ? `<p class="popup-desc">${props.description}</p>` : ''}
+            <button class="popup-detail-btn" style="border-color:${cfg.color}33;color:${cfg.color}" onclick="window.__rachaNavToLocation(${locId})">
+              <span style="font-size:13px;vertical-align:middle">${t('loc.viewOnMap')}</span>
+              <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">arrow_forward</span>
+            </button>
+          </div>`).addTo(map)
+      }
+
+      const _pinClusterClick = (e) => {
+        if (!e.features?.length) return
+        const feat = e.features[0]
+        map.getSource(feat.layer.source).getClusterExpansionZoom(feat.properties.cluster_id, (err, zoom) => {
+          if (!err) map.easeTo({ center: feat.geometry.coordinates, zoom: zoom + 1, duration: 500 })
+        })
+      }
+
+      for (const cat of CAT_DEFS) {
+        const srcId = `pins-${cat.key}`
+        map.on('click', `${srcId}-points`,   _pinPointClick)
+        map.on('click', `${srcId}-clusters`, _pinClusterClick)
+      }
+    }
+  }
+
+  // Rebuild ad GL sources and layers from the adsDataCache.
+  // Click/cursor handlers registered once (_adHandlersRegistered flag).
+  function rebuildAdLayers() {
+    if (!adsDataCache || !map) return
+    if (map.getSource('ads')) return // Already present (first call or no style switch yet)
+
+    map.addSource('ads', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: adsDataCache },
+      cluster: true, clusterMaxZoom: 13, clusterRadius: 50
+    })
+    map.addLayer({
+      id: 'ads-clusters', type: 'circle', source: 'ads',
+      filter: ['has', 'point_count'],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-color': '#FF9800',
+        'circle-radius': ['step', ['get', 'point_count'], 18, 3, 22, 8, 26],
+        'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.92
+      }
+    })
+    map.addLayer({
+      id: 'ads-cluster-count', type: 'symbol', source: 'ads',
+      filter: ['has', 'point_count'],
+      layout: { visibility: 'none', 'text-field': '{point_count_abbreviated}', 'text-size': 12,
+                'text-allow-overlap': true, 'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'] },
+      paint: { 'text-color': '#ffffff' }
+    })
+    map.addLayer({
+      id: 'ads-points', type: 'circle', source: 'ads',
+      filter: ['!', ['has', 'point_count']],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-color': ['match', ['get', 'status'], 'Available', '#FF9800', 'Rented', '#F44336', 'Pending', '#9C27B0', '#FF9800'],
+        'circle-radius': 11, 'circle-stroke-width': 2.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.95
+      }
+    })
+    map.addLayer({
+      id: 'ads-points-icon', type: 'circle', source: 'ads',
+      filter: ['!', ['has', 'point_count']],
+      layout: { visibility: 'none' },
+      paint: { 'circle-color': '#ffffff', 'circle-radius': 4, 'circle-opacity': 0.9 }
+    })
+
+    if (!_adHandlersRegistered) {
+      _adHandlersRegistered = true
+      map.on('click', 'ads-points', (e) => {
+        if (!e.features?.length) return
+        e.originalEvent.stopPropagation()
+        const props = e.features[0].properties
+        openAdModal({ id: props.id, name: props.name, status: props.status,
+          type: props.adType, priceMonthly: props.price,
+          currentImageUrl: props.imageUrl, imageUrl: props.imageUrl })
+      })
+      map.on('click', 'ads-clusters', (e) => {
+        if (!e.features?.length) return
+        const feat = e.features[0]
+        map.getSource('ads').getClusterExpansionZoom(feat.properties.cluster_id, (err, zoom) => {
+          if (!err) map.easeTo({ center: feat.geometry.coordinates, zoom: zoom + 1, duration: 500 })
+        })
+      })
+      ;['ads-clusters', 'ads-points'].forEach(lyr => {
+        map.on('mouseenter', lyr, () => { map.getCanvas().style.cursor = 'pointer' })
+        map.on('mouseleave', lyr, () => { map.getCanvas().style.cursor = '' })
+      })
+    }
   }
 
   // Debounced weather — fires max once per 8 seconds after map stops moving
@@ -2667,27 +2680,6 @@ async function updateWeather() {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-// Raise mask → border glow → major city labels → POI pins to the top of the
-// GL layer stack.  Call after any operation that adds or re-positions layers.
-function raiseMaskAndPins() {
-  if (!map) return
-  ;['dim-mask-layer','focus-region-glow','focus-region-border'].forEach(id => {
-    if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-  })
-  // City labels always above the dim mask
-  ;['major-settlements-dot','major-settlements-label'].forEach(id => {
-    if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-  })
-  // POI pins at the very top
-  const _ALL = ['landmark','waterfall','lake','river','mountain','forest','canyon',
-                'church','fortress','museum','archaeological','village','architecture',
-                'hotel','restaurant']
-  _ALL.forEach(c => {
-    ;[`pins-${c}-clusters`,`pins-${c}-count`,`pins-${c}-points`].forEach(id => {
-      if (map.getLayer(id)) try { map.moveLayer(id) } catch(e) {}
-    })
-  })
-}
 
 // Update major-settlements dot/label style to match current map mode.
 function applyMajorSettlementsStyle() {
@@ -2709,75 +2701,11 @@ function applyMajorSettlementsStyle() {
 function toggleMapStyle() {
   if (!map || styleTransitioning.value) return
   styleTransitioning.value = true
-
-  const toGraphic = mapStyleMode.value === 'satellite'
-  mapStyleMode.value = toGraphic ? 'graphic' : 'satellite'
-
-  try {
-    if (toGraphic) {
-      // ── Enter graphic mode ──
-      // graphic-bg was inserted BELOW roads/labels at map load, so simply
-      // making it visible gives a white canvas with roads/labels on top.
-      // No moveLayer hacks needed.
-
-      // 1. Hide satellite imagery, show cream background
-      if (map.getLayer('esri-satellite-layer'))
-        map.setLayoutProperty('esri-satellite-layer', 'visibility', 'none')
-      if (map.getLayer('graphic-bg'))
-        map.setLayoutProperty('graphic-bg', 'visibility', 'visible')
-
-      // 2. Apply layer visibility + graphic-mode colours via updateLayers()
-      updateLayers()
-
-      // 3. Mask, terrain, fog
-      applyDimMaskOpacity()
-      try { map.setTerrain(null) } catch(e) {}
-      try { map.setFog(null) }     catch(e) {}
-
-      // 4. City label style → dark text on light halo
-      applyMajorSettlementsStyle()
-
-      // 5. Re-raise mask, city labels, pins
-      raiseMaskAndPins()
-
-    } else {
-      // ── Enter satellite mode ──
-
-      // 1. Show satellite, hide graphic background
-      if (map.getLayer('esri-satellite-layer'))
-        map.setLayoutProperty('esri-satellite-layer', 'visibility', 'visible')
-      if (map.getLayer('graphic-bg'))
-        map.setLayoutProperty('graphic-bg', 'visibility', 'none')
-
-      // 2. Hide all default Mapbox labels, then re-apply user toggles
-      hideBaseSymbolLayers()
-      updateLayers()
-
-      // 3. Mask, terrain, fog
-      applyDimMaskOpacity()
-      try {
-        if (!map.getSource('dem'))
-          map.addSource('dem', { type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512, maxzoom:14 })
-        map.setTerrain({ source:'dem', exaggeration: 1.5 })
-      } catch(e) {}
-      try {
-        if (!isLightMode.value)
-          map.setFog({ range:[0.5, 12], color:'#0d1520', 'high-color':'#000000',
-                       'space-color':'#000000', 'star-intensity':0.6 })
-      } catch(e) {}
-
-      // 4. City label style → white text on dark halo
-      applyMajorSettlementsStyle()
-
-      // 5. Re-raise mask, city labels, pins
-      raiseMaskAndPins()
-    }
-  } catch(e) {
-    console.error('[MapStyle] toggleMapStyle error:', e)
-  }
-
-  // 300 ms cooldown — prevents double-tap crash
-  setTimeout(() => { styleTransitioning.value = false }, 300)
+  mapStyleMode.value = mapStyleMode.value === 'satellite' ? 'graphic' : 'satellite'
+  const newStyle = mapStyleMode.value === 'satellite' ? SATELLITE_STYLE : GRAPHIC_STYLE
+  map.setStyle(newStyle)
+  // style.load fires → rebuildMapAfterStyleChange() rebuilds all layers in correct order
+  // rebuildMapAfterStyleChange() calls setTimeout(() => styleTransitioning = false, 400)
 }
 
 function applyDimMaskOpacity() {
