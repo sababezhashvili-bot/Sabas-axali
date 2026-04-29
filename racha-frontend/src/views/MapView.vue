@@ -1738,7 +1738,19 @@ onMounted(async () => {
     // first complete render (all tiles loaded) is done — at that point any late-
     // initialised layers are stable and our hide call sticks permanently.
     map.once('idle', () => {
+      // Satellite: re-apply traditional setLayoutProperty/setFilter approach
       hideBaseSymbolLayers()
+      // Graphic (Standard style): re-enforce config API — tile loading can temporarily
+      // flip label config back to default before the import fully settles.
+      if (mapStyleMode.value === 'graphic') {
+        try {
+          map.setConfigProperty('basemap', 'showPlaceLabels',           false)
+          map.setConfigProperty('basemap', 'showRoadLabels',            false)
+          map.setConfigProperty('basemap', 'showPointOfInterestLabels', false)
+          map.setConfigProperty('basemap', 'showTransitLabels',         false)
+          map.setConfigProperty('basemap', 'lightPreset',               'day')
+        } catch(e) {}
+      }
       if (ready) updateLayers(true)
     })
   })
@@ -2065,6 +2077,22 @@ onMounted(async () => {
       //     only our custom major-settlements labels show by default.
       hideBaseSymbolLayers()
 
+      // 15b. Standard-style label config (graphic mode only).
+      //      The graphic style imports Mapbox Standard ('basemap'). Standard labels
+      //      are NOT accessible as individual GL layers — they're rendered by the
+      //      imported basemap and controlled exclusively via setConfigProperty.
+      //      setLayoutProperty / setFilter have no effect on them.
+      if (!isSatellite) {
+        try {
+          map.setConfigProperty('basemap', 'showPlaceLabels',           false)
+          map.setConfigProperty('basemap', 'showRoadLabels',            false)
+          map.setConfigProperty('basemap', 'showPointOfInterestLabels', false)
+          map.setConfigProperty('basemap', 'showTransitLabels',         false)
+          // 'day' preset: bright colours — makes graphic mode visually distinct from satellite
+          map.setConfigProperty('basemap', 'lightPreset',               'day')
+        } catch(e) { console.warn('[rebuildMapAfterStyleChange] setConfigProperty:', e) }
+      }
+
       // 16. Apply user toggle state (roads/labels/buildings visibility) immediately,
       //     even before ready=true on initial load (force=true bypasses the guard).
       //     This guarantees layers that are OFF by default stay hidden from first render.
@@ -2088,14 +2116,17 @@ onMounted(async () => {
         try { map.setFog(null) } catch(e) {}
       }
 
-      // 18. Directional lighting — higher intensity in graphic mode so fill-extrusion
-      //     (3D buildings, forest) casts visible shadows on the light base style.
-      try {
-        const lightIntensity = isSatellite
-          ? (isLightMode.value ? 0.6 : 0.1)
-          : 0.75  // graphic: stronger side-light makes 3D shapes pop on pale background
-        map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: lightIntensity, position: [1.15, 210, 30] })
-      } catch(e) {}
+      // 18. Directional lighting — satellite mode only.
+      //     The graphic style is Standard-based: Standard manages its own sun position
+      //     and atmosphere via 'lightPreset'. Calling setLight() in graphic mode overrides
+      //     Standard's lighting system, washing out terrain shading and making the style
+      //     look flat/grey (indistinguishable from satellite). Skip it for graphic mode.
+      if (isSatellite) {
+        try {
+          const lightIntensity = isLightMode.value ? 0.6 : 0.1
+          map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: lightIntensity, position: [1.15, 210, 30] })
+        } catch(e) {}
+      }
 
       // 19. Hide admin boundary lines
       try {
@@ -2802,7 +2833,25 @@ function toggleMapStyle() {
   styleTransitioning.value = true
   mapStyleMode.value = mapStyleMode.value === 'satellite' ? 'graphic' : 'satellite'
   const newStyle = mapStyleMode.value === 'satellite' ? SATELLITE_STYLE : GRAPHIC_STYLE
-  map.setStyle(newStyle)
+
+  if (mapStyleMode.value === 'graphic') {
+    // Pass config at load time so labels are hidden from the very first render.
+    // The graphic style imports Mapbox Standard ('basemap') — Standard-based labels
+    // are controlled via the config API, not setLayoutProperty/setFilter.
+    map.setStyle(newStyle, {
+      config: {
+        basemap: {
+          showPlaceLabels:           false,
+          showRoadLabels:            false,
+          showPointOfInterestLabels: false,
+          showTransitLabels:         false,
+          lightPreset:               'day',   // bright, colourful — clearly distinct from satellite
+        }
+      }
+    })
+  } else {
+    map.setStyle(newStyle)
+  }
   // style.load fires → rebuildMapAfterStyleChange() rebuilds all layers in correct order
   // rebuildMapAfterStyleChange() calls setTimeout(() => styleTransitioning = false, 400)
 }
