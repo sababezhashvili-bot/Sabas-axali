@@ -922,7 +922,7 @@ const showForest  = ref(false)
 const mapStyleMode        = ref('satellite') // 'satellite' | 'graphic'
 const styleTransitioning  = ref(false)
 const SATELLITE_STYLE = 'mapbox://styles/mapbox/satellite-streets-v12'
-const GRAPHIC_STYLE   = 'mapbox://styles/mapbox/outdoors-v12'
+const GRAPHIC_STYLE   = 'mapbox://styles/sabuka629/cmn93zj1f000b01s7grsed6mv'
 
 // Bundled approximate Racha polygon — instant fallback if geoboundaries fetch fails.
 // Covers Ambrolauri + Oni districts without any network dependency.
