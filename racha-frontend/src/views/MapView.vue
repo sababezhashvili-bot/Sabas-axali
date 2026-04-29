@@ -1399,7 +1399,9 @@ function updateLayers(force = false) {
       }
 
       try { map.setLayoutProperty(id, 'visibility', showRd ? 'visible' : 'none') } catch(e) {}
-      if (showRd && activeFeature.value) {
+      // Always apply within-filter regardless of showRd — ensures road lines never
+      // bleed outside the Racha contour even if visibility is toggled on later.
+      if (activeFeature.value) {
         try { map.setFilter(id, ['within', activeFeature.value]) } catch(e) {}
       }
       if (showRd) {
@@ -1687,19 +1689,35 @@ onMounted(async () => {
     initMapLayers()
   })
 
-  // Hide every base symbol layer AND clip it to Racha polygon (double protection)
+  // Hide ALL base-style symbol layers and clip ALL base-style line layers to
+  // the Racha polygon.  Result: outside the Racha contour only terrain fills
+  // (hillshade, water, land-cover) are visible — no labels, no road lines.
   function hideBaseSymbolLayers() {
     const st = map.getStyle()
     if (!st || !st.layers) return
     const withinFilter = activeFeature.value ? ['within', activeFeature.value] : ['==', 'id', '']
+
+    // Custom layer prefixes that must never be touched here
+    const isCustom = (id) =>
+      id.startsWith('pins-')  || id.startsWith('route-')  || id.startsWith('esri-') ||
+      id.startsWith('major-settlements') || id.startsWith('ads-') || id.startsWith('focus-') ||
+      id.startsWith('dim-')   || id.startsWith('admin-')  || id === '3d-buildings' ||
+      id === 'forest'
+
     st.layers.forEach(l => {
-      if (l.type !== 'symbol') return
-      if (l.id.startsWith('pins-') || l.id.startsWith('route-') ||
-          l.id.startsWith('esri-') || l.id.startsWith('major-settlements') ||
-          l.id.startsWith('ads-') || l.id === '3d-buildings') return
-      try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
-      // Backup: even if visibility gets re-enabled, filter blocks outside features
-      try { map.setFilter(l.id, withinFilter) } catch(e) {}
+      if (isCustom(l.id)) return
+
+      if (l.type === 'symbol') {
+        // Hide all base labels/icons and clip to region
+        try { map.setLayoutProperty(l.id, 'visibility', 'none') } catch(e) {}
+        try { map.setFilter(l.id, withinFilter) } catch(e) {}
+      } else if (l.type === 'line') {
+        // Don't change visibility — roads/labels toggles control that.
+        // But always apply the within-filter so that even when lines ARE visible
+        // they are clipped to Racha: no road lines, river lines, or contours
+        // are rendered outside the contour.
+        try { map.setFilter(l.id, withinFilter) } catch(e) {}
+      }
     })
   }
 
@@ -1766,17 +1784,18 @@ onMounted(async () => {
        m.el.style.display = (isInside && catMatch) ? 'block' : 'none'
     })
 
-    // B. Layer Clipping & Point Lighting Isolation
+    // B. Layer Clipping — clip ALL base symbol+line layers to the Racha polygon.
+    //    Outside the contour: only terrain fills (hillshade, water, land-cover) remain.
     const style = map.getStyle()
     if (style && style.layers) {
+      const isCustom = (id) =>
+        id.startsWith('pins-') || id.startsWith('route-') || id.startsWith('esri-') ||
+        id.startsWith('major-settlements') || id.startsWith('ads-') || id.startsWith('focus-') ||
+        id.startsWith('dim-') || id.startsWith('admin-') || id === '3d-buildings' || id === 'forest'
       style.layers.forEach(l => {
-        // Never filter our custom major-settlement labels — they are already inside Racha
-        if (l.id.startsWith('major-settlements')) return
-        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
-          try {
-            // Only show labels/features IF they are within our Racha boundary
-            map.setFilter(l.id, ['within', feature])
-          } catch (e) {}
+        if (isCustom(l.id)) return
+        if (l.type === 'symbol' || l.type === 'line') {
+          try { map.setFilter(l.id, ['within', feature]) } catch (e) {}
         }
       })
     }
@@ -2139,17 +2158,22 @@ onMounted(async () => {
       if (mask && map.getSource('dim-mask-source')) {
         map.getSource('dim-mask-source').setData(mask)
         if (map.getLayer('dim-mask-layer'))
-          map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.97)
+          map.setPaintProperty('dim-mask-layer', 'fill-opacity',
+            mapStyleMode.value === 'graphic' ? 0.70 : 0.92)
       }
     } catch(e) {}
 
-    // Re-apply within-filter to base label/road/poi layers
+    // Re-apply within-filter to ALL base symbol and line layers so nothing
+    // outside the Racha contour can bleed through — only terrain fills remain.
     try {
       const withinFilter = ['within', feature]
+      const isCustom = (id) =>
+        id.startsWith('pins-') || id.startsWith('route-') || id.startsWith('esri-') ||
+        id.startsWith('major-settlements') || id.startsWith('ads-') || id.startsWith('focus-') ||
+        id.startsWith('dim-') || id.startsWith('admin-') || id === '3d-buildings' || id === 'forest'
       map.getStyle().layers.forEach(l => {
-        if (l.id.startsWith('major-settlements') || l.id.startsWith('pins-') ||
-            l.id.startsWith('route-') || l.id.startsWith('ads-')) return
-        if (l.id.includes('label') || l.id.includes('road') || l.id.includes('building') || l.id.includes('poi')) {
+        if (isCustom(l.id)) return
+        if (l.type === 'symbol' || l.type === 'line') {
           try { map.setFilter(l.id, withinFilter) } catch(e) {}
         }
       })
@@ -2771,9 +2795,10 @@ function toggleMapStyle() {
 function applyDimMaskOpacity() {
   if (!map || !map.getLayer('dim-mask-layer')) return
   try {
-    // 0.97 in both modes — nearly fully opaque so nothing outside the Racha
-    // contour is visible. A tiny residual (0.03) avoids a hard pixel-perfect edge.
-    map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.97)
+    // Graphic: 0.7 — semi-transparent, only terrain/relief visible outside Racha
+    // Satellite: 0.92 — nearly opaque, strong dimming on bright aerial imagery
+    const opacity = mapStyleMode.value === 'graphic' ? 0.70 : 0.92
+    map.setPaintProperty('dim-mask-layer', 'fill-opacity', opacity)
   } catch(e) {}
 }
 
