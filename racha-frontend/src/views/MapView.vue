@@ -1347,8 +1347,11 @@ function toggleLayerGroup(keyword, isVisible) {
   })
 }
 
-function updateLayers() {
-  if (!map || !ready || !map.getStyle()) return
+function updateLayers(force = false) {
+  // force=true bypasses the !ready guard — used by rebuildMapAfterStyleChange()
+  // so that layer visibility is applied immediately on every style.load,
+  // even before initMapLayers() has finished (ready stays false until map.on('load')).
+  if (!map || (!ready && !force) || !map.getStyle()) return
   const all = showAllLayers.value
   const showLbl = showLabels.value || all
   const showRd  = showRoads.value  || all
@@ -2028,8 +2031,10 @@ onMounted(async () => {
       //     only our custom major-settlements labels show by default.
       hideBaseSymbolLayers()
 
-      // 16. Apply user toggle state (roads/labels visibility, mode-aware colours)
-      updateLayers()
+      // 16. Apply user toggle state (roads/labels/buildings visibility) immediately,
+      //     even before ready=true on initial load (force=true bypasses the guard).
+      //     This guarantees layers that are OFF by default stay hidden from first render.
+      updateLayers(true)
 
       // 17. Terrain — enabled in BOTH modes so mountains/3D topography always show.
       //     DEM source persists across setStyle() calls (re-added here if stripped).
@@ -2134,8 +2139,7 @@ onMounted(async () => {
       if (mask && map.getSource('dim-mask-source')) {
         map.getSource('dim-mask-source').setData(mask)
         if (map.getLayer('dim-mask-layer'))
-          map.setPaintProperty('dim-mask-layer', 'fill-opacity',
-            mapStyleMode.value === 'satellite' ? 0.80 : 0.55)
+          map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.97)
       }
     } catch(e) {}
 
@@ -2767,10 +2771,9 @@ function toggleMapStyle() {
 function applyDimMaskOpacity() {
   if (!map || !map.getLayer('dim-mask-layer')) return
   try {
-    // Satellite: strong dark mask (0.80) — outside-Racha needs heavy dimming on bright imagery
-    // Graphic:   lighter mask (0.55) — light-v11 is already pale; a heavy mask looks over-dark
-    const opacity = mapStyleMode.value === 'satellite' ? 0.80 : 0.55
-    map.setPaintProperty('dim-mask-layer', 'fill-opacity', opacity)
+    // 0.97 in both modes — nearly fully opaque so nothing outside the Racha
+    // contour is visible. A tiny residual (0.03) avoids a hard pixel-perfect edge.
+    map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.97)
   } catch(e) {}
 }
 
