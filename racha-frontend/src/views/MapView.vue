@@ -1507,9 +1507,10 @@ let markers = []
 let _geoBoundariesCache  = null
 // Cached ad GeoJSON features — reused when rebuilding layers after setStyle()
 let adsDataCache         = null
-// Guard: pin/ad click+cursor handlers are registered once and persist through setStyle()
-let _pinHandlersRegistered = false
-let _adHandlersRegistered  = false
+// Guard: click/cursor handlers registered once and persist through setStyle()
+let _pinHandlersRegistered        = false
+let _adHandlersRegistered         = false
+let _settlementsClickRegistered   = false
 let hoveredId    = null
 let adm1HoveredId = null
 
@@ -1675,6 +1676,11 @@ onMounted(async () => {
 
   map.on('load', async () => {
     ready = true
+    // Now that ready=true, updateLayers() will run properly.
+    // This ensures roads/labels toggled OFF by default are actually hidden
+    // on the initial satellite load (style.load fired before ready=true so
+    // the earlier updateLayers() call returned early).
+    updateLayers()
     initMapLayers()
   })
 
@@ -2063,20 +2069,42 @@ onMounted(async () => {
       // 20. Mode-aware city label colours
       applyMajorSettlementsStyle()
 
-      // 21. On mode switch (ready=true): re-apply current region state without flying
+      // 21. Hide base 2D building fill/outline layers — they create white patches in
+      //     graphic mode (outdoors-v12 renders building footprints as white/light fills).
+      //     Our own 3d-buildings layer is the canonical building representation.
+      ;['building', 'building-outline', 'building-number-label', 'building-entrance'].forEach(id => {
+        try { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none') } catch(e) {}
+      })
+
+      // 22. On mode switch (ready=true): re-apply current region state without flying
       if (ready && activeFeature.value) {
         reapplyRegionState()
       }
 
-      // 22. Restore pin category visibility state — pinsHidden / activeCat survive setStyle()
+      // 23. Restore pin category visibility state — pinsHidden / activeCat survive setStyle()
       //     but the newly-added GL layers start visible; re-apply any filter the user had set.
       if (pinsHidden.value) {
         setPinCatVisibility('none')
       } else if (activeCat.value && activeCat.value !== 'all') {
-        // Specific category or sub-category was selected before style switch
         setPinCatVisibility(activeCat.value)
       }
-      // activeCat === 'all' && !pinsHidden → all layers already visible by default ✓
+
+      // 24. Settlement dot/label click → fly to that city (registered once per map lifetime)
+      if (!_settlementsClickRegistered) {
+        _settlementsClickRegistered = true
+        const onSettlementClick = (e) => {
+          if (!e.features?.length) return
+          const coords = e.features[0].geometry.coordinates.slice()
+          map.flyTo({ center: coords, zoom: 14, duration: 1400, essential: true,
+                      easing: t => t * (2 - t) })
+        }
+        map.on('click',      'major-settlements-dot',   onSettlementClick)
+        map.on('click',      'major-settlements-label', onSettlementClick)
+        map.on('mouseenter', 'major-settlements-dot',   () => { map.getCanvas().style.cursor = 'pointer' })
+        map.on('mouseleave', 'major-settlements-dot',   () => { map.getCanvas().style.cursor = '' })
+        map.on('mouseenter', 'major-settlements-label', () => { map.getCanvas().style.cursor = 'pointer' })
+        map.on('mouseleave', 'major-settlements-label', () => { map.getCanvas().style.cursor = '' })
+      }
 
     } catch(e) {
       console.error('[rebuildMapAfterStyleChange] error:', e)
