@@ -1697,11 +1697,14 @@ onMounted(async () => {
     if (!st || !st.layers) return
     const withinFilter = activeFeature.value ? ['within', activeFeature.value] : ['==', 'id', '']
 
-    // Custom layer prefixes that must never be touched here
+    // Custom layer prefixes/IDs that must never be touched here.
+    // NOTE: id.startsWith('admin-') was too broad — it was accidentally skipping
+    // base-style admin-boundary symbol layers (e.g. 'admin-0-boundary-disputed').
+    // Only exclude our own custom layer 'admin-regions-fill'.
     const isCustom = (id) =>
       id.startsWith('pins-')  || id.startsWith('route-')  || id.startsWith('esri-') ||
       id.startsWith('major-settlements') || id.startsWith('ads-') || id.startsWith('focus-') ||
-      id.startsWith('dim-')   || id.startsWith('admin-')  || id === '3d-buildings' ||
+      id.startsWith('dim-')   || id === 'admin-regions-fill' || id === '3d-buildings' ||
       id === 'forest'
 
     st.layers.forEach(l => {
@@ -1726,6 +1729,18 @@ onMounted(async () => {
   // guaranteed bottom-to-top order each time the base style changes.
   map.on('style.load', () => {
     rebuildMapAfterStyleChange()
+
+    // Second-pass label hide after tiles fully render.
+    // Problem: style.load fires before tile data is fetched. When GL initialises
+    // a symbol layer from incoming tile data it can reset the visibility back to
+    // its default ('visible'), overriding the setLayoutProperty('visibility','none')
+    // we applied in rebuildMapAfterStyleChange(). The 'idle' event fires once the
+    // first complete render (all tiles loaded) is done — at that point any late-
+    // initialised layers are stable and our hide call sticks permanently.
+    map.once('idle', () => {
+      hideBaseSymbolLayers()
+      if (ready) updateLayers(true)
+    })
   })
 
   async function selectRegion(feature) {
@@ -1791,7 +1806,7 @@ onMounted(async () => {
       const isCustom = (id) =>
         id.startsWith('pins-') || id.startsWith('route-') || id.startsWith('esri-') ||
         id.startsWith('major-settlements') || id.startsWith('ads-') || id.startsWith('focus-') ||
-        id.startsWith('dim-') || id.startsWith('admin-') || id === '3d-buildings' || id === 'forest'
+        id.startsWith('dim-') || id === 'admin-regions-fill' || id === '3d-buildings' || id === 'forest'
       style.layers.forEach(l => {
         if (isCustom(l.id)) return
         if (l.type === 'symbol' || l.type === 'line') {
@@ -2170,7 +2185,7 @@ onMounted(async () => {
       const isCustom = (id) =>
         id.startsWith('pins-') || id.startsWith('route-') || id.startsWith('esri-') ||
         id.startsWith('major-settlements') || id.startsWith('ads-') || id.startsWith('focus-') ||
-        id.startsWith('dim-') || id.startsWith('admin-') || id === '3d-buildings' || id === 'forest'
+        id.startsWith('dim-') || id === 'admin-regions-fill' || id === '3d-buildings' || id === 'forest'
       map.getStyle().layers.forEach(l => {
         if (isCustom(l.id)) return
         if (l.type === 'symbol' || l.type === 'line') {
