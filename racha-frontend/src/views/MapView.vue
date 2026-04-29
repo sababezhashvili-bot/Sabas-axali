@@ -2023,25 +2023,31 @@ onMounted(async () => {
       // 16. Apply user toggle state (roads/labels visibility, mode-aware colours)
       updateLayers()
 
-      // 17. Mode-specific settings
+      // 17. Terrain — enabled in BOTH modes so mountains/3D topography always show.
+      //     DEM source persists across setStyle() calls (re-added here if stripped).
+      try {
+        if (!map.getSource('dem'))
+          map.addSource('dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 })
+        map.setTerrain({ source: 'dem', exaggeration: 1.5 })
+      } catch(e) { console.warn('[rebuildMapAfterStyleChange] terrain error:', e) }
+
+      // Fog — satellite only (dark space atmosphere).  Graphic uses the style's own sky.
       if (isSatellite) {
-        try {
-          if (!map.getSource('dem'))
-            map.addSource('dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 })
-          map.setTerrain({ source: 'dem', exaggeration: 1.5 })
-        } catch(e) {}
         try {
           if (!isLightMode.value)
             map.setFog({ range: [0.5, 12], color: '#0d1520', 'high-color': '#000000', 'space-color': '#000000', 'star-intensity': 0.6 })
         } catch(e) {}
       } else {
-        try { map.setTerrain(null) } catch(e) {}
-        try { map.setFog(null)     } catch(e) {}
+        try { map.setFog(null) } catch(e) {}
       }
 
-      // 18. Lighting
+      // 18. Directional lighting — higher intensity in graphic mode so fill-extrusion
+      //     (3D buildings, forest) casts visible shadows on the light base style.
       try {
-        map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: isLightMode.value ? 0.6 : 0.1, position: [1.15, 210, 30] })
+        const lightIntensity = isSatellite
+          ? (isLightMode.value ? 0.6 : 0.1)
+          : 0.75  // graphic: stronger side-light makes 3D shapes pop on pale background
+        map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: lightIntensity, position: [1.15, 210, 30] })
       } catch(e) {}
 
       // 19. Hide admin boundary lines
@@ -2088,7 +2094,8 @@ onMounted(async () => {
       if (mask && map.getSource('dim-mask-source')) {
         map.getSource('dim-mask-source').setData(mask)
         if (map.getLayer('dim-mask-layer'))
-          map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.8)
+          map.setPaintProperty('dim-mask-layer', 'fill-opacity',
+            mapStyleMode.value === 'satellite' ? 0.80 : 0.55)
       }
     } catch(e) {}
 
@@ -2711,8 +2718,10 @@ function toggleMapStyle() {
 function applyDimMaskOpacity() {
   if (!map || !map.getLayer('dim-mask-layer')) return
   try {
-    // 0.8 in both modes — subtle fade outside region while keeping some context visible
-    map.setPaintProperty('dim-mask-layer', 'fill-opacity', 0.8)
+    // Satellite: strong dark mask (0.80) — outside-Racha needs heavy dimming on bright imagery
+    // Graphic:   lighter mask (0.55) — light-v11 is already pale; a heavy mask looks over-dark
+    const opacity = mapStyleMode.value === 'satellite' ? 0.80 : 0.55
+    map.setPaintProperty('dim-mask-layer', 'fill-opacity', opacity)
   } catch(e) {}
 }
 
